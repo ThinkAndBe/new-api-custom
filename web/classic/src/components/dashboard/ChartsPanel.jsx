@@ -31,6 +31,7 @@ const ChartsPanel = ({
   spec_rank_bar,
   spec_user_rank,
   spec_user_trend,
+  spec_user_token_rank,
   isAdminUser,
   CARD_PROPS,
   CHART_CONFIG,
@@ -63,6 +64,9 @@ const ChartsPanel = ({
             {isAdminUser && (
               <TabPane tab={<span>{t('用户消耗趋势')}</span>} itemKey='6' />
             )}
+            {isAdminUser && (
+              <TabPane tab={<span>{t('用户Token排行')}</span>} itemKey='7' />
+            )}
           </Tabs>
         </div>
       }
@@ -86,6 +90,9 @@ const ChartsPanel = ({
         )}
         {activeChartTab === '6' && isAdminUser && (
           <VChart spec={spec_user_trend} option={CHART_CONFIG} />
+        )}
+        {activeChartTab === '7' && isAdminUser && (
+          <VChart spec={spec_user_token_rank} option={CHART_CONFIG} />
         )}
       </div>
     </Card>

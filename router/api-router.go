@@ -224,6 +224,8 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			ratioSyncRoute.GET("/channels", controller.GetSyncableChannels)
 			ratioSyncRoute.POST("/fetch", controller.FetchUpstreamRatios)
+			ratioSyncRoute.GET("/auto_sync_status", controller.GetOfficialRatioSyncStatus)
+			ratioSyncRoute.POST("/auto_sync_now", controller.AutoSyncOfficialRatiosNow)
 		}
 		channelRoute := apiRouter.Group("/channel")
 		channelRoute.Use(middleware.AdminAuth())
@@ -308,6 +310,10 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
+		logRoute.GET("/export", middleware.AdminAuth(), controller.ExportLogs)
+		logRoute.GET("/self/export", middleware.UserAuth(), controller.ExportSelfLogs)
+		logRoute.GET("/token_summary", middleware.AdminAuth(), controller.GetLogsTokenSummary)
+		logRoute.GET("/self/token_summary", middleware.UserAuth(), controller.GetLogsSelfTokenSummary)
 
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)

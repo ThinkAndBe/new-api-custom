@@ -49,6 +49,9 @@ const OperationSetting = () => {
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
+    AutoSyncOfficialRatioEnabled: false,
+    OfficialRatioSyncIntervalHours: 24,
+    OfficialRatioSyncSources: 'official,modelsdev',
 
     /* 顶栏模块管理 */
     HeaderNavModules: '',

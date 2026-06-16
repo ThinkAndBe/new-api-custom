@@ -164,6 +164,9 @@ func InitOptionMap() {
 	common.OptionMap["CheckSensitiveEnabled"] = strconv.FormatBool(setting.CheckSensitiveEnabled)
 	common.OptionMap["DemoSiteEnabled"] = strconv.FormatBool(operation_setting.DemoSiteEnabled)
 	common.OptionMap["SelfUseModeEnabled"] = strconv.FormatBool(operation_setting.SelfUseModeEnabled)
+	common.OptionMap["AutoSyncOfficialRatioEnabled"] = strconv.FormatBool(operation_setting.AutoSyncOfficialRatioEnabled)
+	common.OptionMap["OfficialRatioSyncIntervalHours"] = strconv.Itoa(operation_setting.OfficialRatioSyncIntervalHours)
+	common.OptionMap["OfficialRatioSyncSources"] = operation_setting.OfficialRatioSyncSources
 	common.OptionMap["ModelRequestRateLimitEnabled"] = strconv.FormatBool(setting.ModelRequestRateLimitEnabled)
 	common.OptionMap["CheckSensitiveOnPromptEnabled"] = strconv.FormatBool(setting.CheckSensitiveOnPromptEnabled)
 	common.OptionMap["StopOnSensitiveEnabled"] = strconv.FormatBool(setting.StopOnSensitiveEnabled)
@@ -342,6 +345,8 @@ func updateOptionMap(key string, value string) (err error) {
 			operation_setting.DemoSiteEnabled = boolValue
 		case "SelfUseModeEnabled":
 			operation_setting.SelfUseModeEnabled = boolValue
+		case "AutoSyncOfficialRatioEnabled":
+			operation_setting.AutoSyncOfficialRatioEnabled = boolValue
 		case "CheckSensitiveOnPromptEnabled":
 			setting.CheckSensitiveOnPromptEnabled = boolValue
 		case "ModelRequestRateLimitEnabled":
@@ -398,6 +403,10 @@ func updateOptionMap(key string, value string) (err error) {
 		operation_setting.USDExchangeRate, _ = strconv.ParseFloat(value, 64)
 	case "MinTopUp":
 		operation_setting.MinTopUp, _ = strconv.Atoi(value)
+	case "OfficialRatioSyncIntervalHours":
+		operation_setting.OfficialRatioSyncIntervalHours, _ = strconv.Atoi(value)
+	case "OfficialRatioSyncSources":
+		operation_setting.OfficialRatioSyncSources = value
 	case "StripeApiSecret":
 		setting.StripeApiSecret = value
 	case "StripeWebhookSecret":

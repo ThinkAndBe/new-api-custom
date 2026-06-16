@@ -26,6 +26,7 @@ import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import UserInfoModal from './modals/UserInfoModal';
 import ChannelAffinityUsageCacheModal from './modals/ChannelAffinityUsageCacheModal';
 import ParamOverrideModal from './modals/ParamOverrideModal';
+import TokenSummaryPanel from './TokenSummaryPanel';
 import { useLogsData } from '../../../hooks/usage-logs/useUsageLogsData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -60,6 +61,9 @@ const LogsPage = () => {
       >
         <LogsTable {...logsData} />
       </CardPro>
+
+      {/* 令牌汇总统计面板 */}
+      <TokenSummaryPanel {...logsData} />
     </>
   );
 };

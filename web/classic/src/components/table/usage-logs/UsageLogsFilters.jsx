@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button, Form } from '@douyinfe/semi-ui';
-import { IconSearch } from '@douyinfe/semi-icons';
+import { Button, Dropdown, Form } from '@douyinfe/semi-ui';
+import { IconSearch, IconDownload } from '@douyinfe/semi-icons';
 
 import { DATE_RANGE_PRESETS } from '../../../constants/console.constants';
 
@@ -32,6 +32,8 @@ const LogsFilters = ({
   setLogType,
   loading,
   isAdminUser,
+  exportLogs,
+  exporting,
   t,
 }) => {
   return (
@@ -183,6 +185,49 @@ const LogsFilters = ({
             >
               {t('列设置')}
             </Button>
+            <Dropdown
+              trigger='click'
+              position='bottomRight'
+              render={
+                <Dropdown.Menu>
+                  <Dropdown.Item
+                    disabled={exporting}
+                    onClick={() => exportLogs && exportLogs('detail')}
+                  >
+                    {t('明细日志')}
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    disabled={exporting}
+                    onClick={() => exportLogs && exportLogs('model')}
+                  >
+                    {t('按模型聚合')}
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    disabled={exporting}
+                    onClick={() => exportLogs && exportLogs('token')}
+                  >
+                    {t('按令牌聚合')}
+                  </Dropdown.Item>
+                  {isAdminUser && (
+                    <Dropdown.Item
+                      disabled={exporting}
+                      onClick={() => exportLogs && exportLogs('user')}
+                    >
+                      {t('按用户聚合')}
+                    </Dropdown.Item>
+                  )}
+                </Dropdown.Menu>
+              }
+            >
+              <Button
+                type='tertiary'
+                icon={<IconDownload />}
+                loading={exporting}
+                size='small'
+              >
+                {t('导出')}
+              </Button>
+            </Dropdown>
           </div>
         </div>
       </div>

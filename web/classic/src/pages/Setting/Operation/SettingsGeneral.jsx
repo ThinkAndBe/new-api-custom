@@ -28,6 +28,7 @@ import {
   Modal,
   Input,
   Typography,
+  Tag,
 } from '@douyinfe/semi-ui';
 import {
   compareObjects,
@@ -57,10 +58,16 @@ export default function GeneralSettings(props) {
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
+    AutoSyncOfficialRatioEnabled: false,
+    OfficialRatioSyncIntervalHours: 24,
+    OfficialRatioSyncSources: 'official,modelsdev',
     'token_setting.max_user_tokens': 1000,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
+  // 官方价格同步状态
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   function handleFieldChange(fieldName) {
     return (value) => {
@@ -197,6 +204,52 @@ export default function GeneralSettings(props) {
     }
     return '';
   }, [quotaDisplayType, combinedRate, inputs, t]);
+
+  // 加载官方价格同步状态
+  const loadSyncStatus = async () => {
+    try {
+      const res = await API.get('/api/ratio_sync/auto_sync_status');
+      if (res.data.success) {
+        setSyncStatus(res.data.data);
+      }
+    } catch (e) {
+      // 静默失败，不影响主设置页
+    }
+  };
+
+  // 立即触发一次官方价格同步
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const res = await API.post('/api/ratio_sync/auto_sync_now');
+      if (res.data.success) {
+        showSuccess(
+          t('同步成功，共更新') + ` ${res.data.data.count} ` + t('个模型'),
+        );
+        await loadSyncStatus();
+      } else {
+        showError(res.data.message || t('同步失败'));
+      }
+    } catch (e) {
+      showError(e.message || t('同步失败'));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // 格式化同步时间展示
+  const formatSyncTime = (ts) => {
+    if (!ts) return t('从未同步');
+    const d = new Date(ts * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+      d.getDate(),
+    )} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  useEffect(() => {
+    loadSyncStatus();
+  }, []);
 
   useEffect(() => {
     const currentInputs = {};
@@ -389,6 +442,99 @@ export default function GeneralSettings(props) {
                   uncheckedText='〇'
                   onChange={handleFieldChange('SelfUseModeEnabled')}
                 />
+              </Col>
+            </Row>
+            {/* 自用模式 - 自动获取官方价格 */}
+            <Row gutter={16}>
+              <Col span={24}>
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    marginBottom: 8,
+                    background: 'var(--semi-color-fill-0)',
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text strong>{t('自用模式 · 自动获取官方价格')}</Text>
+                  <Text
+                    type='tertiary'
+                    size='small'
+                    style={{ marginLeft: 8 }}
+                  >
+                    {t(
+                      '按配置间隔自动从官方倍率预设(basellm.github.io)和 models.dev 拉取价格并应用到本地，仅填充本地未配置的模型，不覆盖已有倍率',
+                    )}
+                  </Text>
+                </div>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'AutoSyncOfficialRatioEnabled'}
+                  label={t('启用自动同步')}
+                  extraText={t('开启后按下方间隔定时拉取并应用官方价格')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('AutoSyncOfficialRatioEnabled')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'OfficialRatioSyncIntervalHours'}
+                  label={t('同步间隔（小时）')}
+                  step={1}
+                  min={1}
+                  max={168}
+                  extraText={t('默认 24 小时，范围 1-168')}
+                  onChange={handleFieldChange(
+                    'OfficialRatioSyncIntervalHours',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Input
+                  field={'OfficialRatioSyncSources'}
+                  label={t('价格来源（逗号分隔）')}
+                  extraText={t(
+                    'official=官方预设(优先)，modelsdev=models.dev(兜底)',
+                  )}
+                  placeholder='official,modelsdev'
+                  onChange={handleFieldChange('OfficialRatioSyncSources')}
+                />
+              </Col>
+              <Col span={24}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    marginTop: 4,
+                  }}
+                >
+                  <Button
+                    loading={syncing}
+                    onClick={handleSyncNow}
+                    size='default'
+                  >
+                    {t('立即同步')}
+                  </Button>
+                  {syncStatus && (
+                    <>
+                      <Tag size='large' color='blue'>
+                        {t('上次同步')}: {formatSyncTime(syncStatus.last_sync_time)}
+                      </Tag>
+                      {syncStatus.last_sync_count > 0 && (
+                        <Tag size='large' color='green'>
+                          {t('模型数')}: {syncStatus.last_sync_count}
+                        </Tag>
+                      )}
+                      <Tag size='large' color='grey'>
+                        {t('下次同步')}: {formatSyncTime(syncStatus.next_sync_time)}
+                      </Tag>
+                    </>
+                  )}
+                </div>
               </Col>
             </Row>
             <Row gutter={16}>

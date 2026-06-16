@@ -383,6 +383,49 @@ export const useDashboardCharts = (
     color: { type: 'ordinal', range: USER_COLORS },
   });
 
+  // ========== Admin: 用户 Token 用量排行 ==========
+  const [spec_user_token_rank, setSpecUserTokenRank] = useState({
+    type: 'bar',
+    data: [{ id: 'userTokenRankData', values: [] }],
+    xField: 'TokenUsed',
+    yField: 'User',
+    seriesField: 'User',
+    direction: 'horizontal',
+    legends: { visible: false },
+    title: {
+      visible: true,
+      text: t('用户 Token 用量排行'),
+      subtext: '',
+    },
+    bar: {
+      state: { hover: { stroke: '#000', lineWidth: 1 } },
+    },
+    label: {
+      visible: true,
+      position: 'outside',
+      formatMethod: (value, datum) =>
+        renderNumber(datum['TokenUsed'] || 0),
+    },
+    axes: [{
+      orient: 'left',
+      type: 'band',
+      label: { visible: true },
+    }, {
+      orient: 'bottom',
+      type: 'linear',
+      visible: false,
+    }],
+    tooltip: {
+      mark: {
+        content: [{
+          key: (datum) => datum['User'],
+          value: (datum) => renderNumber(datum['TokenUsed'] || 0),
+        }],
+      },
+    },
+    color: { type: 'ordinal', range: USER_COLORS },
+  });
+
   // ========== 数据处理函数 ==========
   const generateModelColors = useCallback((uniqueModels, modelColors) => {
     const newModelColors = {};
@@ -603,6 +646,34 @@ export const useDashboardCharts = (
           subtext: `${t('总计')}：${renderQuota(totalUserQuota, 2)}`,
         },
       }));
+
+      // ===== 用户 Token 用量排行（基于 token_used 字段）=====
+      // quota_data 已含 token_used，按用户聚合后取 Top 10
+      const userTokenTotal = new Map();
+      data.forEach((item) => {
+        const prev = userTokenTotal.get(item.username) || 0;
+        userTokenTotal.set(
+          item.username,
+          prev + (item.token_used || 0),
+        );
+      });
+      const userTokenRankValues = Array.from(userTokenTotal.entries())
+        .map(([User, TokenUsed]) => ({ User, TokenUsed }))
+        .sort((a, b) => b.TokenUsed - a.TokenUsed)
+        .slice(0, 10);
+      const totalUserTokens = userTokenRankValues.reduce(
+        (s, i) => s + i.TokenUsed,
+        0,
+      );
+
+      setSpecUserTokenRank((prev) => ({
+        ...prev,
+        data: [{ id: 'userTokenRankData', values: userTokenRankValues }],
+        title: {
+          ...prev.title,
+          subtext: `${t('总计')}：${renderNumber(totalUserTokens)}`,
+        },
+      }));
     },
     [dataExportDefaultTime, t],
   );
@@ -621,6 +692,7 @@ export const useDashboardCharts = (
     spec_rank_bar,
     spec_user_rank,
     spec_user_trend,
+    spec_user_token_rank,
     updateChartData,
     updateUserChartData,
     generateModelColors,

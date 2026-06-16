@@ -18,8 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button } from '@douyinfe/semi-ui';
-import { RefreshCw, Search } from 'lucide-react';
+import { Button, Toast } from '@douyinfe/semi-ui';
+import { RefreshCw, Search, Download } from 'lucide-react';
+import { downloadCSV, genExportFilename, timestamp2string } from '../../helpers';
 
 const DashboardHeader = ({
   getGreeting,
@@ -27,9 +28,45 @@ const DashboardHeader = ({
   showSearchModal,
   refresh,
   loading,
+  quotaData,
+  inputs,
   t,
 }) => {
   const ICON_BUTTON_CLASS = 'text-white hover:bg-opacity-80 !rounded-full';
+
+  // 将当前看板的 quotaData（按模型/时间聚合）导出为 CSV
+  const handleExport = () => {
+    if (!quotaData || quotaData.length === 0) {
+      Toast.warning(t('当前无数据可导出'));
+      return;
+    }
+    const rows = [
+      [
+        t('时间'),
+        t('模型'),
+        t('调用次数'),
+        t('Token 用量'),
+        t('消耗 Quota'),
+        t('消耗(USD)'),
+      ],
+    ];
+    for (const item of quotaData) {
+      // 跳过占位的空数据项
+      if (item.model_name === '无数据') {
+        continue;
+      }
+      rows.push([
+        timestamp2string(item.created_at),
+        item.model_name || '',
+        String(item.count ?? 0),
+        String(item.token_used ?? 0),
+        String(item.quota ?? 0),
+        (Number(item.quota ?? 0) / 500000).toFixed(4),
+      ]);
+    }
+    const filename = genExportFilename('dashboard_report', 'csv');
+    downloadCSV(filename, rows);
+  };
 
   return (
     <div className='flex items-center justify-between mb-4'>
@@ -52,6 +89,12 @@ const DashboardHeader = ({
           onClick={refresh}
           loading={loading}
           className={`bg-blue-500 hover:bg-blue-600 ${ICON_BUTTON_CLASS}`}
+        />
+        <Button
+          type='tertiary'
+          icon={<Download size={16} />}
+          onClick={handleExport}
+          className={`bg-orange-500 hover:bg-orange-600 ${ICON_BUTTON_CLASS}`}
         />
       </div>
     </div>

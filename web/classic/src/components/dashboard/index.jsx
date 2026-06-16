@@ -158,6 +158,8 @@ const Dashboard = () => {
         showSearchModal={dashboardData.showSearchModal}
         refresh={handleRefresh}
         loading={dashboardData.loading}
+        quotaData={dashboardData.quotaData}
+        inputs={dashboardData.inputs}
         t={dashboardData.t}
       />
 
@@ -194,8 +196,9 @@ const Dashboard = () => {
             spec_model_line={dashboardCharts.spec_model_line}
             spec_pie={dashboardCharts.spec_pie}
             spec_rank_bar={dashboardCharts.spec_rank_bar}
-            spec_user_rank={dashboardCharts.spec_user_rank}
-            spec_user_trend={dashboardCharts.spec_user_trend}
+              spec_user_rank={dashboardCharts.spec_user_rank}
+              spec_user_trend={dashboardCharts.spec_user_trend}
+              spec_user_token_rank={dashboardCharts.spec_user_token_rank}
             isAdminUser={dashboardData.isAdminUser}
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}

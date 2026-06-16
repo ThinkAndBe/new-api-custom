@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@douyinfe/semi-ui';
 import {
@@ -38,6 +38,8 @@ import {
   renderModelPrice,
   renderTieredModelPrice,
   renderTaskBillingProcess,
+  exportFromAPI,
+  genExportFilename,
 } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
@@ -794,7 +796,125 @@ export const useLogsData = () => {
     setActivePage(1);
     handleEyeClick();
     await loadLogs(1, pageSize);
+    // 查询时同步刷新令牌汇总（面板展开状态下）
+    if (showTokenSummaryRef.current) {
+      loadTokenSummaryRef.current();
+    }
   };
+
+  // 导出状态
+  const [exporting, setExporting] = useState(false);
+
+  // 令牌汇总状态
+  const [tokenSummary, setTokenSummary] = useState([]);
+  const [tokenSummaryLoading, setTokenSummaryLoading] = useState(false);
+  const [showTokenSummary, setShowTokenSummary] = useState(false);
+  // 用 ref 保存最新值/函数，供定义在前的 refresh 回调引用，避免闭包陈旧值
+  const showTokenSummaryRef = useRef(false);
+  const loadTokenSummaryRef = useRef(async () => {});
+
+  // 导出日志为 CSV，支持 4 种视图：detail/model/user/token
+  // 复用当前表单过滤条件，调后端流式导出接口
+  const exportLogs = async (view) => {
+    if (exporting) {
+      return;
+    }
+    setExporting(true);
+    try {
+      const params = buildFilterParams();
+      params.set('view', view || 'detail');
+      const base = isAdminUser ? '/api/log/export' : '/api/log/self/export';
+      const url = `${base}?${params.toString()}`;
+      const prefixMap = {
+        detail: 'logs_detail',
+        model: 'logs_by_model',
+        user: 'logs_by_user',
+        token: 'logs_by_token',
+      };
+      const filename = genExportFilename(
+        prefixMap[view] || 'logs_export',
+        'csv',
+      );
+      await exportFromAPI(url, filename);
+      showSuccess(t('导出成功'));
+    } catch (err) {
+      showError(err.message || t('导出失败'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // 构建当前表单过滤条件为 URLSearchParams，供导出和令牌汇总复用
+  const buildFilterParams = () => {
+    const {
+      username,
+      token_name,
+      model_name,
+      start_timestamp,
+      end_timestamp,
+      channel,
+      group,
+      request_id,
+      logType: formLogType,
+    } = getFormValues();
+    const currentLogType =
+      formLogType !== undefined ? formLogType : logType;
+    const localStartTimestamp = Date.parse(start_timestamp) / 1000;
+    const localEndTimestamp = Date.parse(end_timestamp) / 1000;
+    const params = new URLSearchParams();
+    params.set('type', currentLogType);
+    params.set('start_timestamp', localStartTimestamp);
+    params.set('end_timestamp', localEndTimestamp);
+    if (token_name) params.set('token_name', token_name);
+    if (model_name) params.set('model_name', model_name);
+    if (group) params.set('group', group);
+    if (request_id) params.set('request_id', request_id);
+    if (isAdminUser) {
+      if (username) params.set('username', username);
+      if (channel) params.set('channel', channel);
+    }
+    return params;
+  };
+
+  // 加载令牌维度汇总数据（复用当前过滤条件）
+  const loadTokenSummary = async () => {
+    setTokenSummaryLoading(true);
+    try {
+      const params = buildFilterParams();
+      const base = isAdminUser
+        ? '/api/log/token_summary'
+        : '/api/log/self/token_summary';
+      const url = `${base}?${params.toString()}`;
+      const res = await API.get(url);
+      if (res.data.success) {
+        setTokenSummary(res.data.data.rows || []);
+      } else {
+        showError(res.data.message || t('加载令牌汇总失败'));
+      }
+    } catch (err) {
+      showError(err.message || t('加载令牌汇总失败'));
+    } finally {
+      setTokenSummaryLoading(false);
+    }
+  };
+
+  // 切换令牌汇总面板显示
+  const toggleTokenSummary = async () => {
+    const next = !showTokenSummary;
+    setShowTokenSummary(next);
+    // 每次展开都重新拉取，保证数据与当前筛选条件一致
+    if (next) {
+      await loadTokenSummary();
+    }
+  };
+
+  // 用 effect 同步 ref，确保 refresh（定义在前）能引用到最新的状态和函数
+  useEffect(() => {
+    showTokenSummaryRef.current = showTokenSummary;
+  }, [showTokenSummary]);
+  useEffect(() => {
+    loadTokenSummaryRef.current = loadTokenSummary;
+  }, [loadTokenSummary]);
 
   // Copy text function
   const copyText = async (e, text) => {
@@ -893,6 +1013,13 @@ export const useLogsData = () => {
     hasExpandableRows,
     setLogType,
     openParamOverrideModal,
+    exportLogs,
+    exporting,
+    loadTokenSummary,
+    toggleTokenSummary,
+    tokenSummary,
+    tokenSummaryLoading,
+    showTokenSummary,
 
     // Translation
     t,

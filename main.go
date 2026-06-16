@@ -131,6 +131,9 @@ func main() {
 	// Channel upstream model update check task
 	controller.StartChannelUpstreamModelUpdateTask()
 
+	// 自用模式：官方价格自动同步任务
+	service.StartOfficialRatioAutoSyncTask()
+
 	if common.IsMasterNode && constant.UpdateTask {
 		gopool.Go(func() {
 			controller.UpdateMidjourneyTaskBulk()
