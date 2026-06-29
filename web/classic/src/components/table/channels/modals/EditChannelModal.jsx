@@ -3414,7 +3414,7 @@ const EditChannelModal = (props) => {
                               {
                                 value: DEPRECATED_DOUBAO_CODING_PLAN_BASE_URL,
                                 label: doubaoCodingPlanOptionLabel,
-                                disabled: !canKeepDeprecatedDoubaoCodingPlan,
+                                disabled: false,
                               },
                             ]}
                             defaultValue='https://ark.cn-beijing.volces.com'
