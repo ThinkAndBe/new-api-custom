@@ -18,7 +18,6 @@ type StatusCodeRange struct {
 // 429/503 通常表示上游额度限制或高峰期限流，禁用后可 fallback 到其他可用渠道。
 var AutomaticDisableStatusCodeRanges = []StatusCodeRange{
 	{Start: 401, End: 401},
-	{Start: 429, End: 429},
 	{Start: 503, End: 503},
 }
 
