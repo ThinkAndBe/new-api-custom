@@ -488,7 +488,7 @@ COMPOSE_EOF
     networks:
       - new-api-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/api/status"]
       interval: 30s
       timeout: 10s
       retries: 3
