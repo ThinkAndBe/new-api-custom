@@ -16,6 +16,8 @@
 #   - 滚动重启，零停机
 #   - 健康检查，失败自动回滚
 #   - 支持手动回滚到升级前版本
+#   - 迁移模式：保留原版全部数据（用户/渠道/令牌/日志）
+#   - 自动部署 Headroom 压缩服务（含 Kompress ML 模型）
 #
 # 前置要求：已安装 docker、docker compose、git
 #
@@ -331,8 +333,8 @@ do_migrate() {
     cd "${new_dir}"
     info "已进入二开目录: ${new_dir}"
 
-    # 4. 生成新的 docker-compose.yml，合并原版配置 + 源码构建
-    log "生成新 docker-compose.yml（合并原版配置 + 源码构建）..."
+    # 4. 生成新的 docker-compose.yml，合并原版配置 + 源码构建 + Headroom
+    log "生成新 docker-compose.yml（合并原版配置 + 源码构建 + Headroom 压缩）..."
     generate_migrated_compose "${old_compose}" "${db_type}" "${sql_dsn}" "${redis_conn}" \
         "${pg_user}" "${pg_pw}" "${pg_db}" "${mysql_pw}"
 
@@ -340,7 +342,15 @@ do_migrate() {
     setup_data_inheritance "${old_dir}" "${new_dir}" "${db_type}" \
         "${old_pg_volume}" "${old_mysql_volume}" "${old_compose}"
 
-    # 6. 构建并启动
+    # 6. 构建 headroom 镜像
+    log "构建 Headroom 压缩镜像..."
+    if ! ${COMPOSE_CMD} build headroom; then
+        err "Headroom 镜像构建失败"
+        err "原版服务未受影响，仍可正常运行"
+        exit 1
+    fi
+
+    # 7. 构建 new-api 镜像
     log "构建二开镜像（首次约 5-10 分钟）..."
     if ! ${COMPOSE_CMD} build "${SERVICE}"; then
         err "镜像构建失败"
@@ -349,7 +359,25 @@ do_migrate() {
         exit 1
     fi
 
-    log "启动二开服务..."
+    # 8. 先启动 headroom（等模型下载）
+    log "启动 Headroom 服务（首次需下载模型，约 2-5 分钟）..."
+    ${COMPOSE_CMD} up -d headroom
+    info "等待 Headroom 就绪..."
+    sleep 10
+    local hr_elapsed=0
+    while [ "${hr_elapsed}" -lt 180 ]; do
+        if curl -sf http://localhost:8788/livez -o /dev/null 2>/dev/null; then
+            log "Headroom 就绪 ✓"
+            break
+        fi
+        sleep 5
+        hr_elapsed=$((hr_elapsed + 5))
+        printf "."
+    done
+    echo
+
+    # 9. 启动全部服务
+    log "启动全部服务..."
     # 注意：postgres/redis 服务名一致时，会复用同一个数据卷（关键！）
     ${COMPOSE_CMD} up -d
 
@@ -357,6 +385,7 @@ do_migrate() {
         log "========== 迁移成功 =========="
         info "二开版本已启动: ${HEALTH_URL%/api/status}"
         info "你的所有配置/用户/Token/渠道/日志已保留"
+        info "Headroom 压缩服务已启动: http://localhost:8788/livez"
         info ""
         info "后续操作："
         info "  1. 停止原版服务（可选，避免端口冲突）:"
@@ -365,6 +394,7 @@ do_migrate() {
         info "     cd ${old_dir} && ${COMPOSE_CMD} down"
         info "  3. 以后升级只需在 ${new_dir} 执行:"
         info "     ./upgrade.sh"
+        info "  4. 登录管理后台配置渠道 Headroom 开关"
         echo
         warn "注意：原版和二开不能同时用相同端口运行，请确认只启动一个"
     else
@@ -428,9 +458,15 @@ COMPOSE_EOF
       - ERROR_LOG_ENABLED=true
       - BATCH_UPDATE_ENABLED=true
       - NODE_NAME=new-api-node-1
+      - STREAMING_TIMEOUT=300
+      - RELAY_IDLE_CONN_TIMEOUT=90
+      # Headroom 压缩服务
+      - HEADROOM_URL=http://headroom:8787
+      - HEADROOM_GLOBAL_ENABLED=true
 
     depends_on:
       - redis
+      - headroom
 COMPOSE_EOF
 
     # 按数据库类型添加依赖服务
@@ -495,6 +531,45 @@ COMPOSE_EOF
 COMPOSE_EOF
     fi
 
+    # Headroom 压缩服务（始终添加）
+    cat >> docker-compose.yml << 'COMPOSE_EOF'
+
+  headroom:
+    build:
+      context: ./docker/headroom
+      dockerfile: Dockerfile
+    image: new-api-headroom:latest
+    container_name: headroom
+    restart: always
+    environment:
+      - HEADROOM_HOST=0.0.0.0
+      - HEADROOM_PORT=8787
+      - HEADROOM_WORKERS=1
+      - HEADROOM_MAX_CONCURRENCY=50
+      - HEADROOM_FORCE_MODEL=new-api-generic
+      - HEADROOM_KOMPRESS_MODEL=
+      - HEADROOM_PROTECT_RECENT=2
+      - HEADROOM_MIN_TOKENS_TO_COMPRESS=100
+      - HEADROOM_COMPRESS_USER_MESSAGES=true
+      - HF_HOME=/models
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HEADROOM_LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./headroom-models:/models
+      - ./headroom-logs:/app/logs
+    ports:
+      - "8788:8787"
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/livez', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+COMPOSE_EOF
+
     echo "" >> docker-compose.yml
     echo "volumes:" >> docker-compose.yml
     [ "${db_type}" = "postgres" ] && echo "  pg_data:" >> docker-compose.yml
@@ -504,7 +579,7 @@ COMPOSE_EOF
     echo "  new-api-network:" >> docker-compose.yml
     echo "    driver: bridge" >> docker-compose.yml
 
-    info "已生成 docker-compose.yml（数据库: ${db_type}）"
+    info "已生成 docker-compose.yml（数据库: ${db_type} + Headroom 压缩）"
 }
 
 # 数据衔接：让二开复用原版的数据库数据
