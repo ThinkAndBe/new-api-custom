@@ -294,7 +294,15 @@ do_migrate() {
     if [ "${db_type}" = "postgres" ]; then
         log "备份 PostgreSQL..."
         cd "${old_dir}"
-        ${COMPOSE_CMD} exec -T postgres pg_dump -U "${pg_user}" "${pg_db}" > "${old_backup}/postgres.sql" 2>/dev/null || warn "PG dump 失败（容器可能未运行）"
+        # 先尝试 docker compose exec，再尝试 docker exec（容器名 postgres）
+        if ${COMPOSE_CMD} exec -T postgres pg_dump -U "${pg_user}" "${pg_db}" > "${old_backup}/postgres.sql" 2>/dev/null; then
+            [ -s "${old_backup}/postgres.sql" ] && log "PG dump 完成" || warn "PG dump 失败（文件为空）"
+        elif docker exec postgres pg_dump -U "${pg_user}" "${pg_db}" > "${old_backup}/postgres.sql" 2>/dev/null; then
+            [ -s "${old_backup}/postgres.sql" ] && log "PG dump 完成（docker exec）" || warn "PG dump 失败"
+        else
+            warn "PG dump 失败（postgres 容器未运行）"
+            info "数据通过 volume 复用，不需要 dump 也能迁移"
+        fi
         cd - > /dev/null
     elif [ "${db_type}" = "mysql" ]; then
         log "备份 MySQL..."
@@ -563,7 +571,7 @@ COMPOSE_EOF
     networks:
       - new-api-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/livez', timeout=5)\" || exit 1"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8787/livez\", timeout=5)' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -599,45 +607,68 @@ setup_data_inheritance() {
         fi
     else
         # PostgreSQL/MySQL：复用同一个 docker volume
-        # 关键：docker-compose.yml 中 volumes 名一致 + 在同一个 compose project 下，
-        # 会自动复用。但跨目录迁移时 project 名会变，需显式处理。
+        # 关键：自动检测原版实际使用的 volume 名
         log "数据库将复用原版的数据卷..."
-        local vol_name=""
+
+        # 自动检测原版的 PG volume 名（docker volume ls）
+        local real_vol=""
         if [ "${db_type}" = "postgres" ]; then
-            vol_name=$(echo "${old_pg_volume}" | grep -oP '\b\w+_pg_data\b|pg_data' | head -1 || echo "pg_data")
+            # 尝试多种命名模式：new-api_pg_data, new_api_pg_data, pg_data 等
+            real_vol=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E 'pg_data' | head -1 || echo "")
+            if [ -z "${real_vol}" ]; then
+                # fallback：用目录名推断
+                local project_name=""
+                project_name=$(basename "${old_dir}" | tr '-' '_' | tr '.' '_')
+                real_vol="${project_name}_pg_data"
+            fi
         elif [ "${db_type}" = "mysql" ]; then
-            vol_name=$(echo "${old_mysql_volume}" | grep -oP '\b\w+_mysql_data\b|mysql_data' | grep -oP '\w+_mysql_data' | head -1 || echo "mysql_data")
+            real_vol=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E 'mysql_data' | head -1 || echo "")
+            if [ -z "${real_vol}" ]; then
+                local project_name=""
+                project_name=$(basename "${old_dir}" | tr '-' '_' | tr '.' '_')
+                real_vol="${project_name}_mysql_data"
+            fi
         fi
 
-        # 获取原版实际的 volume 名（带 project 前缀）
-        local project_name=""
-        project_name=$(basename "${old_dir}" | tr '-' '_' | tr '.' '_')
-        local real_vol="${project_name}_${vol_name}"
+        local vol_short="pg_data"
+        [ "${db_type}" = "mysql" ] && vol_short="mysql_data"
 
         info "原版数据卷: ${real_vol}"
         info "二开将挂载同一数据卷（通过 external volume 方式）"
 
         # 把新 compose 的 volume 改为 external，指向原版卷
-        if docker volume inspect "${real_vol}" &> /dev/null 2>&1; then
-            # 用 sed 把 "  vol_name:" 改为 external 引用
+        if [ -n "${real_vol}" ] && docker volume inspect "${real_vol}" &> /dev/null 2>&1; then
             log "配置数据卷 ${vol_short} → external (${real_vol})..."
             if sed -i \
                 -e "s|^  ${vol_short}:$|  ${vol_short}:\n    external: true\n    name: ${real_vol}|" \
                 docker-compose.yml; then
-                # 验证替换是否成功
                 if grep -q "external: true" docker-compose.yml; then
-                    info "数据卷已改为 external，复用原版数据"
+                    info "数据卷已改为 external，复用原版数据 ✓"
                 else
-                    warn "external volume 配置失败，可能数据卷名为其他格式"
-                    info "原版数据卷: ${real_vol}（可手动编辑 docker-compose.yml）"
+                    warn "external volume 配置失败，尝试追加方式..."
+                    # 如果 sed 没成功，直接重写 volumes 段
+                    sed -i '/^volumes:/,$d' docker-compose.yml
+                    echo "" >> docker-compose.yml
+                    echo "volumes:" >> docker-compose.yml
+                    echo "  ${vol_short}:" >> docker-compose.yml
+                    echo "    external: true" >> docker-compose.yml
+                    echo "    name: ${real_vol}" >> docker-compose.yml
+                    echo "" >> docker-compose.yml
+                    echo "networks:" >> docker-compose.yml
+                    echo "  new-api-network:" >> docker-compose.yml
+                    echo "    driver: bridge" >> docker-compose.yml
+                    info "数据卷已改为 external（追加方式）✓"
                 fi
             else
-                warn "自动改 external volume 失败，请手动确认数据卷挂载"
+                warn "自动改 external volume 失败，请手动确认"
                 info "原版数据卷: ${real_vol}"
             fi
         else
-            warn "未找到原版数据卷 ${real_vol}，二开将创建空数据库"
-            warn "如需迁移数据库内容，请手动 pg_dump/restore"
+            warn "未找到原版数据卷 ${real_vol}"
+            warn "二开将创建空数据库"
+            warn "如需迁移数据，手动执行:"
+            info "  pg_dump -U root new-api > backup.sql  (原版)"
+            info "  psql -U root new-api < backup.sql     (二开)"
             warn "原版备份已保存在 ${old_dir}/.backups/"
         fi
     fi
