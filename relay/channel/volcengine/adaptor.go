@@ -38,7 +38,8 @@ func (a *Adaptor) ConvertGeminiRequest(*gin.Context, *relaycommon.RelayInfo, *dt
 }
 
 func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, req *dto.ClaudeRequest) (any, error) {
-	if _, ok := channelconstant.ChannelSpecialBases[info.ChannelBaseUrl]; ok {
+	// 有 ClaudeBaseURL 的 special plan 走原生 Claude 格式；否则转成 OpenAI 格式
+	if specialPlan, ok := channelconstant.ChannelSpecialBases[info.ChannelBaseUrl]; ok && specialPlan.ClaudeBaseURL != "" {
 		adaptor := claude.Adaptor{}
 		return adaptor.ConvertClaudeRequest(c, info, req)
 	}
@@ -248,6 +249,10 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		if hasSpecialPlan && specialPlan.ClaudeBaseURL != "" {
 			return fmt.Sprintf("%s/v1/messages", specialPlan.ClaudeBaseURL), nil
 		}
+		// 特殊 plan 没有独立的 Claude 端点时，用 OpenAI 端点（NEW API 会做格式转换）
+		if hasSpecialPlan && specialPlan.OpenAIBaseURL != "" {
+			return fmt.Sprintf("%s/chat/completions", specialPlan.OpenAIBaseURL), nil
+		}
 		if strings.HasPrefix(info.UpstreamModelName, "bot") {
 			return fmt.Sprintf("%s/api/v3/bots/chat/completions", baseUrl), nil
 		}
@@ -347,7 +352,8 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
 	if info.RelayFormat == types.RelayFormatClaude {
-		if _, ok := channelconstant.ChannelSpecialBases[info.ChannelBaseUrl]; ok {
+		// 有 ClaudeBaseURL 的 special plan 走原生 Claude 响应解析；否则走 OpenAI 解析
+		if specialPlan, ok := channelconstant.ChannelSpecialBases[info.ChannelBaseUrl]; ok && specialPlan.ClaudeBaseURL != "" {
 			adaptor := claude.Adaptor{}
 			return adaptor.DoResponse(c, resp, info)
 		}

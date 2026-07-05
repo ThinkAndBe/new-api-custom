@@ -197,8 +197,32 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 
 		addUsedChannel(c, channel.Id)
+
+		// 渠道并发控制：重试路径同样检查并发上限
+		maxConc := channel.GetSetting().MaxConcurrency
+		acquired := false
+		if maxConc > 0 {
+			if !service.TryAcquireChannel(channel.Id, maxConc) {
+				// 该渠道已满，记日志后重试下一个
+				logger.LogInfo(c, fmt.Sprintf("channel %s (#%d) concurrency limit %d reached, trying next",
+					channel.Name, channel.Id, maxConc))
+				relayInfo.LastError = types.NewErrorWithStatusCode(
+					fmt.Errorf("channel %s busy", channel.Name),
+					types.ErrorCodeGetChannelFailed, http.StatusServiceUnavailable)
+				if !shouldRetry(c, relayInfo.LastError, common.RetryTimes-retryParam.GetRetry()) {
+					newAPIError = relayInfo.LastError
+					break
+				}
+				continue
+			}
+			acquired = true
+		}
+
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
+			if acquired {
+				service.ReleaseChannel(channel.Id, maxConc)
+			}
 			// Ensure consistent 413 for oversized bodies even when error occurs later (e.g., retry path)
 			if common.IsRequestBodyTooLargeError(bodyErr) || errors.Is(bodyErr, common.ErrRequestBodyTooLarge) {
 				newAPIError = types.NewErrorWithStatusCode(bodyErr, types.ErrorCodeReadRequestBodyFailed, http.StatusRequestEntityTooLarge, types.ErrOptionWithSkipRetry())
@@ -218,6 +242,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = geminiRelayHandler(c, relayInfo)
 		default:
 			newAPIError = relayHandler(c, relayInfo)
+		}
+
+		// 请求结束，释放并发令牌
+		if acquired {
+			service.ReleaseChannel(channel.Id, maxConc)
 		}
 
 		if newAPIError == nil {

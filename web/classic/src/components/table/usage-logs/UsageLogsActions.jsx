@@ -58,6 +58,28 @@ const LogsActions = ({
             {t('消耗额度')}: {renderQuota(stat.quota)}
           </Tag>
           <Tag
+            color='cyan'
+            style={{
+              fontWeight: 500,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              padding: 13,
+            }}
+            className='!rounded-lg'
+          >
+            {t('总 Tokens')}: {stat.total_tokens != null ? Number(stat.total_tokens).toLocaleString() : '-'}
+          </Tag>
+          <Tag
+            color='green'
+            style={{
+              fontWeight: 500,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              padding: 13,
+            }}
+            className='!rounded-lg'
+          >
+            {t('请求数')}: {stat.request_count != null ? Number(stat.request_count).toLocaleString() : '-'}
+          </Tag>
+          <Tag
             color='pink'
             style={{
               fontWeight: 500,

@@ -160,6 +160,19 @@ func Distribute() func(c *gin.Context) {
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+
+		// 渠道并发控制：达到上限时直接拒绝（不阻塞等待，避免请求堆积）
+		maxConc := channel.GetSetting().MaxConcurrency
+		if maxConc > 0 {
+			if !service.TryAcquireChannel(channel.Id, maxConc) {
+				abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
+					i18n.T(c, i18n.MsgDistributorNoAvailableChannel),
+					types.ErrorCodeGetChannelFailed)
+				return
+			}
+			defer service.ReleaseChannel(channel.Id, maxConc)
+		}
+
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)

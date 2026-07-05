@@ -105,6 +105,14 @@ func processTokenData(relayMode int, data string, responseTextBuilder *strings.B
 			return err
 		}
 		processCompletionsStreamResponse(streamResponse, responseTextBuilder)
+	default:
+		// 对于 Claude Messages → OpenAI 转换路径，relayMode 可能是 Unknown，
+		// 但响应仍是 OpenAI ChatCompletions 格式，需要正常累积文本以用于本地估算 token
+		var streamResponse dto.ChatCompletionsStreamResponse
+		if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
+			return err
+		}
+		return ProcessStreamResponse(streamResponse, responseTextBuilder, toolCount)
 	}
 	return nil
 }

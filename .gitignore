@@ -1,3 +1,30 @@
+# Test artifacts
+claude-big-test.json
+claude-long-test.json
+claude-tool-test.json
+claude-test-body.json
+headroom-long-test.json
+headroom-test-body.json
+kompress-test-body.json
+models_check.json
+test_large.json
+test_large_upstream.json
+test_medium.json
+test_stream.json
+
+# Logs
+new-api-err.log
+new-api-run.log
+newapi-headroom-debug.log
+nul
+web/classic/nul
+
+# DB backups
+one-api.db.backup.*
+
+# Headroom source/model artifacts (downloaded, not source)
+headroom-models/
+headroom_source/
 .idea
 .vscode
 .zed

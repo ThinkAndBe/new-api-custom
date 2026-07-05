@@ -1,0 +1,113 @@
+# ===================================================================
+# NEW API + Headroom 压缩服务 一体化编排
+# ===================================================================
+#
+# 这是一份自包含的 compose 文件，仅启动 new-api 和 headroom 两个服务，
+# 默认使用 SQLite（持久化到 ./data 目录），适合单机自用场景。
+#
+# 快速启动：
+#   1. （首次）构建 Headroom 镜像：
+#        docker compose -f docker-compose.headroom.yml build headroom
+#   2. 启动全部服务：
+#        docker compose -f docker-compose.headroom.yml up -d
+#   3. 访问 http://localhost:3000 ，进入「渠道 → 编辑 → 扩展设置」，
+#      打开「Headroom 压缩」开关。
+#
+# 停止 / 清理：
+#   docker compose -f docker-compose.headroom.yml down
+#
+# 查看日志：
+#   docker compose -f docker-compose.headroom.yml logs -f headroom
+#
+# -------------------------------------------------------------------
+
+version: '3.4'
+
+services:
+  # -----------------------------------------------------------------
+  # NEW API 主服务
+  # -----------------------------------------------------------------
+  new-api:
+    # 默认使用官方镜像；若用本地二开代码，取消下面一行注释改用 build
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    image: calciumion/new-api:latest
+    container_name: new-api
+    restart: always
+    command: --log-dir /app/logs
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    environment:
+      # SQLite 默认无需 SQL_DSN；如需切换 MySQL/PostgreSQL，参考 docker-compose.yml
+      - TZ=Asia/Shanghai
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+      - STREAMING_TIMEOUT=300
+      - RELAY_IDLE_CONN_TIMEOUT=90
+      # Headroom 服务地址：通过服务名 headroom 解析，端口 8787
+      # 渠道编辑页留空 HeadroomURL 时，会回退到此环境变量
+      - HEADROOM_URL=http://headroom:8787
+      # 开启全局 Headroom 总开关（渠道里仍需单独打开开关）
+      # 也可在「系统设置 → 运营设置」里动态调整，无需重启
+      - HEADROOM_GLOBAL_ENABLED=true
+    depends_on:
+      headroom:
+        condition: service_started
+    networks:
+      - new-api-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # -----------------------------------------------------------------
+  # Headroom 压缩服务（Python sidecar）
+  # -----------------------------------------------------------------
+  # 监听 8787，仅对 new-api 容器可见，不对外暴露端口
+  # 如需从宿主机直接访问（调试用），取消下方 ports 注释
+  headroom:
+    build:
+      context: ./docker/headroom
+      dockerfile: Dockerfile
+    image: new-api-headroom:latest
+    container_name: headroom
+    restart: always
+    environment:
+      - HEADROOM_HOST=0.0.0.0
+      - HEADROOM_PORT=8787
+      # 多用户/高并发：每个 worker 是独立进程，建议按 CPU 核数或 CPU 核数/2 设置
+      - HEADROOM_WORKERS=2
+      # 限制单实例并发，防止瞬时多用户压缩把 CPU/内存打满
+      - HEADROOM_MAX_CONCURRENCY=50
+      # 国内环境避免 tiktoken 在线下载，强制使用 Headroom 估算 tokenizer
+      - HEADROOM_FORCE_MODEL=new-api-generic
+      # 默认禁用 Kompress ML 模型，避免首次请求下载模型导致阻塞；生产网络稳定后可改为空启用
+      - HEADROOM_KOMPRESS_MODEL=disabled
+      - HF_HOME=/models
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HEADROOM_LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
+    volumes:
+      # 模型权重持久化，避免容器重建后重复下载（几百 MB）
+      - ./headroom-models:/models
+      # 压缩日志
+      - ./headroom-logs:/app/logs
+    # ports:
+    #   - "8787:8787"
+    networks:
+      - new-api-net
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/livez', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+networks:
+  new-api-net:
+    driver: bridge

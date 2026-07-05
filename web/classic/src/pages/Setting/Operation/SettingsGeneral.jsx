@@ -58,9 +58,12 @@ export default function GeneralSettings(props) {
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
+    HeadroomGlobalEnabled: true,
+    HeadroomRetentionDays: 30,
     AutoSyncOfficialRatioEnabled: false,
     OfficialRatioSyncIntervalHours: 24,
     OfficialRatioSyncSources: 'official,modelsdev',
+    OfficialRatioOverwriteExisting: false,
     'token_setting.max_user_tokens': 1000,
   });
   const refForm = useRef();
@@ -443,6 +446,29 @@ export default function GeneralSettings(props) {
                   onChange={handleFieldChange('SelfUseModeEnabled')}
                 />
               </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'HeadroomGlobalEnabled'}
+                  label={t('Headroom 全局开关')}
+                  extraText={t('关闭后所有渠道的 Headroom 压缩均不生效')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('HeadroomGlobalEnabled')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'HeadroomRetentionDays'}
+                  label={t('Headroom 数据保留天数')}
+                  extraText={t('Headroom 压缩统计的留存天数，超过此范围的数据不在看板显示（默认 30 天）')}
+                  min={1}
+                  max={365}
+                  initValue={30}
+                  style={{ width: '100%' }}
+                  onChange={handleFieldChange('HeadroomRetentionDays')}
+                />
+              </Col>
             </Row>
             {/* 自用模式 - 自动获取官方价格 */}
             <Row gutter={16}>
@@ -500,6 +526,17 @@ export default function GeneralSettings(props) {
                   )}
                   placeholder='official,modelsdev'
                   onChange={handleFieldChange('OfficialRatioSyncSources')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'OfficialRatioOverwriteExisting'}
+                  label={t('覆盖已有价格')}
+                  extraText={t('开启后同步时覆盖本地已配置的模型价格，关闭则仅填充缺失')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('OfficialRatioOverwriteExisting')}
                 />
               </Col>
               <Col span={24}>

@@ -175,8 +175,24 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	}
 
 	if !containStreamUsage {
-		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		// 上游未返回 usage，本地估算
+		promptTokens := info.GetEstimatePromptTokens()
+		// 如果 Headroom 压缩生效，用压缩后的实际发送 token 数替代估算值
+		if info.HeadroomTokensSaved > 0 && info.HeadroomTokensInput > 0 {
+			actualSent := info.HeadroomTokensInput - info.HeadroomTokensSaved
+			if actualSent > 0 && actualSent < promptTokens {
+				promptTokens = actualSent
+			}
+		}
+		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, promptTokens)
 		usage.CompletionTokens += toolCount * 7
+	} else {
+		// 上游返回了 usage 但 completion_tokens=0 时（如 doubao-agent-plan 流式不返回 comp），
+		// 用本地累积的响应文本估算 completion_tokens，避免计费遗漏输出 token
+		if usage.CompletionTokens == 0 && responseTextBuilder.Len() > 0 {
+			usage.CompletionTokens = service.CountTextToken(responseTextBuilder.String(), info.UpstreamModelName) + toolCount*7
+			usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+		}
 	}
 
 	applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))

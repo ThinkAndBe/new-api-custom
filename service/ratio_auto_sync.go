@@ -25,9 +25,11 @@ import (
 
 // 官方价格来源常量
 const (
-	sourceOfficial  = "official"   // basellm.github.io 官方倍率预设
+	sourceOfficial  = "official"   // 官方倍率预设（从 NEW API 自身的 /api/ratio_config 获取，需开启 ExposeRatioEnabled）
 	sourceModelsDev = "modelsdev"  // models.dev 多供应商价格聚合
 
+	// official 来源：NEW API 自身的 ratio_config 接口（需在系统设置中开启"暴露倍率配置"）
+	// 如果自身未开启，则回退到上游公共实例
 	officialBaseURL      = "https://basellm.github.io"
 	officialEndpointPath = "/api/ratio_config"
 	modelsDevBaseURL     = "https://models.dev"
@@ -146,6 +148,7 @@ func isModelsDevEndpointSync(rawURL string) bool {
 }
 
 // fetchURLWithRetry 拉取指定 URL 内容，带简单重试和 github.io IPv4 优先。
+// 支持 HTTP_PROXY/HTTPS_PROXY 环境变量代理。
 func fetchURLWithRetry(ctx context.Context, fullURL string) ([]byte, error) {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	transport := &http.Transport{
@@ -158,6 +161,8 @@ func fetchURLWithRetry(ctx context.Context, fullURL string) ([]byte, error) {
 	if common.TLSInsecureSkipVerify {
 		transport.TLSClientConfig = common.InsecureTLSConfig
 	}
+	// 支持系统代理（HTTP_PROXY / HTTPS_PROXY 环境变量）
+	transport.Proxy = http.ProxyFromEnvironment
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, _, err := net.SplitHostPort(addr)
 		if err != nil {
@@ -182,12 +187,14 @@ func fetchURLWithRetry(ctx context.Context, fullURL string) ([]byte, error) {
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err
+			common.SysLog(fmt.Sprintf("[官方价格同步] 拉取失败 (attempt %d/3): %s, error: %v", attempt+1, fullURL, err))
 			time.Sleep(time.Duration(200*(1<<attempt)) * time.Millisecond)
 			continue
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			lastErr = fmt.Errorf("HTTP %s", resp.Status)
+			common.SysLog(fmt.Sprintf("[官方价格同步] 拉取失败 (attempt %d/3): %s, status: %s", attempt+1, fullURL, resp.Status))
 			time.Sleep(time.Duration(200*(1<<attempt)) * time.Millisecond)
 			continue
 		}
@@ -378,7 +385,40 @@ func buildCandidateSync(provider string, cost modelsDevCostSync) (modelsDevCandi
 	}, true
 }
 
+// shouldReplaceCandidateSync 国产模型优先选官方 provider（非转售），其次选 -cn 后缀。
+// officialProviders 中的 provider 优先级最高，避免选到云市场转售的低价。
+var officialProviders = map[string]int{
+	"zhipuai":     1, // 智谱官方
+	"moonshotai":  1, // Kimi 官方
+	"minimax":     1, // MiniMax 官方
+	"xiaomi":      1, // 小米官方
+	"stepfun":     1, // 阶跃星辰官方
+	"baidu":       1, // 百度官方
+	"baichuan":    1, // 百川官方
+	"01-ai":       1, // 零一万物官方
+	"yi":          1,
+	"sensetime":   1, // 商汤官方
+	"iflytek":     1, // 讯飞官方
+	"hunyuan":     1, // 腾讯官方
+	"volcengine":  1, // 火山引擎官方
+}
+
 func shouldReplaceCandidateSync(current, next modelsDevCandidateSync) bool {
+	// 优先选官方 provider（zhipuai > alibaba-cn 转售）
+	currentOfficial := officialProviders[current.Provider]
+	nextOfficial := officialProviders[next.Provider]
+	if currentOfficial != nextOfficial {
+		return nextOfficial > currentOfficial
+	}
+
+	// 同为官方/非官方时，优先选 -cn 后缀（国内定价）
+	currentCN := strings.HasSuffix(current.Provider, "-cn")
+	nextCN := strings.HasSuffix(next.Provider, "-cn")
+	if currentCN != nextCN {
+		return nextCN
+	}
+
+	// 最后选价格最低的（排除 0 元免费方案）
 	currentNonZero := current.Input > 0
 	nextNonZero := next.Input > 0
 	if currentNonZero != nextNonZero {
@@ -405,6 +445,30 @@ func convertModelsDevToMap(reader io.Reader) (map[string]any, error) {
 		return nil, fmt.Errorf("empty models.dev response")
 	}
 
+	// 国产大模型 provider 白名单（只同步这些厂商，忽略国外模型）
+	domesticProviders := map[string]bool{
+		"zhipuai":         true, // 智谱 GLM
+		"zhipuai-cn":      true,
+		"alibaba-cn":      true, // 阿里通义千问
+		"dashscope":       true,
+		"moonshotai":      true, // Kimi
+		"moonshotai-cn":   true,
+		"minimax":         true, // MiniMax
+		"minimax-cn":      true,
+		"xiaomi":          true, // 小米 MiMo
+		"stepfun":         true, // 阶跃星辰
+		"stepfun-ai":      true,
+		"baidu":           true, // 百度文心
+		"baichuan":        true, // 百川
+		"01-ai":           true, // 零一万物
+		"yi":              true,
+		"sensetime":       true, // 商汤
+		"iflytek":         true, // 讯飞星火
+		"hunyuan":         true, // 腾讯混元
+		"volcengine":      true, // 火山引擎豆包
+		"doubao":          true,
+	}
+
 	providers := make([]string, 0, len(upstreamData))
 	for provider := range upstreamData {
 		providers = append(providers, provider)
@@ -413,6 +477,10 @@ func convertModelsDevToMap(reader io.Reader) (map[string]any, error) {
 
 	selected := make(map[string]modelsDevCandidateSync)
 	for _, provider := range providers {
+		// 只同步国产模型 provider
+		if !domesticProviders[provider] {
+			continue
+		}
 		providerData := upstreamData[provider]
 		if len(providerData.Models) == 0 {
 			continue
@@ -440,12 +508,15 @@ func convertModelsDevToMap(reader io.Reader) (map[string]any, error) {
 	modelRatioMap := make(map[string]any)
 	completionRatioMap := make(map[string]any)
 	cacheRatioMap := make(map[string]any)
+	rmbCorrection := operation_setting.OfficialRatioRMBCorrection
 	for modelName, candidate := range selected {
 		if candidate.Input == 0 {
 			modelRatioMap[modelName] = 0.0
 			continue
 		}
-		modelRatio := candidate.Input * float64(ratio_setting.USD) / modelsDevInputCostRatioBase
+		// models.dev 价格是 USD/1M tokens，转换为 NEW API ratio（1 ratio = $0.002/1K = $2/1M）
+		// 再乘以 RMB 修正系数，使价格接近国内 RMB 官方定价
+		modelRatio := candidate.Input * float64(ratio_setting.USD) / modelsDevInputCostRatioBase * rmbCorrection
 		modelRatioMap[modelName] = roundRatioValueSync(modelRatio)
 		if candidate.Output != nil {
 			completionRatio := *candidate.Output / candidate.Input
@@ -478,10 +549,10 @@ func SyncOfficialRatios() (int, error) {
 
 	sources := parseSources(operation_setting.OfficialRatioSyncSources)
 	if len(sources) == 0 {
-		sources = []string{sourceOfficial, sourceModelsDev}
+		sources = []string{sourceModelsDev, sourceOfficial}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), syncHTTPTimeout*2)
+	ctx, cancel := context.WithTimeout(context.Background(), syncHTTPTimeout*3)
 	defer cancel()
 
 	merged := newRatioData()
@@ -489,8 +560,9 @@ func SyncOfficialRatios() (int, error) {
 	// 按优先级顺序拉取：高优先级来源 overwrite=true（覆盖），低优先级兜底 overwrite=false
 	for _, src := range sources {
 		var (
-			data map[string]any
-			err  error
+			data    map[string]any
+			err     error
+			cnt     int
 		)
 		switch src {
 		case sourceOfficial:
@@ -504,10 +576,14 @@ func SyncOfficialRatios() (int, error) {
 			common.SysLog(fmt.Sprintf("[官方价格同步] 来源 %s 拉取失败: %v", src, err))
 			continue
 		}
+		// 统计拉取到的模型数
+		if mr, ok := data["model_ratio"].(map[string]any); ok {
+			cnt = len(mr)
+		}
 		// 第一个来源覆盖，后续仅填充缺失
 		isFirst := len(merged.ModelRatio) == 0 && len(merged.CacheRatio) == 0
 		merged.mergeFrom(data, isFirst)
-		common.SysLog(fmt.Sprintf("[官方价格同步] 来源 %s 拉取成功", src))
+		common.SysLog(fmt.Sprintf("[官方价格同步] 来源 %s 拉取成功，%d 个模型", src, cnt))
 	}
 
 	if len(merged.ModelRatio) == 0 {
@@ -546,7 +622,7 @@ func parseSources(s string) []string {
 }
 
 // applyMergedRatios 将合并后的倍率数据应用到本地配置。
-// 采用合并策略：对每个模型，仅当本地未配置时才写入（避免覆盖用户自定义）。
+// 策略：OfficialRatioOverwriteExisting=true 时覆盖已有值，否则仅填充缺失。
 func applyMergedRatios(merged *ratioData) error {
 	// 获取本地现有数据
 	localModelRatio := ratio_setting.GetModelRatioCopy()
@@ -556,40 +632,42 @@ func applyMergedRatios(merged *ratioData) error {
 	localAudioRatio := ratio_setting.GetAudioRatioCopy()
 	localAudioCompletionRatio := ratio_setting.GetAudioCompletionRatioCopy()
 
-	// 合并：远程值填充本地缺失的键
+	overwrite := operation_setting.OfficialRatioOverwriteExisting
+
+	// 合并：根据 overwrite 决定是否覆盖已有值
 	changed := false
 	for k, v := range merged.ModelRatio {
-		if _, exists := localModelRatio[k]; !exists {
+		if _, exists := localModelRatio[k]; !exists || overwrite {
 			localModelRatio[k] = v
 			changed = true
 		}
 	}
 	for k, v := range merged.CompletionRatio {
-		if _, exists := localCompletionRatio[k]; !exists {
+		if _, exists := localCompletionRatio[k]; !exists || overwrite {
 			localCompletionRatio[k] = v
 			changed = true
 		}
 	}
 	for k, v := range merged.CacheRatio {
-		if _, exists := localCacheRatio[k]; !exists {
+		if _, exists := localCacheRatio[k]; !exists || overwrite {
 			localCacheRatio[k] = v
 			changed = true
 		}
 	}
 	for k, v := range merged.ImageRatio {
-		if _, exists := localImageRatio[k]; !exists {
+		if _, exists := localImageRatio[k]; !exists || overwrite {
 			localImageRatio[k] = v
 			changed = true
 		}
 	}
 	for k, v := range merged.AudioRatio {
-		if _, exists := localAudioRatio[k]; !exists {
+		if _, exists := localAudioRatio[k]; !exists || overwrite {
 			localAudioRatio[k] = v
 			changed = true
 		}
 	}
 	for k, v := range merged.AudioCompletionRatio {
-		if _, exists := localAudioCompletionRatio[k]; !exists {
+		if _, exists := localAudioCompletionRatio[k]; !exists || overwrite {
 			localAudioCompletionRatio[k] = v
 			changed = true
 		}

@@ -64,6 +64,7 @@ import OIDCIcon from '../common/logo/OIDCIcon';
 import WeChatIcon from '../common/logo/WeChatIcon';
 import LinuxDoIcon from '../common/logo/LinuxDoIcon';
 import TwoFAVerification from './TwoFAVerification';
+import ForceChangePasswordModal from './ForceChangePasswordModal';
 import { useTranslation } from 'react-i18next';
 import { SiDiscord } from 'react-icons/si';
 
@@ -102,6 +103,11 @@ const LoginForm = () => {
     useState(false);
   const [wechatCodeSubmitLoading, setWechatCodeSubmitLoading] = useState(false);
   const [showTwoFA, setShowTwoFA] = useState(false);
+  const [forceChangePwdData, setForceChangePwdData] = useState({
+    visible: false,
+    username: '',
+    password: '',
+  });
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -240,6 +246,13 @@ const LoginForm = () => {
           // 检查是否需要2FA验证
           if (data && data.require_2fa) {
             setShowTwoFA(true);
+            setLoginLoading(false);
+            return;
+          }
+
+          // 检查是否需要强制修改密码（管理员创建的用户首次登录）
+          if (data && data.must_change_password) {
+            setForceChangePwdData({ visible: true, username: data.username || username, password });
             setLoginLoading(false);
             return;
           }
@@ -976,6 +989,24 @@ const LoginForm = () => {
           </div>
         )}
       </div>
+
+      {/* 首次登录强制改密弹窗 */}
+      <ForceChangePasswordModal
+        visible={forceChangePwdData.visible}
+        username={forceChangePwdData.username}
+        initialPassword={forceChangePwdData.password}
+        onClose={() => {
+          setForceChangePwdData({ visible: false, username: '', password: '' });
+        }}
+        onSuccess={(data) => {
+          setForceChangePwdData({ visible: false, username: '', password: '' });
+          userDispatch({ type: 'login', payload: data });
+          setUserData(data);
+          updateAPI();
+          showSuccess('登录成功！');
+          navigate('/console');
+        }}
+      />
     </div>
   );
 };

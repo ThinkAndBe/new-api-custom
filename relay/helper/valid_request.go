@@ -302,6 +302,9 @@ func GetAndValidateTextRequest(c *gin.Context, relayMode int) (*dto.GeneralOpenA
 		if len(textRequest.Messages) == 0 && textRequest.Prefix == nil && textRequest.Suffix == nil {
 			return nil, errors.New("field messages is required")
 		}
+		// 检测并转换 Claude 风格的 content blocks（tool_use/tool_result）为 OpenAI 格式
+		// 某些客户端（如 ZCode）可能通过 OpenAI chat/completions 端点发送 Claude 格式的消息
+		normalizeClaudeContentBlocks(textRequest)
 	case relayconstant.RelayModeEmbeddings:
 	case relayconstant.RelayModeModerations:
 		if textRequest.Input == nil || textRequest.Input == "" {
@@ -348,4 +351,98 @@ func GetAndValidateGeminiBatchEmbeddingRequest(c *gin.Context) (*dto.GeminiBatch
 		return nil, err
 	}
 	return request, nil
+}
+
+// normalizeClaudeContentBlocks 检测 OpenAI chat/completions 请求中的 Claude 风格 content blocks
+// （tool_use / tool_result），并转换为 OpenAI 标准格式。
+// 某些客户端（如 ZCode）可能通过 OpenAI 端点发送 Claude 格式的消息，
+// 直接透传给上游会导致 "invalid value: tool_use" 错误。
+func normalizeClaudeContentBlocks(textRequest *dto.GeneralOpenAIRequest) {
+	for i := range textRequest.Messages {
+		msg := &textRequest.Messages[i]
+		// Content 可能是 string 或 []any（content blocks）
+		if msg.Content == nil {
+			continue
+		}
+		if _, isStr := msg.Content.(string); isStr {
+			continue
+		}
+		blocks, ok := msg.Content.([]any)
+		if !ok {
+			continue
+		}
+
+		// 检测是否包含 Claude 风格的 content block
+		hasClaudeBlock := false
+		for _, b := range blocks {
+			if block, ok := b.(map[string]any); ok {
+				t, _ := block["type"].(string)
+				if t == "tool_use" || t == "tool_result" {
+					hasClaudeBlock = true
+					break
+				}
+			}
+		}
+		if !hasClaudeBlock {
+			continue
+		}
+
+		// 转换 Claude content blocks → OpenAI 格式
+		var textParts []string
+		var toolCalls []map[string]any
+		for _, b := range blocks {
+			block, ok := b.(map[string]any)
+			if !ok {
+				continue
+			}
+			t, _ := block["type"].(string)
+			switch t {
+			case "text":
+				if text, ok := block["text"].(string); ok {
+					textParts = append(textParts, text)
+				}
+			case "tool_use":
+				id, _ := block["id"].(string)
+				name, _ := block["name"].(string)
+				input := block["input"]
+				args, _ := common.Marshal(input)
+				toolCalls = append(toolCalls, map[string]any{
+					"id":   id,
+					"type": "function",
+					"function": map[string]any{
+						"name":      name,
+						"arguments": string(args),
+					},
+				})
+			case "tool_result":
+				// tool_result 在 Claude 里是 user 消息的 content block
+				// 在 OpenAI 里应该是单独的 tool role 消息
+				// 这里把 content 提取为文本，实际 tool 消息需要插入
+				if content, ok := block["content"]; ok {
+					if cs, ok := content.(string); ok {
+						textParts = append(textParts, cs)
+					} else if ca, ok := content.([]any); ok {
+						for _, c := range ca {
+							if cm, ok := c.(map[string]any); ok {
+								if ct, ok := cm["text"].(string); ok {
+									textParts = append(textParts, ct)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// 设置转换后的内容
+		if len(textParts) > 0 {
+			msg.Content = strings.Join(textParts, "\n")
+		} else {
+			msg.Content = ""
+		}
+		if len(toolCalls) > 0 {
+			tcJSON, _ := common.Marshal(toolCalls)
+			msg.ToolCalls = tcJSON
+		}
+	}
 }

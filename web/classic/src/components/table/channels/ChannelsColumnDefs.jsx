@@ -784,20 +784,20 @@ export const getChannelsColumns = ({
                   type='tertiary'
                   onClick={() => testChannel(record, '')}
                 >
-                  {t('测试')}
-                </Button>
-                <Button
-                  size='small'
-                  type='tertiary'
-                  icon={<IconTreeTriangleDown />}
-                  onClick={() => {
-                    setCurrentTestChannel(record);
-                    setShowModelTestModal(true);
-                  }}
-                />
-              </SplitButtonGroup>
+{t('测试')}
+	                </Button>
+	                <Button
+	                  size='small'
+	                  type='tertiary'
+	                  icon={<IconTreeTriangleDown />}
+	                  onClick={() => {
+	                    setCurrentTestChannel(record);
+	                    setShowModelTestModal(true);
+	                  }}
+/>
+	              </SplitButtonGroup>
 
-              {record.status === 1 ? (
+	              {record.status === 1 ? (
                 <Button
                   type='danger'
                   size='small'

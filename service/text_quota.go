@@ -185,6 +185,19 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	summary.PromptTokens = usage.PromptTokens
 	summary.CompletionTokens = usage.CompletionTokens
 	summary.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+
+	// Headroom 压缩生效时，始终用压缩后实际发送的 token 数覆盖 prompt_tokens。
+	// 无论上游返回什么 usage（OpenAI 原生 / Claude→OpenAI 转换 / 原生 Claude），
+	// 计费都应基于压缩后的实际发送量，而非上游可能未压缩的原始估算值。
+	// 修复 ch=3 (火山ap) prompt_tokens > headroom_input 的问题。
+	if relayInfo.HeadroomTokensSaved > 0 && relayInfo.HeadroomTokensInput > 0 {
+		actualSent := relayInfo.HeadroomTokensInput - relayInfo.HeadroomTokensSaved
+		if actualSent > 0 && actualSent < summary.PromptTokens {
+			summary.PromptTokens = actualSent
+			summary.TotalTokens = summary.PromptTokens + summary.CompletionTokens
+		}
+	}
+
 	summary.CacheTokens = usage.PromptTokensDetails.CachedTokens
 	summary.CacheCreationTokens = usage.PromptTokensDetails.CachedCreationTokens
 	summary.CacheCreationTokens5m = usage.ClaudeCacheCreation5mTokens
@@ -454,6 +467,11 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		// reliable total input value and tagged the usage source. Do not infer it from
 		// prompt/cache fields here, otherwise old upstream payloads may be double-counted.
 		other["input_tokens_total"] = usage.InputTokens
+	}
+	if relayInfo.HeadroomTokensSaved > 0 {
+		other["headroom_tokens_saved"] = relayInfo.HeadroomTokensSaved
+		other["headroom_tokens_input"] = relayInfo.HeadroomTokensInput
+		other["headroom_ratio"] = relayInfo.HeadroomRatio
 	}
 	if tieredBillingApplied {
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)

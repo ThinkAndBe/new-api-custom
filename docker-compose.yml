@@ -40,6 +40,9 @@ services:
 #      - GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX  # Google Analytics 的测量 ID (Google Analytics Measurement ID)
 #      - UMAMI_WEBSITE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  # Umami 网站 ID (Umami Website ID)
 #      - UMAMI_SCRIPT_URL=https://analytics.umami.is/script.js  # Umami 脚本 URL，默认为官方地址 (Umami Script URL, defaults to official URL)
+      # Headroom 压缩服务地址：仅当 --profile headroom 启用时生效
+      # 启用方式：docker compose --profile headroom up -d
+      - HEADROOM_URL=http://headroom:8787
 
     depends_on:
       - redis
@@ -89,6 +92,49 @@ services:
 #      - new-api-network
 #    ports:
 #      - "3306:3306"  # Uncomment if you need to access MySQL from outside Docker
+
+  # ===================================================================
+  # 可选：Headroom 上下文压缩服务（sidecar）
+  # ===================================================================
+  # 默认不会启动；需要压缩能力时显式启用：
+  #   docker compose --profile headroom up -d
+  #
+  # 启用后，NEW API 自动通过 HEADROOM_URL=http://headroom:8787 调用，
+  # 无需在渠道页单独填 URL（渠道里留空即可）。
+  headroom:
+    profiles: ["headroom"]
+    build:
+      context: ./docker/headroom
+      dockerfile: Dockerfile
+    image: new-api-headroom:latest
+    container_name: headroom
+    restart: always
+    environment:
+      - HEADROOM_HOST=0.0.0.0
+      - HEADROOM_PORT=8787
+      # 多用户/高并发：每个 worker 是独立进程，建议按 CPU 核数或 CPU 核数/2 设置
+      - HEADROOM_WORKERS=2
+      # 限制单实例并发，防止瞬时多用户压缩把 CPU/内存打满
+      - HEADROOM_MAX_CONCURRENCY=50
+      # 国内环境避免 tiktoken 在线下载，强制使用 Headroom 估算 tokenizer
+      - HEADROOM_FORCE_MODEL=new-api-generic
+      # 默认禁用 Kompress ML 模型，避免首次请求下载模型导致阻塞；生产网络稳定后可改为空启用
+      - HEADROOM_KOMPRESS_MODEL=disabled
+      - HF_HOME=/models
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HEADROOM_LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./headroom-models:/models
+      - ./headroom-logs:/app/logs
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/livez', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
 
 volumes:
   pg_data:

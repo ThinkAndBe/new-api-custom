@@ -69,6 +69,7 @@ func SetApiRouter(router *gin.Engine) {
 			userRoute.POST("/register", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, middleware.TurnstileCheck(), controller.Register)
 			userRoute.POST("/login", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, middleware.TurnstileCheck(), controller.Login)
 			userRoute.POST("/login/2fa", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, controller.Verify2FALogin)
+			userRoute.POST("/login/change_password", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, controller.ChangePasswordOnFirstLogin)
 			userRoute.POST("/passkey/login/begin", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, controller.PasskeyLoginBegin)
 			userRoute.POST("/passkey/login/finish", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, controller.PasskeyLoginFinish)
 			//userRoute.POST("/tokenlog", middleware.CriticalRateLimit(), controller.TokenLog)
@@ -265,6 +266,7 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.POST("/upstream_updates/apply_all", controller.ApplyAllChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect", controller.DetectChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect_all", controller.DetectAllChannelUpstreamModelUpdates)
+			channelRoute.POST("/health/check/:id", controller.CheckChannelHealth)
 		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())
@@ -315,10 +317,23 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/token_summary", middleware.AdminAuth(), controller.GetLogsTokenSummary)
 		logRoute.GET("/self/token_summary", middleware.UserAuth(), controller.GetLogsSelfTokenSummary)
 
-		dataRoute := apiRouter.Group("/data")
-		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
-		dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
-		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
+dataRoute := apiRouter.Group("/data")
+			dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
+			dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
+			dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
+			headroomDataRoute := dataRoute.Group("/headroom")
+			headroomDataRoute.Use(middleware.AdminAuth())
+			{
+				headroomDataRoute.GET("/summary", controller.GetHeadroomSummary)
+				headroomDataRoute.GET("/by_model", controller.GetHeadroomByModel)
+				headroomDataRoute.GET("/by_user", controller.GetHeadroomByUser)
+				headroomDataRoute.GET("/by_channel", controller.GetHeadroomByChannel)
+				headroomDataRoute.GET("/recent", controller.GetHeadroomRecent)
+				headroomDataRoute.GET("/trend", controller.GetHeadroomTrend)
+				headroomDataRoute.GET("/monthly", controller.GetHeadroomMonthly)
+				headroomDataRoute.GET("/yearly", controller.GetHeadroomYearly)
+				headroomDataRoute.GET("/export", controller.ExportHeadroom)
+			}
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{

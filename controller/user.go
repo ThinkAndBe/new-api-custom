@@ -87,6 +87,103 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// 检查是否需要强制修改密码（管理员创建的用户首次登录）
+	if user.MustChangePassword {
+		// 设置 pending session，等待首次改密完成
+		session := sessions.Default(c)
+		session.Set("pending_username", user.Username)
+		session.Set("pending_user_id", user.Id)
+		session.Set("pending_must_change_password", true)
+		if err := session.Save(); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": "首次登录，请修改密码",
+			"success": true,
+			"data": map[string]interface{}{
+				"must_change_password": true,
+				"username":             user.Username,
+			},
+		})
+		return
+	}
+
+	setupLogin(&user, c)
+}
+
+// ChangePasswordOnFirstLogin 首次登录强制改密接口。
+// 需要 pending session（由 Login 设置），验证旧密码后更新密码并清除标志。
+func ChangePasswordOnFirstLogin(c *gin.Context) {
+	var req struct {
+		Username         string `json:"username"`
+		OriginalPassword string `json:"original_password"`
+		NewPassword      string `json:"new_password"`
+	}
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if req.NewPassword == "" || len(req.NewPassword) < 8 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "密码长度至少为8个字符",
+		})
+		return
+	}
+
+	// 校验 pending session
+	session := sessions.Default(c)
+	pendingUsername, ok1 := session.Get("pending_username").(string)
+	pendingMustChange, ok2 := session.Get("pending_must_change_password").(bool)
+	if !ok1 || !ok2 || !pendingMustChange || pendingUsername == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "会话已过期，请重新登录",
+		})
+		return
+	}
+	if req.Username != "" && req.Username != pendingUsername {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "用户名不匹配",
+		})
+		return
+	}
+
+	// 查用户并验证旧密码
+	user := model.User{Username: pendingUsername}
+	if err := user.ValidateAndFill(); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "用户验证失败",
+		})
+		return
+	}
+	// 验证旧密码（原始密码）
+	if !common.ValidatePasswordAndHash(req.OriginalPassword, user.Password) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "原密码不正确",
+		})
+		return
+	}
+
+	// 更新密码并清除标志
+	user.Password = req.NewPassword
+	user.MustChangePassword = false
+	if err := user.Update(true); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// 清除 pending session 标志
+	session.Delete("pending_must_change_password")
+	session.Delete("pending_username")
+	session.Delete("pending_user_id")
+	_ = session.Save()
+
+	// 完成登录
 	setupLogin(&user, c)
 }
 
@@ -894,12 +991,18 @@ func CreateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
+	// 捕获明文密码，Insert 后会被 hash 覆盖
+	plainPassword := user.Password
 	// Even for admin users, we cannot fully trust them!
 	cleanUser := model.User{
-		Username:    user.Username,
-		Password:    user.Password,
-		DisplayName: user.DisplayName,
-		Role:        user.Role, // 保持管理员设置的角色
+		Username:           user.Username,
+		Password:           user.Password,
+		DisplayName:        user.DisplayName,
+		Role:               user.Role, // 保持管理员设置的角色
+		MustChangePassword: true,      // 管理员创建的用户首次登录必须改密
+	}
+	if user.Remark != "" {
+		cleanUser.Remark = user.Remark
 	}
 	if err := cleanUser.Insert(0); err != nil {
 		common.ApiError(c, err)
@@ -913,6 +1016,11 @@ func CreateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
+		"data": gin.H{
+			"username":             cleanUser.Username,
+			"password":             plainPassword,
+			"must_change_password": true,
+		},
 	})
 	return
 }

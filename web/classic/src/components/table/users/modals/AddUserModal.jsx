@@ -32,16 +32,19 @@ import {
   Form,
   Row,
   Col,
+  Modal,
 } from '@douyinfe/semi-ui';
-import { IconSave, IconClose, IconUserAdd } from '@douyinfe/semi-icons';
+import { IconSave, IconClose, IconUserAdd, IconCopy } from '@douyinfe/semi-icons';
 import { useTranslation } from 'react-i18next';
 
-const { Text, Title } = Typography;
+const { Text, Title, Paragraph } = Typography;
 
 const AddUserModal = (props) => {
   const { t } = useTranslation();
   const formApiRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  // 创建成功后的邀请信息弹窗
+  const [credentials, setCredentials] = useState(null);
   const isMobile = useIsMobile();
 
   const getInitValues = () => ({
@@ -53,21 +56,44 @@ const AddUserModal = (props) => {
 
   const submit = async (values) => {
     setLoading(true);
-    const res = await API.post(`/api/user/`, values);
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('用户账户创建成功！'));
-      formApiRef.current?.setValues(getInitValues());
-      props.refresh();
-      props.handleClose();
-    } else {
-      showError(message);
+    try {
+      const res = await API.post(`/api/user/`, values);
+      const { success, message, data } = res.data;
+      if (success) {
+        showSuccess(t('用户账户创建成功！'));
+        formApiRef.current?.setValues(getInitValues());
+        props.refresh();
+        props.handleClose();
+        // 弹出邀请信息
+        if (data && data.username) {
+          setCredentials(data);
+        }
+      } else {
+        showError(message);
+      }
+    } catch (e) {
+      showError(e.message);
     }
     setLoading(false);
   };
 
   const handleCancel = () => {
     props.handleClose();
+  };
+
+  // 复制邀请文案
+  const handleCopyInvite = () => {
+    if (!credentials) return;
+    const loginUrl = window.location.origin;
+    const text =
+      `${t('New API 账号邀请')}\n` +
+      `${t('登录地址')}: ${loginUrl}\n` +
+      `${t('用户名')}: ${credentials.username}\n` +
+      `${t('初始密码')}: ${credentials.password}\n` +
+      `${t('首次登录需要修改密码')}`;
+    navigator.clipboard.writeText(text).then(() => {
+      showSuccess(t('邀请信息已复制到剪贴板'));
+    });
   };
 
   return (
@@ -158,10 +184,10 @@ const AddUserModal = (props) => {
                   <Col span={24}>
                     <Form.Input
                       field='password'
-                      label={t('密码')}
+                      label={t('初始密码')}
                       type='password'
-                      placeholder={t('请输入密码')}
-                      rules={[{ required: true, message: t('请输入密码') }]}
+                      placeholder={t('用户首次登录需要修改此密码')}
+                      rules={[{ required: true, message: t('请输入初始密码') }]}
                       showClear
                     />
                   </Col>
@@ -179,6 +205,67 @@ const AddUserModal = (props) => {
           </Form>
         </Spin>
       </SideSheet>
+
+      {/* 邀请信息弹窗 */}
+      <Modal
+        title={
+          <Space>
+            <IconUserAdd />
+            {t('用户创建成功 - 邀请信息')}
+          </Space>
+        }
+        visible={!!credentials}
+        onCancel={() => setCredentials(null)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button onClick={() => setCredentials(null)}>{t('关闭')}</Button>
+            <Button
+              theme='solid'
+              type='primary'
+              icon={<IconCopy />}
+              onClick={handleCopyInvite}
+            >
+              {t('复制邀请信息')}
+            </Button>
+          </div>
+        }
+      >
+        {credentials && (
+          <div>
+            <div
+              style={{
+                background: 'var(--semi-color-fill-0)',
+                padding: 16,
+                borderRadius: 8,
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ marginBottom: 8 }}>
+                <Text strong>{t('登录地址')}: </Text>
+                <Text copyable>{window.location.origin}</Text>
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <Text strong>{t('用户名')}: </Text>
+                <Text code>{credentials.username}</Text>
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <Text strong>{t('初始密码')}: </Text>
+                <Text code>{credentials.password}</Text>
+              </div>
+            </div>
+            <div
+              style={{
+                background: 'var(--semi-color-warning-light)',
+                padding: 12,
+                borderRadius: 8,
+                fontSize: 13,
+              }}
+            >
+              ⚠️ {t('该用户首次登录时需要修改密码才能使用系统')}
+            </div>
+          </div>
+        )}
+      </Modal>
     </>
   );
 };

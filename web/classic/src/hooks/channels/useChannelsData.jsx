@@ -929,6 +929,7 @@ export const useChannelsData = () => {
         }
       } else {
         showError(message);
+        handleTestFailure(record, message);
       }
     } catch (error) {
       // 处理网络错误
@@ -954,7 +955,35 @@ export const useChannelsData = () => {
     }
   };
 
-  // 批量测试单个渠道的所有模型，参考旧版实现
+  // 测试失败时直接禁用渠道
+  const handleTestFailure = (record, message) => {
+    if (
+      message &&
+      message !== '渠道已禁用' &&
+      message !== '渠道已被停用'
+    ) {
+      manageChannel(record.id, 'disable', record);
+    }
+  };
+
+  // 手动健康检测（测活）
+  const healthCheckChannel = async (channelId, channelName) => {
+    try {
+      const res = await API.post(`/api/channel/health/check/${channelId}`);
+      if (res.data.success) {
+        showSuccess(t('渠道「${name}」测活成功').replace('${name}', channelName));
+        refresh();
+      } else {
+        showError(
+          t('渠道「${name}」测活失败: ${msg}')
+            .replace('${name}', channelName)
+            .replace('${msg}', res.data.message),
+        );
+      }
+    } catch (error) {
+      showError(error.message || t('测活失败'));
+    }
+  };
   const batchTestModels = async () => {
     if (!currentTestChannel || !currentTestChannel.models) {
       showError(t('渠道模型信息不完整'));
@@ -1236,6 +1265,8 @@ export const useChannelsData = () => {
     fixChannelsAbilities,
     checkOllamaVersion,
     testChannel,
+    healthCheckChannel,
+    handleTestFailure,
     batchTestModels,
     handleCloseModal,
     getFormValues,

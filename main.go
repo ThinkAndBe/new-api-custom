@@ -113,6 +113,12 @@ func main() {
 
 	go controller.AutomaticallyTestChannels()
 
+	// 渠道定时暂停任务（自动根据配置的时间窗口切换状态 1↔4）
+	service.StartChannelSchedulePauseTask()
+
+	// 渠道健康监测任务（定时探活，连续失败自动熔断，恢复后自动启用）
+	controller.StartChannelHealthMonitorTask()
+
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 

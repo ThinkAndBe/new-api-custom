@@ -163,6 +163,11 @@ type RelayInfo struct {
 
 	PriceData types.PriceData
 
+	// Headroom 压缩节省统计
+	HeadroomTokensSaved int
+	HeadroomTokensInput int
+	HeadroomRatio       float64
+
 	// TieredBillingSnapshot is a frozen snapshot of tiered billing rules
 	// captured at pre-consume time. Non-nil only when billing mode is "tiered_expr".
 	TieredBillingSnapshot *billingexpr.BillingSnapshot

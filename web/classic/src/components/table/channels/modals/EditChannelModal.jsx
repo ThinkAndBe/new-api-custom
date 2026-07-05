@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   API,
@@ -194,6 +194,9 @@ const EditChannelModal = (props) => {
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
+    headroom_enabled: false,
+    headroom_url: 'http://127.0.0.1:8787',
+    max_concurrency: 0,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -214,6 +217,11 @@ const EditChannelModal = (props) => {
     upstream_model_update_last_check_time: 0,
     upstream_model_update_last_detected_models: [],
     upstream_model_update_ignored_models: '',
+    schedule_pause_enabled: false,
+    schedule_pause_rules: [],
+    health_check_enabled: false,
+    health_check_interval_minutes: 5,
+    health_check_failure_threshold: 3,
   };
   const [batch, setBatch] = useState(false);
   const [multiToSingle, setMultiToSingle] = useState(false);
@@ -868,6 +876,9 @@ const EditChannelModal = (props) => {
           data.system_prompt = parsedSettings.system_prompt || '';
           data.system_prompt_override =
             parsedSettings.system_prompt_override || false;
+          data.headroom_enabled = parsedSettings.headroom_enabled || false;
+          data.headroom_url = parsedSettings.headroom_url || 'http://127.0.0.1:8787';
+          data.max_concurrency = parsedSettings.max_concurrency || 0;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -876,6 +887,9 @@ const EditChannelModal = (props) => {
           data.pass_through_body_enabled = false;
           data.system_prompt = '';
           data.system_prompt_override = false;
+          data.headroom_enabled = false;
+          data.headroom_url = 'http://127.0.0.1:8787';
+          data.max_concurrency = 0;
         }
       } else {
         data.force_format = false;
@@ -884,6 +898,9 @@ const EditChannelModal = (props) => {
         data.pass_through_body_enabled = false;
         data.system_prompt = '';
         data.system_prompt_override = false;
+        data.headroom_enabled = false;
+        data.headroom_url = 'http://127.0.0.1:8787';
+        data.max_concurrency = 0;
       }
 
       if (data.settings) {
@@ -925,6 +942,19 @@ const EditChannelModal = (props) => {
           )
             ? parsedSettings.upstream_model_update_ignored_models.join(',')
             : '';
+          data.schedule_pause_enabled =
+            parsedSettings.schedule_pause_enabled === true;
+          data.schedule_pause_rules = Array.isArray(
+            parsedSettings.schedule_pause_rules,
+          )
+            ? parsedSettings.schedule_pause_rules
+            : [];
+          data.health_check_enabled =
+            parsedSettings.health_check_enabled === true;
+          data.health_check_interval_minutes =
+            Number(parsedSettings.health_check_interval_minutes) || 5;
+          data.health_check_failure_threshold =
+            Number(parsedSettings.health_check_failure_threshold) || 3;
         } catch (error) {
           console.error('解析其他设置失败:', error);
           data.azure_responses_version = '';
@@ -944,6 +974,11 @@ const EditChannelModal = (props) => {
           data.upstream_model_update_last_check_time = 0;
           data.upstream_model_update_last_detected_models = [];
           data.upstream_model_update_ignored_models = '';
+          data.schedule_pause_enabled = false;
+          data.schedule_pause_rules = [];
+          data.health_check_enabled = false;
+          data.health_check_interval_minutes = 5;
+          data.health_check_failure_threshold = 3;
         }
       } else {
         // 兼容历史数据：老渠道没有 settings 时，默认按 json 展示
@@ -960,9 +995,16 @@ const EditChannelModal = (props) => {
         data.upstream_model_update_check_enabled = false;
         data.upstream_model_update_auto_sync_enabled = false;
         data.upstream_model_update_last_check_time = 0;
-        data.upstream_model_update_last_detected_models = [];
-        data.upstream_model_update_ignored_models = '';
-      }
+data.upstream_model_update_last_detected_models = [];
+	      data.upstream_model_update_ignored_models = '';
+	    }
+	    data.schedule_pause_enabled = data.schedule_pause_enabled || false;
+	    data.schedule_pause_rules = data.schedule_pause_rules || [];
+	    data.health_check_enabled = data.health_check_enabled || false;
+	    data.health_check_interval_minutes =
+	      data.health_check_interval_minutes || 5;
+	    data.health_check_failure_threshold =
+	      data.health_check_failure_threshold || 3;
 
       if (
         data.type === 45 &&
@@ -1035,7 +1077,12 @@ const EditChannelModal = (props) => {
         data.pass_through_body_enabled ||
         data.force_format ||
         data.claude_beta_query ||
-        data.system_prompt_override;
+        data.system_prompt_override ||
+        data.headroom_enabled ||
+        (data.headroom_url && data.headroom_url !== 'http://127.0.0.1:8787') ||
+        (Number(data.max_concurrency) > 0) ||
+        data.schedule_pause_enabled ||
+        data.health_check_enabled;
       if (hasAdvancedValues) {
         setAdvancedSettingsOpen(true);
       }
@@ -1747,6 +1794,9 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: localInputs.pass_through_body_enabled || false,
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
+      headroom_enabled: localInputs.headroom_enabled || false,
+      headroom_url: localInputs.headroom_url || 'http://127.0.0.1:8787',
+      max_concurrency: Number(localInputs.max_concurrency) || 0,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -1819,6 +1869,16 @@ const EditChannelModal = (props) => {
       settings.upstream_model_update_last_check_time = 0;
     }
 
+    settings.schedule_pause_enabled =
+      localInputs.schedule_pause_enabled === true;
+    settings.schedule_pause_rules = localInputs.schedule_pause_rules || [];
+    settings.health_check_enabled =
+      localInputs.health_check_enabled === true;
+    settings.health_check_interval_minutes =
+      parseInt(localInputs.health_check_interval_minutes) || 5;
+    settings.health_check_failure_threshold =
+      parseInt(localInputs.health_check_failure_threshold) || 3;
+
     localInputs.settings = JSON.stringify(settings);
 
     // 清理不需要发送到后端的字段
@@ -1828,6 +1888,9 @@ const EditChannelModal = (props) => {
     delete localInputs.pass_through_body_enabled;
     delete localInputs.system_prompt;
     delete localInputs.system_prompt_override;
+    delete localInputs.headroom_enabled;
+    delete localInputs.headroom_url;
+    delete localInputs.max_concurrency;
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -1846,6 +1909,11 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_model_update_last_check_time;
     delete localInputs.upstream_model_update_last_detected_models;
     delete localInputs.upstream_model_update_ignored_models;
+    delete localInputs.schedule_pause_enabled;
+    delete localInputs.schedule_pause_rules;
+    delete localInputs.health_check_enabled;
+    delete localInputs.health_check_interval_minutes;
+    delete localInputs.health_check_failure_threshold;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -2502,6 +2570,100 @@ const EditChannelModal = (props) => {
                   )}
                 </div>
 
+                {/* Scheduled Pause Section */}
+                <div className='py-3 border-b border-gray-100'>
+                  <Text className='text-sm font-medium text-gray-500 mb-3 block'>
+                    {t('定时暂停')}
+                  </Text>
+
+                  <Form.Switch
+                    field='schedule_pause_enabled'
+                    label={t('开启定时暂停')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    onChange={(value) =>
+                      handleChannelOtherSettingsChange(
+                        'schedule_pause_enabled',
+                        value,
+                      )
+                    }
+                    extraText={t(
+                      '开启后，渠道将在设定的时间段自动暂停，过后自动恢复。用于应对 API 平台高峰多倍消耗',
+                    )}
+                  />
+                  {inputs.schedule_pause_enabled && (
+                    <div className='border rounded-lg p-3 mt-2 bg-gray-50'>
+                      <SchedulePauseRuleEditor
+                        rules={inputs.schedule_pause_rules || []}
+                        onChange={(rules) =>
+                          handleChannelOtherSettingsChange(
+                            'schedule_pause_rules',
+                            rules,
+                          )
+                        }
+                        t={t}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Health Monitoring Section */}
+                <div className='py-3 border-b border-gray-100'>
+                  <Text className='text-sm font-medium text-gray-500 mb-3 block'>
+                    {t('健康监测')}
+                  </Text>
+
+                  <Form.Switch
+                    field='health_check_enabled'
+                    label={t('开启健康监测')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    onChange={(value) =>
+                      handleChannelOtherSettingsChange(
+                        'health_check_enabled',
+                        value,
+                      )
+                    }
+                    extraText={t(
+                      '开启后，后台定时发送测试请求检测渠道可用性，连续失败达阈值自动禁用，恢复后自动启用',
+                    )}
+                  />
+                  {inputs.health_check_enabled && (
+                    <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2'>
+                      <Form.InputNumber
+                        field='health_check_interval_minutes'
+                        label={t('检测间隔（分钟）')}
+                        min={1}
+                        max={1440}
+                        step={1}
+                        defaultValue={5}
+                        onChange={(value) =>
+                          handleChannelOtherSettingsChange(
+                            'health_check_interval_minutes',
+                            value,
+                          )
+                        }
+                        extraText={t('每次检测间隔，默认 5 分钟')}
+                      />
+                      <Form.InputNumber
+                        field='health_check_failure_threshold'
+                        label={t('连续失败阈值')}
+                        min={1}
+                        max={10}
+                        step={1}
+                        defaultValue={3}
+                        onChange={(value) =>
+                          handleChannelOtherSettingsChange(
+                            'health_check_failure_threshold',
+                            value,
+                          )
+                        }
+                        extraText={t('连续失败次数达到阈值后自动禁用渠道，默认 3 次')}
+                      />
+                    </div>
+                  )}
+                </div>
+
                 {/* Extra Settings Section */}
                 <div className='pt-3'>
                   <Text className='text-sm font-medium text-gray-500 mb-3 block'>
@@ -2521,6 +2683,12 @@ const EditChannelModal = (props) => {
 
                   <Form.Input field='proxy' label={t('代理地址')} placeholder={t('例如: socks5://user:pass@host:port')} onChange={(value) => handleChannelSettingsChange('proxy', value)} showClear extraText={t('用于配置网络代理，支持 socks5 协议')} />
 
+                  <Form.Switch field='headroom_enabled' label={t('启用 Headroom 压缩')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('headroom_enabled', value)} extraText={t('开启后，请求发送上游前会先调用 Headroom sidecar 压缩消息；Headroom 不可用时自动透传原请求')} />
+                  {inputs.headroom_enabled && (
+                    <Form.Input field='headroom_url' label={t('Headroom 地址')} placeholder='http://127.0.0.1:8787' onChange={(value) => handleChannelSettingsChange('headroom_url', value)} showClear extraText={t('Headroom proxy 地址，默认 http://127.0.0.1:8787')} />
+                  )}
+
+                  <Form.InputNumber field='max_concurrency' label={t('最大并发')} min={0} max={1000} onChange={(value) => handleChannelSettingsChange('max_concurrency', value)} extraText={t('该渠道允许的最大并发请求数，0 表示不限制；达到上限时新请求会跳过此渠道选择其他可用渠道')} />
                   <Form.TextArea field='system_prompt' label={t('系统提示词')} placeholder={t('输入系统提示词，用户的系统提示词将优先于此设置')} onChange={(value) => handleChannelSettingsChange('system_prompt', value)} autosize showClear extraText={t('用户优先：如果用户在请求中指定了系统提示词，将优先使用用户的设置')} />
                   <Form.Switch field='system_prompt_override' label={t('系统提示词拼接')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('system_prompt_override', value)} extraText={t('如果用户请求中包含系统提示词，则使用此设置拼接到用户的系统提示词前面')} />
                 </div>
@@ -3416,6 +3584,11 @@ const EditChannelModal = (props) => {
                                 label: doubaoCodingPlanOptionLabel,
                                 disabled: false,
                               },
+                              {
+                                value: 'doubao-agent-plan',
+                                label: 'Doubao Agent Plan',
+                                disabled: false,
+                              },
                             ]}
                             defaultValue='https://ark.cn-beijing.volces.com'
                             disabled={isIonetLocked}
@@ -3921,6 +4094,150 @@ const EditChannelModal = (props) => {
         }}
       />
     </>
+  );
+};
+
+// ---------- 定时暂停规则编辑器 ----------
+const SchedulePauseRuleEditor = ({ rules, onChange, t }) => {
+  const daysLabels = [
+    t('周日'),
+    t('周一'),
+    t('周二'),
+    t('周三'),
+    t('周四'),
+    t('周五'),
+    t('周六'),
+  ];
+
+  const addRule = useCallback(() => {
+    const newRules = [
+      ...(rules || []),
+      { days: [1, 2, 3, 4, 5], start: '14:00', end: '16:00', reason: '' },
+    ];
+    onChange(newRules);
+  }, [rules, onChange]);
+
+  const removeRule = useCallback(
+    (index) => {
+      const newRules = [...(rules || [])];
+      newRules.splice(index, 1);
+      onChange(newRules);
+    },
+    [rules, onChange],
+  );
+
+  const updateRule = useCallback(
+    (index, key, value) => {
+      const newRules = [...(rules || [])];
+      newRules[index] = { ...newRules[index], [key]: value };
+      onChange(newRules);
+    },
+    [rules, onChange],
+  );
+
+  const toggleDay = useCallback(
+    (ruleIndex, day) => {
+      const rule = rules[ruleIndex];
+      const days = rule.days || [];
+      const idx = days.indexOf(day);
+      let newDays;
+      if (idx >= 0) {
+        newDays = days.filter((d) => d !== day);
+      } else {
+        newDays = [...days, day].sort();
+      }
+      updateRule(ruleIndex, 'days', newDays);
+    },
+    [rules, updateRule],
+  );
+
+  if (!rules || rules.length === 0) {
+    return (
+      <div>
+        <Button size='small' onClick={addRule}>
+          {t('添加暂停规则')}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {rules.map((rule, idx) => (
+        <div
+          key={idx}
+          style={{
+            border: '1px solid var(--semi-color-border)',
+            borderRadius: 6,
+            padding: 10,
+            position: 'relative',
+          }}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            {/* 星期选择 */}
+            <div style={{ display: 'flex', gap: 2 }}>
+              {daysLabels.map((label, day) => (
+                <Tag
+                  key={day}
+                  size='small'
+                  color={(rule.days || []).includes(day) ? 'blue' : 'light'}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => toggleDay(idx, day)}
+                >
+                  {label}
+                </Tag>
+              ))}
+            </div>
+
+            {/* 开始时间 */}
+            <Form.Input
+              field={`pause_start_${idx}`}
+              value={rule.start}
+              style={{ width: 80 }}
+              size='small'
+              placeholder='14:00'
+              onChange={(v) => updateRule(idx, 'start', v)}
+            />
+
+            <span style={{ fontSize: 12 }}>—</span>
+
+            {/* 结束时间 */}
+            <Form.Input
+              field={`pause_end_${idx}`}
+              value={rule.end}
+              style={{ width: 80 }}
+              size='small'
+              placeholder='16:00'
+              onChange={(v) => updateRule(idx, 'end', v)}
+            />
+
+            {/* 原因 */}
+            <Form.Input
+              field={`pause_reason_${idx}`}
+              value={rule.reason || ''}
+              style={{ width: 130 }}
+              size='small'
+              placeholder={t('原因（可选）')}
+              onChange={(v) => updateRule(idx, 'reason', v)}
+            />
+
+            {/* 删除按钮 */}
+            <Button
+              size='small'
+              type='danger'
+              onClick={() => removeRule(idx)}
+            >
+              {t('删除')}
+            </Button>
+          </div>
+        </div>
+      ))}
+      <div>
+        <Button size='small' onClick={addRule}>
+          {t('添加暂停规则')}
+        </Button>
+      </div>
+    </div>
   );
 };
 

@@ -1,11 +1,14 @@
 package channel
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -494,6 +497,80 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		}
 	} else {
 		client = service.GetHttpClient()
+	}
+
+	// Headroom 压缩：在发送请求前，如果启用了 Headroom，对请求体进行压缩
+	// 支持 OpenAI Chat Completions 和 Claude Messages 两种格式（都有 messages 字段）
+	if operation_setting.HeadroomGlobalEnabled && info.ChannelSetting.HeadroomEnabled &&
+		(info.RelayMode == constant.RelayModeChatCompletions || info.RelayFormat == types.RelayFormatClaude) {
+		// 优先级：渠道配置 HeadroomURL > 环境变量 HEADROOM_URL > 默认值
+		headroomURL := info.ChannelSetting.HeadroomURL
+		if headroomURL == "" {
+			headroomURL = os.Getenv("HEADROOM_URL")
+		}
+		if headroomURL == "" {
+			headroomURL = "http://127.0.0.1:8787"
+		}
+
+		// 读取原始请求体；后续无论压缩是否成功，都必须恢复 req.Body
+		bodyBytes, readErr := io.ReadAll(req.Body)
+		req.Body.Close()
+		if readErr == nil && len(bodyBytes) > 0 {
+			// 默认透传原请求，只有压缩成功且 tokens_saved > 0 时才替换 body
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			req.ContentLength = int64(len(bodyBytes))
+
+			compressURL := fmt.Sprintf("%s/v1/compress", strings.TrimRight(headroomURL, "/"))
+			// 超时从 30s 降到 5s：压缩服务不可用时避免客户端长时间等待
+			compressClient := &http.Client{Timeout: 5 * time.Second}
+			compressResp, compressErr := compressClient.Post(compressURL, "application/json", bytes.NewReader(bodyBytes))
+			if compressErr == nil && compressResp != nil {
+				defer compressResp.Body.Close()
+				if compressResp.StatusCode == http.StatusOK {
+					var compressResult struct {
+						Messages         json.RawMessage `json:"messages"`
+						TokensBefore     int             `json:"tokens_before"`
+						TokensAfter      int             `json:"tokens_after"`
+						TokensSaved      int             `json:"tokens_saved"`
+						CompressionRatio float64         `json:"compression_ratio"`
+					}
+					if decodeErr := common2.DecodeJson(compressResp.Body, &compressResult); decodeErr == nil && compressResult.TokensSaved > 0 {
+						var originalBody map[string]interface{}
+						if common2.Unmarshal(bodyBytes, &originalBody) == nil {
+							var compressedMsgs interface{}
+							if common2.Unmarshal(compressResult.Messages, &compressedMsgs) == nil {
+								originalBody["messages"] = compressedMsgs
+								newBodyBytes, marshalErr := common2.Marshal(originalBody)
+								if marshalErr == nil {
+									req.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
+									req.ContentLength = int64(len(newBodyBytes))
+									info.HeadroomTokensSaved = compressResult.TokensSaved
+									info.HeadroomTokensInput = compressResult.TokensBefore
+									// Headroom 的 compression_ratio 是保留率(压缩后/压缩前)，转换为节省率 = saved / input
+									if compressResult.TokensBefore > 0 {
+										info.HeadroomRatio = float64(compressResult.TokensSaved) / float64(compressResult.TokensBefore)
+									} else {
+										info.HeadroomRatio = compressResult.CompressionRatio
+									}
+									logger.LogInfo(c, fmt.Sprintf("headroom compression: %d -> %d tokens, saved %d (%.1f%%)",
+										compressResult.TokensBefore, compressResult.TokensAfter,
+										compressResult.TokensSaved, info.HeadroomRatio*100))
+								}
+							}
+						}
+					}
+			} else {
+				logger.LogInfo(c, fmt.Sprintf("headroom compression bad status: %d, using original body", compressResp.StatusCode))
+			}
+		} else if compressErr != nil {
+			logger.LogInfo(c, fmt.Sprintf("headroom compression failed: %v, using original body", compressErr))
+		}
+		} else {
+			if bodyBytes != nil {
+				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				req.ContentLength = int64(len(bodyBytes))
+			}
+		}
 	}
 
 	var stopPinger context.CancelFunc

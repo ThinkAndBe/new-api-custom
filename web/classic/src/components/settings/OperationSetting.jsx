@@ -49,6 +49,7 @@ const OperationSetting = () => {
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
+    HeadroomGlobalEnabled: true,
     AutoSyncOfficialRatioEnabled: false,
     OfficialRatioSyncIntervalHours: 24,
     OfficialRatioSyncSources: 'official,modelsdev',

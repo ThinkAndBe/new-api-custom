@@ -250,10 +250,11 @@ const (
 )
 
 const (
-	ChannelStatusUnknown          = 0
-	ChannelStatusEnabled          = 1 // don't use 0, 0 is the default value!
-	ChannelStatusManuallyDisabled = 2 // also don't use 0
-	ChannelStatusAutoDisabled     = 3
+ChannelStatusUnknown            = 0
+		ChannelStatusEnabled            = 1 // don't use 0, 0 is the default value!
+		ChannelStatusManuallyDisabled   = 2 // also don't use 0
+		ChannelStatusAutoDisabled       = 3
+		ChannelStatusSchedulePaused     = 4
 )
 
 const (
