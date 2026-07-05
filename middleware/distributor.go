@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
@@ -161,14 +162,57 @@ func Distribute() func(c *gin.Context) {
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
 
-		// 渠道并发控制：达到上限时直接拒绝（不阻塞等待，避免请求堆积）
-		maxConc := channel.GetSetting().MaxConcurrency
+		// 渠道并发控制：达到上限时自动 fallback 到下一个可用渠道（不直接 503）。
+		// 仅对非亲和性路径生效；亲和性命中的渠道不走并发检查（亲和性优先）。
+		maxConc := 0
+		if channel != nil {
+			maxConc = channel.GetSetting().MaxConcurrency
+		}
 		if maxConc > 0 {
+			currentGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+			// 尝试获取令牌；失败则进入 fallback 循环
 			if !service.TryAcquireChannel(channel.Id, maxConc) {
-				abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
-					i18n.T(c, i18n.MsgDistributorNoAvailableChannel),
-					types.ErrorCodeGetChannelFailed)
-				return
+				logger.LogInfo(c, fmt.Sprintf("channel %s (#%d) concurrency limit %d reached, trying fallback",
+					channel.Name, channel.Id, maxConc))
+				// fallback：重新选渠道，最多尝试 common.RetryTimes+1 次
+				fallbackRetry := 0
+				maxFallback := common.RetryTimes + 1
+				if maxFallback < 4 {
+					maxFallback = 4 // 至少尝试 4 次，确保有机会覆盖所有候选渠道
+				}
+				fallbackSuccess := false
+				for fallbackRetry = 1; fallbackRetry <= maxFallback; fallbackRetry++ {
+					nextChannel, _, nextErr := service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
+						Ctx:        c,
+						ModelName:  modelRequest.Model,
+						TokenGroup: currentGroup,
+						Retry:      common.GetPointer(fallbackRetry),
+					})
+					if nextErr != nil || nextChannel == nil {
+						break
+					}
+					nextMaxConc := nextChannel.GetSetting().MaxConcurrency
+					if nextMaxConc <= 0 || service.TryAcquireChannel(nextChannel.Id, nextMaxConc) {
+						// 找到可用渠道，切换过去
+						channel = nextChannel
+						maxConc = nextMaxConc
+						SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+						logger.LogInfo(c, fmt.Sprintf("fallback succeeded: switched to channel %s (#%d) on retry %d",
+							channel.Name, channel.Id, fallbackRetry))
+						fallbackSuccess = true
+						break
+					}
+					logger.LogInfo(c, fmt.Sprintf("fallback retry %d: channel %s (#%d) also busy",
+						fallbackRetry, nextChannel.Name, nextChannel.Id))
+				}
+				if !fallbackSuccess {
+					logger.LogError(c, fmt.Sprintf("all channels busy for model %s under group %s after %d fallback attempts",
+						modelRequest.Model, currentGroup, fallbackRetry))
+					abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
+						i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": currentGroup, "Model": modelRequest.Model}),
+						types.ErrorCodeGetChannelFailed)
+					return
+				}
 			}
 			defer service.ReleaseChannel(channel.Id, maxConc)
 		}

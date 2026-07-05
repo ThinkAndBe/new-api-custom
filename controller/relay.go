@@ -264,6 +264,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}
 
+	// 重试循环结束后，如果是并发满导致的失败，记录明确日志
+	if newAPIError != nil && newAPIError.StatusCode == http.StatusServiceUnavailable &&
+		strings.Contains(newAPIError.Error(), "busy") {
+		logger.LogError(c, fmt.Sprintf("all channels busy for model %s after %d retries, last error: %s",
+			relayInfo.OriginModelName, retryParam.GetRetry(), newAPIError.Error()))
+	}
+
 	useChannel := c.GetStringSlice("use_channel")
 	if len(useChannel) > 1 {
 		retryLogStr := fmt.Sprintf("重试：%s", strings.Trim(strings.Join(strings.Fields(fmt.Sprint(useChannel)), "->"), "[]"))
