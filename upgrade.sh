@@ -218,9 +218,9 @@ do_migrate() {
     local pg_pw="123456" pg_user="root" pg_db="new-api"
     local mysql_pw="123456"
 
-    # 从 compose 文件提取 SQL_DSN
-    sql_dsn=$(grep -oP 'SQL_DSN=\K.*' "${old_compose}" 2>/dev/null | grep -v '^\s*#' | head -1 | tr -d ' ' || true)
-    redis_conn=$(grep -oP 'REDIS_CONN_STRING=\K.*' "${old_compose}" 2>/dev/null | grep -v '^\s*#' | head -1 | tr -d ' ' || true)
+    # 从 compose 文件提取 SQL_DSN（去掉行内注释 #...）
+    sql_dsn=$(grep -oP 'SQL_DSN=\K.*' "${old_compose}" 2>/dev/null | head -1 | sed 's/#.*//' | sed 's/[[:space:]]*$//' | sed 's/^[[:space:]]*//' || true)
+    redis_conn=$(grep -oP 'REDIS_CONN_STRING=\K.*' "${old_compose}" 2>/dev/null | head -1 | sed 's/#.*//' | sed 's/[[:space:]]*$//' | sed 's/^[[:space:]]*//' || true)
 
     # 也检查 .env 文件
     if [ -f "${old_env_file}" ]; then
@@ -571,7 +571,7 @@ COMPOSE_EOF
     networks:
       - new-api-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8787/livez\", timeout=5)' || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/livez', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
