@@ -1,303 +1,358 @@
-# 升级部署指南
+# 完整升级步骤：原版 new-api (Docker Compose + PostgreSQL) → 二开版本
 
-> 从原版 new-api 升级到二开版本（含 Headroom 压缩 + 渠道并发控制 + 看板等）
-
-## 前置条件
-
-- 已安装 Docker + Docker Compose + Git
-- 原版 new-api 正在运行（docker compose 方式）
-- 已打虚拟机快照（ rollback 保障）
+> **目标**：保留原有用户、渠道、令牌、配置，新增 Headroom 压缩 + 看板 + 渠道并发控制等功能
 
 ---
 
-## 一、备份现有环境
+## 第 0 步：打虚拟机快照
+
+```
+在虚拟机管理平台上对目标机器打快照，命名为 "升级前-原版newapi"
+```
+
+---
+
+## 第 1 步：备份现有数据
 
 ```bash
 # 进入原版 new-api 部署目录
 cd /path/to/new-api
 
-# 1. 备份数据库
+# 1.1 备份 PostgreSQL 数据库
+docker compose exec -T postgres pg_dump -U root new-api > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 1.2 备份 data 目录（包含日志、上传文件等）
 cp -r ./data ./data.backup.$(date +%Y%m%d)
 
-# 2. 备份配置
+# 1.3 备份 docker-compose.yml（保留你的密码配置）
 cp docker-compose.yml docker-compose.yml.backup
 
-# 3. 导出数据库（如果用 PostgreSQL）
-docker compose exec -T postgres pg_dump -U root new-api > backup.sql
+# 1.4 备份 .env 文件（如果有）
+[ -f .env ] && cp .env .env.backup
 
-# 4. 打虚拟机快照（此时）
+# 1.5 确认备份文件
+ls -lh backup_*.sql docker-compose.yml.backup data.backup.*
 ```
 
 ---
 
-## 二、拉取二开代码
+## 第 2 步：停止原版服务
 
 ```bash
-# 在部署目录操作（或新建目录）
-cd /path/to/new-api
+# 停止 new-api 容器（保留 postgres 和 redis 不停，避免连接中断）
+docker compose stop new-api
 
-# 添加二开远程仓库
+# 确认 new-api 已停止
+docker compose ps
+# new-api 应该显示 Exited，postgres 和 redis 仍在运行
+```
+
+---
+
+## 第 3 步：拉取二开代码
+
+```bash
+# 3.1 如果原部署目录不是 git 仓库，先初始化
+cd /path/to/new-api
+git init
+git remote add origin https://github.com/QuantumNous/new-api.git
+
+# 3.2 添加二开远程
 git remote add myfork https://github.com/bugking2493/new-api.git
 
-# 拉取二开分支
+# 3.3 拉取二开分支
 git fetch myfork
 git checkout feature/custom-export-and-price-sync
 git pull myfork feature/custom-export-and-price-sync
+
+# 如果有冲突（原配置文件等），保留你的本地修改：
+# git stash → git checkout → git stash pop
 ```
 
 ---
 
-## 三、构建新镜像
+## 第 4 步：修改 docker-compose.yml
 
-### 3.1 构建 new-api 镜像
+编辑 `docker-compose.yml`，做以下 3 处修改：
 
-```bash
-# 修改 docker-compose.yml，使用 build 而非官方镜像
-# 将 image: calciumion/new-api:latest 改为：
-#   build:
-#     context: .
-#     dockerfile: Dockerfile
-
-# 构建
-docker compose build new-api
-```
-
-### 3.2 构建 Headroom 镜像
-
-```bash
-# 构建 headroom 压缩服务镜像
-docker compose -f docker-compose.headroom.yml build headroom
-```
-
----
-
-## 四、配置 docker-compose
-
-### 4.1 使用一体化编排文件
-
-如果原部署用的是 `docker-compose.yml`（含 PostgreSQL），保持不变，只需额外启动 headroom：
-
-```bash
-# 单独启动 headroom 服务
-docker compose -f docker-compose.headroom.yml up -d headroom
-```
-
-如果原部署用的是 SQLite 单机模式，直接用一体化编排：
-
-```bash
-# 停止旧服务
-docker compose down
-
-# 用一体化编排启动
-docker compose -f docker-compose.headroom.yml up -d
-```
-
-### 4.2 new-api 环境变量（在 docker-compose.yml 中添加）
+### 4.1 改为本地构建（不用官方镜像）
 
 ```yaml
 services:
   new-api:
+    # 删除这行：image: calciumion/new-api:latest
+    # 改为：
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: new-api
+```
+
+### 4.2 添加 Headroom 环境变量
+
+在 `new-api` 的 `environment` 部分添加：
+
+```yaml
     environment:
-      # ... 原有配置保留 ...
+      # === 原有配置保留不动 ===
+      - SQL_DSN=postgresql://root:你的密码@postgres:5432/new-api
+      - REDIS_CONN_STRING=redis://:你的密码@redis:6379
+      - TZ=Asia/Shanghai
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+      - NODE_NAME=new-api-node-1
       
-      # Headroom 压缩服务地址（docker 网络内通过服务名访问）
+      # === 新增：Headroom 压缩 ===
       - HEADROOM_URL=http://headroom:8787
-      # 全局开启 Headroom（渠道里仍需单独打开开关）
       - HEADROOM_GLOBAL_ENABLED=true
 ```
 
-### 4.3 Headroom 服务配置
+### 4.3 添加 Headroom 服务定义
 
-`docker-compose.headroom.yml` 已包含全部优化配置，关键参数：
+在 `docker-compose.yml` 末尾的 `services` 下追加（与 redis/postgres 同级）：
 
 ```yaml
-headroom:
-  environment:
-    - HEADROOM_WORKERS=1                    # worker 数（Docker 内建议 1）
-    - HEADROOM_MAX_CONCURRENCY=50           # 最大并发压缩数
-    - HEADROOM_KOMPRESS_MODEL=              # 空=启用本地 Kompress ML
-    - HEADROOM_PROTECT_RECENT=2             # 保护最近 2 轮不压缩
-    - HEADROOM_MIN_TOKENS_TO_COMPRESS=100   # 最小压缩阈值
-    - HEADROOM_COMPRESS_USER_MESSAGES=true  # 用户消息参与压缩
-    - HF_HOME=/models                       # 模型存储路径
-    - HF_ENDPOINT=https://hf-mirror.com     # 国内 HuggingFace 镜像
-  volumes:
-    - ./headroom-models:/models             # 模型持久化
-    - ./headroom-logs:/app/logs             # 日志持久化
-  ports:
-    - "8788:8787"                           # 宿主机调试用（可选）
+  # Headroom 压缩服务
+  headroom:
+    build:
+      context: ./docker/headroom
+      dockerfile: Dockerfile
+    image: new-api-headroom:latest
+    container_name: headroom
+    restart: always
+    environment:
+      - HEADROOM_HOST=0.0.0.0
+      - HEADROOM_PORT=8787
+      - HEADROOM_WORKERS=1
+      - HEADROOM_MAX_CONCURRENCY=50
+      - HEADROOM_FORCE_MODEL=new-api-generic
+      - HEADROOM_KOMPRESS_MODEL=
+      - HEADROOM_PROTECT_RECENT=2
+      - HEADROOM_MIN_TOKENS_TO_COMPRESS=100
+      - HEADROOM_COMPRESS_USER_MESSAGES=true
+      - HF_HOME=/models
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HEADROOM_LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./headroom-models:/models
+      - ./headroom-logs:/app/logs
+    ports:
+      - "8788:8787"
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/livez', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+```
+
+在 `new-api` 的 `depends_on` 里加上 headroom：
+
+```yaml
+    depends_on:
+      - redis
+      - postgres
+      - headroom
 ```
 
 ---
 
-## 五、启动服务
+## 第 5 步：构建镜像
 
 ```bash
-# 1. 启动 headroom（首次需要下载模型，约 2-5 分钟）
-docker compose -f docker-compose.headroom.yml up -d headroom
+# 5.1 构建 headroom 镜像（先构建，因为 new-api 依赖它）
+docker compose build headroom
 
-# 等待 headroom 健康
-docker compose -f docker-compose.headroom.yml logs -f headroom
+# 5.2 构建 new-api 二开镜像
+docker compose build new-api
+
+# 构建过程约 5-10 分钟（Go 编译 + 前端打包 + Python 依赖安装）
+```
+
+---
+
+## 第 6 步：启动 Headroom 服务
+
+```bash
+# 先单独启动 headroom（首次需要下载 Kompress ML 模型，约 2-5 分钟）
+docker compose up -d headroom
+
+# 观察启动日志，等待模型下载完成
+docker compose logs -f headroom
+
 # 看到 "Application startup complete" 表示就绪
-
-# 2. 重启 new-api（加载新镜像）
-docker compose restart new-api
-# 或如果用了 headroom 编排：
-docker compose -f docker-compose.headroom.yml restart new-api
-
-# 3. 验证
-curl http://localhost:3000/api/status
-curl http://localhost:8788/livez
+# Ctrl+C 退出日志查看
 ```
 
 ---
 
-## 六、数据库配置（管理后台操作）
-
-启动后，登录管理后台做以下配置：
-
-### 6.1 系统设置
-
-进入 **设置 → 运营设置**：
-
-| 配置项 | 值 | 说明 |
-|--------|-----|------|
-| RetryTimes | `3` | 429 时自动重试到其他渠道 |
-| CPU 监控阈值 | `99` | 避免误杀正常请求 |
-| Headroom 留存天数 | `30` | 压缩日志保留天数 |
-
-### 6.2 渠道配置
-
-进入 **渠道管理 → 编辑每个渠道**：
-
-| 配置项 | 值 | 说明 |
-|--------|-----|------|
-| 启用 Headroom 压缩 | ✅ 开 | 开启压缩 |
-| Headroom 地址 | `http://headroom:8787` | docker 网络内用服务名 |
-| 最大并发 | `0` | 不限（靠 retry 机制溢出） |
-
-**所有渠道都启用，地址统一填 `http://headroom:8787`**
-
-### 6.3 Headroom 看板
-
-进入 **侧边栏 → Headroom 看板**：
-- 确认 KPI 卡片有数据
-- 确认月度/年度汇总表正常
-- 确认趋势图正常
-
----
-
-## 七、使用一键升级脚本（推荐）
-
-如果之前已部署过二开版本，后续升级用脚本：
+## 第 7 步：启动 new-api
 
 ```bash
-# 普通升级（拉代码 + 构建镜像 + 滚动重启 + 健康检查）
-./upgrade.sh
+# 启动 new-api（使用新构建的二开镜像）
+docker compose up -d new-api
 
-# 回滚上次升级
-./upgrade.sh --rollback
+# 查看启动日志
+docker compose logs -f new-api
+
+# 看到 "server started" 或 "listening on :3000" 表示成功
 ```
 
-脚本会自动：
-1. 备份当前镜像和数据
-2. git pull 拉取最新代码
-3. docker compose build 构建新镜像
-4. 滚动重启服务
-5. 健康检查（失败自动回滚）
-
 ---
 
-## 八、验证清单
-
-升级后逐项验证：
+## 第 8 步：验证服务
 
 ```bash
-# 1. 服务状态
+# 8.1 检查所有容器状态
 docker compose ps
 # new-api: Up (healthy)
 # headroom: Up (healthy)
+# postgres: Up
+# redis: Up
 
-# 2. API 可用
-curl -s http://localhost:3000/api/status | grep success
+# 8.2 API 可用性
+curl -s http://localhost:3000/api/status | python3 -m json.tool
 
-# 3. Headroom 可用
+# 8.3 Headroom 可用性
 curl -s http://localhost:8788/livez
 
-# 4. 发一个测试请求
+# 8.4 浏览器访问
+# http://你的服务器IP:3000 → 用原管理员账号登录
+
+# 8.5 验证原有数据
+# - 用户管理 → 确认原有用户都在
+# - 渠道管理 → 确认原有渠道都在
+# - 令牌管理 → 确认原有令牌都在
+# - 使用日志 → 确认原有日志都在
+```
+
+---
+
+## 第 9 步：管理后台配置
+
+登录管理后台，做以下配置：
+
+### 9.1 运营设置
+
+进入 **设置 → 运营设置**：
+
+| 配置项 | 值 | 原因 |
+|--------|-----|------|
+| 重试次数 (RetryTimes) | `3` | 429 时自动重试到其他渠道 |
+| CPU 监控阈值 | `99` | 避免压缩时 CPU 飙升误杀请求 |
+| Headroom 留存天数 | `30` | 压缩日志保留 30 天 |
+
+### 9.2 渠道配置（每个渠道都要改）
+
+进入 **渠道管理 → 编辑 → 扩展设置**，对每个渠道：
+
+| 配置项 | 值 |
+|--------|-----|
+| 启用 Headroom 压缩 | ✅ 打开 |
+| Headroom 地址 | `http://headroom:8787` |
+| 最大并发 | `0`（不限，靠重试机制处理溢出） |
+
+> **注意**：Headroom 地址在 Docker 网络内用服务名 `headroom`，不是 `127.0.0.1`
+
+### 9.3 验证 Headroom 看板
+
+进入 **侧边栏 → Headroom 看板**：
+- 此时应该没有数据（刚部署）
+- 发一个测试请求后刷新，应该出现 1 条记录
+
+### 9.4 发测试请求
+
+```bash
 curl -s http://localhost:3000/v1/chat/completions \
-  -H "Authorization: Bearer sk-YOUR-TOKEN" \
+  -H "Authorization: Bearer sk-你的令牌" \
   -H "Content-Type: application/json" \
-  -d '{"model":"glm-5.2","messages":[{"role":"user","content":"hi"}],"max_tokens":5}'
+  -d '{
+    "model": "glm-5.2",
+    "messages": [{"role": "user", "content": "hello"}],
+    "max_tokens": 10
+  }'
 
-# 5. 检查 headroom 压缩日志
-docker compose -f docker-compose.headroom.yml logs headroom --tail 5
-
-# 6. 检查 Headroom 看板有数据
-# 浏览器访问 http://localhost:3000 → 侧边栏 → Headroom 看板
+# 发完后检查 Headroom 看板，应该有压缩记录
+# 检查 Headroom 日志
+docker compose logs headroom --tail 5
 ```
 
 ---
 
-## 九、本次升级包含的全部变更
+## 第 10 步：清理旧资源（可选，确认稳定后执行）
 
-### 新功能
-- **Headroom 压缩集成**：Kompress ML 压缩，290ms 处理 314K token
-- **Headroom 看板**：KPI/排行/趋势/月年汇总/明细/CSV 导出
-- **渠道并发控制**：`max_concurrency` 字段 + 满时智能 fallback
-- **doubao-agent-plan 支持**：Claude→OpenAI 协议转换
-- **使用日志增强**：total_tokens / request_count 统计
-- **官方价格同步**：models.dev 数据源 + 国产厂商白名单
-- **渠道健康检查**：定时探测 + 自动禁用/启用
+```bash
+# 10.1 删除旧镜像
+docker image prune -f
 
-### Bug 修复
-- Headroom `compression_ratio` 语义修正（保留率→节省率）
-- Token 计数准确性（统一 prompt_tokens 修正 + completion_tokens 补全）
-- 压缩超时 30s→5s
-- 429 不再自动禁用渠道（改为 retry）
-- Claude 风格 tool_use/tool_result 转 OpenAI 格式
+# 10.2 删除备份的 data 目录（保留 sql 备份）
+# rm -rf ./data.backup.*
 
-### 配置变更
-- `RetryTimes` = 3
-- `monitor_cpu_threshold` = 99
-- 429 从自动禁用范围中移除
-- Headroom 参数调优（protect_recent=2, min_tokens=100, compress_user=true）
+# 10.3 删除临时文件
+# rm -f backup_*.sql
+```
 
 ---
 
-## 十、回滚方案
+## 回滚方案
 
-### 方案 A：虚拟机快照回滚
-直接恢复快照（最简单可靠）。
+### 方案 A：虚拟机快照恢复（推荐）
+直接在虚拟机平台恢复快照。
 
-### 方案 B：脚本回滚
+### 方案 B：手动回滚
+
 ```bash
-./upgrade.sh --rollback
-```
-
-### 方案 C：手动回滚
-```bash
-# 停止服务
+# 1. 停止所有服务
 docker compose down
 
-# 恢复备份的 docker-compose.yml
+# 2. 恢复原版 docker-compose.yml
 cp docker-compose.yml.backup docker-compose.yml
 
-# 恢复数据
-cp -r ./data.backup.* ./data
+# 3. 恢复原版镜像
+docker pull calciumion/new-api:latest
 
-# 用旧镜像启动
+# 4. 启动（不含 headroom）
 docker compose up -d
+
+# 5. 如果数据库被改坏，恢复 SQL
+docker compose exec -T postgres psql -U root new-api < backup_YYYYMMDD.sql
 ```
 
 ---
 
-## 十一、性能基准（10 人并发）
+## 升级后检查清单
 
-| 场景 | 成功率 | avg 延迟 | CPU |
-|------|--------|---------|-----|
-| 10 人中等上下文（57K tokens） | 100% | 2.7s | 35% |
-| 15 人中等上下文 + 0.5s 错峰 | 100% | 3.7s | 39% |
-| 压缩 314K token（单次） | - | 0.29s | - |
+| 检查项 | 方法 | 预期结果 |
+|--------|------|---------|
+| 原有用户 | 管理后台 → 用户管理 | 用户列表完整 |
+| 原有渠道 | 管理后台 → 渠道管理 | 渠道列表完整 |
+| 原有令牌 | 管理后台 → 令牌管理 | 令牌列表完整 |
+| 原有日志 | 管理后台 → 使用日志 | 历史日志可查 |
+| 原有设置 | 管理后台 → 设置 | 比率、限制等配置保留 |
+| API 可用 | curl 测试请求 | 返回正常 |
+| Headroom | curl /livez | {"status":"ok"} |
+| 压缩生效 | 发请求后看日志 | "compress done: tokens X -> Y" |
+| 看板有数据 | Headroom 看板 | 至少 1 条记录 |
+| 渠道测试 | 渠道管理 → 测试 | 渠道正常响应 |
 
-**10 人并发完全够用，压缩不是瓶颈。**
+---
+
+## 常见问题
+
+### Q: 升级后原有用户/渠道不见了？
+A: PostgreSQL 数据在 `pg_data` volume 里，不会因为重建容器丢失。检查 `docker volume ls` 确认 volume 存在。
+
+### Q: Headroom 启动失败？
+A: 首次启动需要下载模型，确保网络能访问 `hf-mirror.com`。查看日志：`docker compose logs headroom`
+
+### Q: 渠道测试报 "unsupported protocol scheme"？
+A: Headroom 地址填错了。Docker 网络内用 `http://headroom:8787`，不是 `http://127.0.0.1:8787`。
+
+### Q: CPU 100% 报错？
+A: 管理后台 → 运营设置 → CPU 监控阈值改为 `99`。压缩时 CPU 会短暂飙升，属于正常现象。
+
+### Q: 429 频繁？
+A: 确认重试次数=3。4 个渠道全部启用。重试机制会自动将 429 的请求转发到其他渠道。
