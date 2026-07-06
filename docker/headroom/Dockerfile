@@ -46,8 +46,6 @@ ENV PYTHONUNBUFFERED=1 \
     HEADROOM_PORT=8787 \
     HEADROOM_WORKERS=1 \
     HF_ENDPOINT=https://hf-mirror.com \
-    HF_HUB_OFFLINE=1 \
-    TRANSFORMERS_OFFLINE=1 \
     PATH="/usr/local/bin:$PATH"
 
 WORKDIR /app

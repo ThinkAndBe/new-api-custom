@@ -560,6 +560,8 @@ COMPOSE_EOF
       - HEADROOM_MIN_TOKENS_TO_COMPRESS=100
       - HEADROOM_COMPRESS_USER_MESSAGES=true
       - HF_HOME=/models
+      - HF_HUB_OFFLINE=0
+      - TRANSFORMERS_OFFLINE=0
       - HF_ENDPOINT=https://hf-mirror.com
       - HEADROOM_LOG_LEVEL=INFO
       - TZ=Asia/Shanghai
