@@ -195,7 +195,7 @@ const EditChannelModal = (props) => {
     system_prompt: '',
     system_prompt_override: false,
     headroom_enabled: false,
-    headroom_url: 'http://127.0.0.1:8787',
+    headroom_url: 'http://headroom:8787',
     max_concurrency: 0,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
@@ -877,7 +877,7 @@ const EditChannelModal = (props) => {
           data.system_prompt_override =
             parsedSettings.system_prompt_override || false;
           data.headroom_enabled = parsedSettings.headroom_enabled || false;
-          data.headroom_url = parsedSettings.headroom_url || 'http://127.0.0.1:8787';
+          data.headroom_url = parsedSettings.headroom_url || 'http://headroom:8787';
           data.max_concurrency = parsedSettings.max_concurrency || 0;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
@@ -888,7 +888,7 @@ const EditChannelModal = (props) => {
           data.system_prompt = '';
           data.system_prompt_override = false;
           data.headroom_enabled = false;
-          data.headroom_url = 'http://127.0.0.1:8787';
+          data.headroom_url = 'http://headroom:8787';
           data.max_concurrency = 0;
         }
       } else {
@@ -899,7 +899,7 @@ const EditChannelModal = (props) => {
         data.system_prompt = '';
         data.system_prompt_override = false;
         data.headroom_enabled = false;
-        data.headroom_url = 'http://127.0.0.1:8787';
+        data.headroom_url = 'http://headroom:8787';
         data.max_concurrency = 0;
       }
 
@@ -1079,7 +1079,7 @@ data.upstream_model_update_last_detected_models = [];
         data.claude_beta_query ||
         data.system_prompt_override ||
         data.headroom_enabled ||
-        (data.headroom_url && data.headroom_url !== 'http://127.0.0.1:8787') ||
+        (data.headroom_url && data.headroom_url !== 'http://headroom:8787') ||
         (Number(data.max_concurrency) > 0) ||
         data.schedule_pause_enabled ||
         data.health_check_enabled;
@@ -1795,7 +1795,7 @@ data.upstream_model_update_last_detected_models = [];
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
       headroom_enabled: localInputs.headroom_enabled || false,
-      headroom_url: localInputs.headroom_url || 'http://127.0.0.1:8787',
+      headroom_url: localInputs.headroom_url || 'http://headroom:8787',
       max_concurrency: Number(localInputs.max_concurrency) || 0,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
@@ -2685,7 +2685,7 @@ data.upstream_model_update_last_detected_models = [];
 
                   <Form.Switch field='headroom_enabled' label={t('启用 Headroom 压缩')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('headroom_enabled', value)} extraText={t('开启后，请求发送上游前会先调用 Headroom sidecar 压缩消息；Headroom 不可用时自动透传原请求')} />
                   {inputs.headroom_enabled && (
-                    <Form.Input field='headroom_url' label={t('Headroom 地址')} placeholder='http://127.0.0.1:8787' onChange={(value) => handleChannelSettingsChange('headroom_url', value)} showClear extraText={t('Headroom proxy 地址，默认 http://127.0.0.1:8787')} />
+                    <Form.Input field='headroom_url' label={t('Headroom 地址')} placeholder='http://headroom:8787' onChange={(value) => handleChannelSettingsChange('headroom_url', value)} showClear extraText={t('Headroom proxy 地址，默认 http://headroom:8787（Docker 网络内用服务名）')} />
                   )}
 
                   <Form.InputNumber field='max_concurrency' label={t('最大并发')} min={0} max={1000} onChange={(value) => handleChannelSettingsChange('max_concurrency', value)} extraText={t('该渠道允许的最大并发请求数，0 表示不限制；达到上限时新请求会跳过此渠道选择其他可用渠道')} />
