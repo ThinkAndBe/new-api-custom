@@ -159,11 +159,14 @@ const HeadroomDashboard = () => {
       }
     };
     loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedPreset]);
 
   const handlePageChange = async (page, pageSize) => {
     setRecentPage(page);
-    setRecentPageSize(pageSize);
+    if (pageSize !== recentPageSize) {
+      setRecentPageSize(pageSize);
+    }
     setLoading(true);
     try {
       await loadRecentData(page, pageSize);
@@ -398,7 +401,8 @@ const HeadroomDashboard = () => {
                 onPageSizeChange: (size) => handlePageChange(1, size),
                 size: 'small',
                 showSizeChanger: true,
-                pageSizeOpts: [20, 50, 100, 200],
+                pageSizeOpts: [20, 50, 100],
+                hideOnSinglePage: false,
               }}
               size='small'
             />
