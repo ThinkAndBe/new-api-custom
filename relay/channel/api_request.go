@@ -500,9 +500,13 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	}
 
 	// Headroom 压缩：在发送请求前，如果启用了 Headroom，对请求体进行压缩
-	// 支持 OpenAI Chat Completions 和 Claude Messages 两种格式（都有 messages 字段）
+	// 支持所有带 messages 字段的请求（Chat/Completions/Claude Messages/Responses）
 	if operation_setting.HeadroomGlobalEnabled && info.ChannelSetting.HeadroomEnabled &&
-		(info.RelayMode == constant.RelayModeChatCompletions || info.RelayFormat == types.RelayFormatClaude) {
+		(info.RelayMode == constant.RelayModeChatCompletions ||
+			info.RelayMode == constant.RelayModeCompletions ||
+			info.RelayMode == constant.RelayModeResponses ||
+			info.RelayMode == constant.RelayModeUnknown ||
+			info.RelayFormat == types.RelayFormatClaude) {
 		// 优先级：渠道配置 HeadroomURL > 环境变量 HEADROOM_URL > 默认值
 		headroomURL := info.ChannelSetting.HeadroomURL
 		if headroomURL == "" {
