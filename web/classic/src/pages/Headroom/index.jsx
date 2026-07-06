@@ -397,12 +397,17 @@ const HeadroomDashboard = () => {
                 currentPage: recentPage,
                 pageSize: recentPageSize,
                 total: recentTotal,
-                onPageChange: handlePageChange,
-                onPageSizeChange: (size) => handlePageChange(1, size),
-                size: 'small',
+                pageSizeOptions: [20, 50, 100],
                 showSizeChanger: true,
-                pageSizeOpts: [20, 50, 100],
-                hideOnSinglePage: false,
+                onPageSizeChange: (size) => {
+                  setRecentPageSize(size);
+                  setRecentPage(1);
+                  loadRecentData(1, size);
+                },
+                onPageChange: (page) => {
+                  setRecentPage(page);
+                  loadRecentData(page, recentPageSize);
+                },
               }}
               size='small'
             />
