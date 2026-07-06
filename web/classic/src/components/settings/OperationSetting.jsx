@@ -50,9 +50,10 @@ const OperationSetting = () => {
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
     HeadroomGlobalEnabled: true,
-    AutoSyncOfficialRatioEnabled: false,
+    AutoSyncOfficialRatioEnabled: true,
     OfficialRatioSyncIntervalHours: 24,
-    OfficialRatioSyncSources: 'official,modelsdev',
+    OfficialRatioSyncSources: 'modelsdev,official',
+    OfficialRatioOverwriteExisting: true,
 
     /* 顶栏模块管理 */
     HeaderNavModules: '',

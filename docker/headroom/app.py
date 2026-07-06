@@ -51,6 +51,8 @@ except Exception as _e:
 KOMPRESS_LOCAL_DIR = os.getenv("KOMPRESS_LOCAL_DIR", "/models/kompress-base")
 MODERNBERT_LOCAL_DIR = os.getenv("MODERNBERT_LOCAL_DIR", "/models/modernbert-base")
 
+# Kompress ONNX 模型必须配套 ModernBERT tokenizer（用于分词），
+# 二者缺一不可，否则 Kompress 会被判定为不可用并自动禁用。
 _kompress_available = (
     os.path.isfile(os.path.join(KOMPRESS_LOCAL_DIR, "onnx", "kompress-int8.onnx"))
     and os.path.isfile(os.path.join(MODERNBERT_LOCAL_DIR, "tokenizer.json"))
@@ -159,8 +161,11 @@ PROTECT_RECENT = int(os.getenv("HEADROOM_PROTECT_RECENT", "4"))
 COMPRESS_USER_MESSAGES = os.getenv("HEADROOM_COMPRESS_USER_MESSAGES", "false").lower() == "true"
 MIN_TOKENS_TO_COMPRESS = int(os.getenv("HEADROOM_MIN_TOKENS_TO_COMPRESS", "250"))
 # 如果本地模型可用，默认启用 Kompress；否则 disabled
+# 注意：传 None 给 headroom.compress.CompressConfig(kompress_model=None) 时，
+# headroom 库会解读为"不压缩"，因此默认值必须显式传模型名 "kompress-base"。
+_DEFAULT_KOMPRESS_MODEL = "kompress-base"
 if _kompress_available:
-    KOMPRESS_MODEL = os.getenv("HEADROOM_KOMPRESS_MODEL", "") or None  # None = 默认模型
+    KOMPRESS_MODEL = os.getenv("HEADROOM_KOMPRESS_MODEL", "") or _DEFAULT_KOMPRESS_MODEL
 else:
     KOMPRESS_MODEL = os.getenv("HEADROOM_KOMPRESS_MODEL", "disabled") or None
 COMPRESS_SYSTEM_MESSAGES = os.getenv("HEADROOM_COMPRESS_SYSTEM_MESSAGES", "true").lower() == "true"

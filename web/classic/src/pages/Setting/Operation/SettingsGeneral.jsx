@@ -60,10 +60,10 @@ export default function GeneralSettings(props) {
     SelfUseModeEnabled: false,
     HeadroomGlobalEnabled: true,
     HeadroomRetentionDays: 30,
-    AutoSyncOfficialRatioEnabled: false,
+    AutoSyncOfficialRatioEnabled: true,
     OfficialRatioSyncIntervalHours: 24,
-    OfficialRatioSyncSources: 'official,modelsdev',
-    OfficialRatioOverwriteExisting: false,
+    OfficialRatioSyncSources: 'modelsdev,official',
+    OfficialRatioOverwriteExisting: true,
     'token_setting.max_user_tokens': 1000,
   });
   const refForm = useRef();

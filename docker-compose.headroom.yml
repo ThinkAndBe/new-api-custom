@@ -86,8 +86,10 @@ services:
       - HEADROOM_MAX_CONCURRENCY=50
       # 国内环境避免 tiktoken 在线下载，强制使用 Headroom 估算 tokenizer
       - HEADROOM_FORCE_MODEL=new-api-generic
-      # 默认禁用 Kompress ML 模型，避免首次请求下载模型导致阻塞；生产网络稳定后可改为空启用
-      - HEADROOM_KOMPRESS_MODEL=
+      # Kompress ML 模型名；权重已挂载到 /models/kompress-base。
+      # 留空会被 headroom 库解释为「不压缩」，必须显式设为 kompress-base 才会启用。
+      # 如需禁用，改为 "disabled"。
+      - HEADROOM_KOMPRESS_MODEL=kompress-base
       - HEADROOM_PROTECT_RECENT=2
       - HEADROOM_MIN_TOKENS_TO_COMPRESS=100
       - HEADROOM_COMPRESS_USER_MESSAGES=true

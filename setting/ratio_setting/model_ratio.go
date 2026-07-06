@@ -212,8 +212,7 @@ var defaultModelRatio = map[string]float64{
 	"glm-4-long":                                0.001 * RMB,
 	"glm-4-flash":                               0,
 	"glm-4v-plus":                               0.01 * RMB,
-	"qwen-turbo":                                0.8572, // ￥0.012 / 1k tokens
-	"qwen-plus":                                 10,     // ￥0.14 / 1k tokens
+	// qwen-turbo / qwen-plus 已迁移到下方阿里云百炼官方定价区
 	"text-embedding-v1":                         0.05,   // ￥0.0007 / 1k tokens
 	"SparkDesk-v1.1":                            1.2858, // ￥0.018 / 1k tokens
 	"SparkDesk-v2.1":                            1.2858, // ￥0.018 / 1k tokens
@@ -279,6 +278,77 @@ var defaultModelRatio = map[string]float64{
 	"deepseek-ai/DeepSeek-R1":                 0.8,
 	"deepseek-ai/DeepSeek-V3-0324":            0.8,
 	"deepseek-ai/DeepSeek-V3.1":               0.8,
+
+	// ============================================================
+	// 阿里云百炼（DashScope）官方定价 - 2025-07 更新
+	// 价格来源：https://help.aliyun.com/zh/model-studio/billing
+	// 单位：每百万 Token，人民币（CNY）
+	// 换算公式：ratio = (CNY/1M) / 14.4 ≈ CNY × 0.0694
+	// ============================================================
+	// --- DeepSeek 系列 ---
+	"deepseek-v4-pro":   12.0 / 14.4, // ¥12/M  -> 0.833
+	"deepseek-v4-flash": 1.0 / 14.4,  // ¥1/M   -> 0.069
+	"deepseek-v3.2":     2.0 / 14.4,  // ¥2/M   -> 0.139
+	"deepseek-v3.2-exp": 2.0 / 14.4,  // ¥2/M   -> 0.139
+	"deepseek-v3.1":     4.0 / 14.4,  // ¥4/M   -> 0.278
+	"deepseek-v3":       2.0 / 14.4,  // ¥2/M   -> 0.139
+	"deepseek-r1":       4.0 / 14.4,  // ¥4/M   -> 0.278
+	"deepseek-r1-0528":  4.0 / 14.4,  // ¥4/M   -> 0.278
+	// --- 智谱 GLM 系列 ---
+	"glm-5.2":      8.0 / 14.4,  // ¥8/M  -> 0.556
+	"glm-5.1":      6.0 / 14.4,  // ¥6/M  -> 0.417
+	"glm-5":        4.0 / 14.4,  // ¥4/M  -> 0.278
+	"glm-4.7":      3.0 / 14.4,  // ¥3/M  -> 0.208
+	"glm-4.6":      3.0 / 14.4,  // ¥3/M  -> 0.208
+	"glm-4.5":      3.0 / 14.4,  // ¥3/M  -> 0.208
+	"glm-4.5-air":  0.8 / 14.4,  // ¥0.8/M -> 0.056
+	// --- Kimi 系列 ---
+	"kimi-k2.7-code":           6.5 / 14.4, // ¥6.5/M  -> 0.451
+	"kimi-k2.6":                6.5 / 14.4, // ¥6.5/M  -> 0.451
+	"kimi-k2.5":                4.0 / 14.4, // ¥4/M    -> 0.278
+	"kimi-k2-thinking":         4.0 / 14.4, // ¥4/M    -> 0.278
+	"Moonshot-Kimi-K2-Instruct": 4.0 / 14.4, // ¥4/M   -> 0.278
+	// --- 通义千问 Qwen 系列 ---
+	"qwen3.7-max":               12.0 / 14.4, // ¥12/M  -> 0.833
+	"qwen3.7-max-preview":       12.0 / 14.4, // ¥12/M  -> 0.833
+	"qwen3.7-plus":              2.0 / 14.4,  // ¥2/M   -> 0.139
+	"qwen3.6-max-preview":       9.0 / 14.4,  // ¥9/M   -> 0.625
+	"qwen3-max":                 2.5 / 14.4,  // ¥2.5/M (≤32K) -> 0.174
+	"qwen3-coder-plus":          4.0 / 14.4,  // ¥4/M (≤32K) -> 0.278
+	"qwen3-coder-plus-2025-09-23": 4.0 / 14.4, // ¥4/M -> 0.278
+	"qwen3-coder-flash":         1.0 / 14.4,  // ¥1/M (≤32K) -> 0.069
+	"qwen3-coder-flash-2025-07-28": 1.0 / 14.4, // ¥1/M -> 0.069
+	"qwen3.6-flash":             1.2 / 14.4,  // ¥1.2/M -> 0.083
+	"qwen3.5-flash":             0.2 / 14.4,  // ¥0.2/M (≤128K) -> 0.014
+	"qwen-flash":                0.15 / 14.4, // ¥0.15/M (≤128K) -> 0.010
+	"qwen3.6-35b-a3b":           1.8 / 14.4,  // ¥1.8/M -> 0.125
+	"qwen3.6-27b":               3.0 / 14.4,  // ¥3/M -> 0.208
+	"qwen3.5-397b-a17b":         1.2 / 14.4,  // ¥1.2/M -> 0.083
+	"qwen3.5-27b":               0.6 / 14.4,  // ¥0.6/M -> 0.042
+	"qwen3.5-35b-a3b":           0.4 / 14.4,  // ¥0.4/M -> 0.028
+	"qwen-plus":                 0.8 / 14.4,  // ¥0.8/M (≤128K) -> 0.056
+	"qwen-turbo":                0.3 / 14.4,  // ¥0.3/M -> 0.021
+	"qwen-long":                 0.5 / 14.4,  // ¥0.5/M -> 0.035
+	"qwq-plus":                  1.6 / 14.4,  // ¥1.6/M -> 0.111
+	// --- MiniMax 系列 ---
+	"MiniMax-M3":     4.2 / 14.4,  // ¥4.2/M -> 0.292
+	"MiniMax-M2.7":   2.1 / 14.4,  // ¥2.1/M -> 0.146
+	"MiniMax-M2.5":   2.1 / 14.4,  // ¥2.1/M -> 0.146
+	"MiniMax-M2.1":   2.1 / 14.4,  // ¥2.1/M -> 0.146
+	// --- 阶跃星辰 ---
+	"stepfun/step-3.7-flash": 1.35 / 14.4, // ¥1.35/M -> 0.094
+	// --- 小米 MiMo ---
+	"xiaomi/mimo-v2.5-pro": 7.0 / 14.4, // ¥7/M (≤256K) -> 0.486
+	// --- 硅基流动转售（与官方一致）---
+	"siliconflow/deepseek-v3.2":            2.0 / 14.4,
+	"siliconflow/deepseek-v3.1-terminus":   4.0 / 14.4,
+	"siliconflow/deepseek-r1-0528":         4.0 / 14.4,
+	"siliconflow/deepseek-v3-0324":         2.0 / 14.4,
+	// --- 快手万擎转售 ---
+	"vanchin/deepseek-v3.2-think":          2.0 / 14.4,
+	"vanchin/deepseek-v3.1-terminus":       4.0 / 14.4,
+	"vanchin/deepseek-r1":                  4.0 / 14.4,
+	"vanchin/deepseek-v3":                  2.0 / 14.4,
 }
 
 var defaultModelPrice = map[string]float64{
@@ -342,6 +412,75 @@ var defaultCompletionRatio = map[string]float64{
 	"gpt-4o-gizmo-*": 3,
 	"gpt-4-all":      2,
 	"gpt-image-1":    8,
+
+	// ============================================================
+	// 阿里云百炼官方输出/输入比 - 2025-07 更新
+	// 价格来源：https://help.aliyun.com/zh/model-studio/billing
+	// 换算：官方输出价 / 官方输入价
+	// ============================================================
+	// --- DeepSeek 系列 ---
+	"deepseek-v4-pro":   24.0 / 12.0, // 2.0
+	"deepseek-v4-flash": 2.0 / 1.0,   // 2.0
+	"deepseek-v3.2":     3.0 / 2.0,   // 1.5
+	"deepseek-v3.2-exp": 3.0 / 2.0,   // 1.5
+	"deepseek-v3.1":     12.0 / 4.0,  // 3.0
+	"deepseek-v3":       8.0 / 2.0,   // 4.0
+	"deepseek-r1":       16.0 / 4.0,  // 4.0
+	"deepseek-r1-0528":  16.0 / 4.0,  // 4.0
+	// --- 智谱 GLM 系列 ---
+	"glm-5.2":     28.0 / 8.0, // 3.5
+	"glm-5.1":     24.0 / 6.0, // 4.0
+	"glm-5":       18.0 / 4.0, // 4.5
+	"glm-4.7":     14.0 / 3.0, // 4.67
+	"glm-4.6":     14.0 / 3.0, // 4.67
+	"glm-4.5":     14.0 / 3.0, // 4.67
+	"glm-4.5-air": 6.0 / 0.8,  // 7.5
+	// --- Kimi 系列 ---
+	"kimi-k2.7-code":            27.0 / 6.5, // 4.15
+	"kimi-k2.6":                 27.0 / 6.5, // 4.15
+	"kimi-k2.5":                 21.0 / 4.0, // 5.25
+	"kimi-k2-thinking":          16.0 / 4.0, // 4.0
+	"Moonshot-Kimi-K2-Instruct": 16.0 / 4.0, // 4.0
+	// --- 通义千问 Qwen 系列 ---
+	"qwen3.7-max":                 36.0 / 12.0, // 3.0
+	"qwen3.7-max-preview":         36.0 / 12.0, // 3.0
+	"qwen3.7-plus":                8.0 / 2.0,   // 4.0 (思考模式)
+	"qwen3.6-max-preview":         54.0 / 9.0,  // 6.0
+	"qwen3-max":                   10.0 / 2.5,  // 4.0 (≤32K)
+	"qwen3-coder-plus":            16.0 / 4.0,  // 4.0 (≤32K)
+	"qwen3-coder-plus-2025-09-23": 16.0 / 4.0,  // 4.0
+	"qwen3-coder-flash":           4.0 / 1.0,   // 4.0 (≤32K)
+	"qwen3-coder-flash-2025-07-28": 4.0 / 1.0,  // 4.0
+	"qwen3.6-flash":               7.2 / 1.2,   // 6.0
+	"qwen3.5-flash":               2.0 / 0.2,   // 10.0 (≤128K)
+	"qwen-flash":                  1.5 / 0.15,  // 10.0 (≤128K)
+	"qwen3.6-35b-a3b":             10.8 / 1.8,  // 6.0
+	"qwen3.6-27b":                 18.0 / 3.0,  // 6.0
+	"qwen3.5-397b-a17b":           7.2 / 1.2,   // 6.0
+	"qwen3.5-27b":                 4.8 / 0.6,   // 8.0
+	"qwen3.5-35b-a3b":             3.2 / 0.4,   // 8.0
+	"qwen-plus":                   2.0 / 0.8,   // 2.5 (≤128K)
+	"qwen-turbo":                  3.0 / 0.3,   // 10.0 (思考模式)
+	"qwen-long":                   2.0 / 0.5,   // 4.0
+	"qwq-plus":                    4.0 / 1.6,   // 2.5
+	// --- MiniMax 系列 ---
+	"MiniMax-M3":     16.8 / 4.2, // 4.0
+	"MiniMax-M2.7":   8.4 / 2.1,  // 4.0
+	"MiniMax-M2.5":   8.4 / 2.1,  // 4.0
+	"MiniMax-M2.1":   8.4 / 2.1,  // 4.0
+	// --- 阶跃星辰 ---
+	"stepfun/step-3.7-flash": 8.1 / 1.35, // 6.0
+	// --- 小米 MiMo ---
+	"xiaomi/mimo-v2.5-pro": 21.0 / 7.0, // 3.0 (≤256K)
+	// --- 硅基流动 / 快手转售 ---
+	"siliconflow/deepseek-v3.2":          3.0 / 2.0,  // 1.5
+	"siliconflow/deepseek-v3.1-terminus": 12.0 / 4.0, // 3.0
+	"siliconflow/deepseek-r1-0528":       16.0 / 4.0, // 4.0
+	"siliconflow/deepseek-v3-0324":       8.0 / 2.0,  // 4.0
+	"vanchin/deepseek-v3.2-think":        3.0 / 2.0,  // 1.5
+	"vanchin/deepseek-v3.1-terminus":     12.0 / 4.0, // 3.0
+	"vanchin/deepseek-r1":                16.0 / 4.0, // 4.0
+	"vanchin/deepseek-v3":                8.0 / 2.0,  // 4.0
 }
 
 // InitRatioSettings initializes all model related settings maps
