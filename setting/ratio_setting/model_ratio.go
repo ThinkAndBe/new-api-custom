@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 )
 
@@ -417,7 +416,8 @@ func GetModelRatio(name string) (float64, bool, string) {
 			}
 			//return 0, true, name
 		}
-		return 37.5, operation_setting.SelfUseModeEnabled, name
+		// 未知模型默认按 glm-5.2 计价（0.546），避免天价账单或免费调用
+		return 0.546, true, name
 	}
 	return ratio, true, name
 }
