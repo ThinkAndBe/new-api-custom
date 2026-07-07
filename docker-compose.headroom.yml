@@ -28,11 +28,10 @@ services:
   # NEW API 主服务
   # -----------------------------------------------------------------
   new-api:
-    # 默认使用官方镜像；若用本地二开代码，取消下面一行注释改用 build
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    image: calciumion/new-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: new-api-custom:latest
     container_name: new-api
     restart: always
     command: --log-dir /app/logs
