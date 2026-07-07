@@ -285,7 +285,7 @@ const HeadroomDashboard = () => {
       <Spin spinning={loading}>
         <div className='p-4 space-y-4'>
           <div className='flex items-center justify-between flex-wrap gap-4'>
-            <Title heading={3}>{t('Headroom 压缩看板')}</Title>
+            <Title heading={3}>{t('压缩看板')}</Title>
             <div className='flex items-center gap-2 flex-wrap'>
               <Select
                 size='small'
