@@ -82,16 +82,20 @@ services:
       # 多用户/高并发：每个 worker 是独立进程，建议按 CPU 核数或 CPU 核数/2 设置
       - HEADROOM_WORKERS=1
       # 限制单实例并发，防止瞬时多用户压缩把 CPU/内存打满
-      - HEADROOM_MAX_CONCURRENCY=50
+      - HEADROOM_MAX_CONCURRENCY=30
       # 国内环境避免 tiktoken 在线下载，强制使用 Headroom 估算 tokenizer
       - HEADROOM_FORCE_MODEL=new-api-generic
       # Kompress ML 模型名；权重已挂载到 /models/kompress-base。
       # 留空会被 headroom 库解释为「不压缩」，必须显式设为 kompress-base 才会启用。
       # 如需禁用，改为 "disabled"。
       - HEADROOM_KOMPRESS_MODEL=kompress-base
-      - HEADROOM_PROTECT_RECENT=2
-      - HEADROOM_MIN_TOKENS_TO_COMPRESS=100
+      # 保护最近 3 轮对话不压缩（代码场景更安全）
+      - HEADROOM_PROTECT_RECENT=3
+      # 请求超过 500 token 才压缩（小请求压缩收益小，徒增延迟）
+      - HEADROOM_MIN_TOKENS_TO_COMPRESS=500
       - HEADROOM_COMPRESS_USER_MESSAGES=true
+      # 不压缩系统消息（防止 AI 行为偏移，系统消息通常是 prompt 指令）
+      - HEADROOM_COMPRESS_SYSTEM_MESSAGES=false
       - HF_HOME=/models
       - HF_HUB_OFFLINE=0
       - TRANSFORMERS_OFFLINE=0
