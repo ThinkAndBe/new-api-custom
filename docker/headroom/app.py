@@ -53,9 +53,9 @@ MODERNBERT_LOCAL_DIR = os.getenv("MODERNBERT_LOCAL_DIR", "/models/modernbert-bas
 
 # Kompress ONNX 模型必须配套 ModernBERT tokenizer（用于分词），
 # 二者缺一不可，否则 Kompress 会被判定为不可用并自动禁用。
-# 支持两种模型文件名：kompress-int8.onnx (base) 和 kompress-fp32.onnx (v2-base)
+# 支持所有 onnx 文件名：int8-wo (推荐) > fp32 > int8
 _kompress_onnx_path = None
-for _fname in ("kompress-int8.onnx", "kompress-fp32.onnx"):
+for _fname in ("kompress-int8-wo.onnx", "kompress-fp32.onnx", "kompress-int8.onnx"):
     _p = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", _fname)
     if os.path.isfile(_p):
         _kompress_onnx_path = _p
@@ -79,12 +79,25 @@ if _kompress_available:
             if os.path.isfile(local_path):
                 _logger.debug("hf_hub_download(local): %s/%s -> %s", repo_id, filename, local_path)
                 return local_path
-            # v2-base 的 onnx 文件名可能不同，尝试两种
-            if filename == "onnx/kompress-int8.onnx":
-                alt_path = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", "kompress-fp32.onnx")
-                if os.path.isfile(alt_path):
-                    _logger.debug("hf_hub_download(alt): %s/%s -> %s", repo_id, filename, alt_path)
-                    return alt_path
+            # v2-base 可能用不同文件名，按优先级尝试
+            if filename == "onnx/kompress-int8-wo.onnx":
+                for alt_name in ("kompress-int8-wo.onnx", "kompress-fp32.onnx", "kompress-int8.onnx"):
+                    alt_path = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", alt_name)
+                    if os.path.isfile(alt_path):
+                        _logger.debug("hf_hub_download(alt): %s/%s -> %s", repo_id, filename, alt_path)
+                        return alt_path
+            elif filename == "onnx/kompress-fp32.onnx":
+                for alt_name in ("kompress-fp32.onnx", "kompress-int8-wo.onnx", "kompress-int8.onnx"):
+                    alt_path = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", alt_name)
+                    if os.path.isfile(alt_path):
+                        _logger.debug("hf_hub_download(alt): %s/%s -> %s", repo_id, filename, alt_path)
+                        return alt_path
+            elif filename == "onnx/kompress-int8.onnx":
+                for alt_name in ("kompress-int8.onnx", "kompress-int8-wo.onnx", "kompress-fp32.onnx"):
+                    alt_path = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", alt_name)
+                    if os.path.isfile(alt_path):
+                        _logger.debug("hf_hub_download(alt): %s/%s -> %s", repo_id, filename, alt_path)
+                        return alt_path
         # ModernBERT tokenizer
         if repo_id == "answerdotai/ModernBERT-base":
             local_path = os.path.join(MODERNBERT_LOCAL_DIR, filename)
