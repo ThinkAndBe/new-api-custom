@@ -114,15 +114,17 @@ services:
     environment:
       - HEADROOM_HOST=0.0.0.0
       - HEADROOM_PORT=8787
-      # 多用户/高并发：每个 worker 是独立进程，建议按 CPU 核数或 CPU 核数/2 设置
-      - HEADROOM_WORKERS=2
-      # 限制单实例并发，防止瞬时多用户压缩把 CPU/内存打满
-      - HEADROOM_MAX_CONCURRENCY=50
-      # 国内环境避免 tiktoken 在线下载，强制使用 Headroom 估算 tokenizer
+      - HEADROOM_WORKERS=1
+      - HEADROOM_MAX_CONCURRENCY=30
       - HEADROOM_FORCE_MODEL=new-api-generic
-      # 默认禁用 Kompress ML 模型，避免首次请求下载模型导致阻塞；生产网络稳定后可改为空启用
-      - HEADROOM_KOMPRESS_MODEL=disabled
+      - HEADROOM_KOMPRESS_MODEL=kompress-base
+      - HEADROOM_PROTECT_RECENT=3
+      - HEADROOM_MIN_TOKENS_TO_COMPRESS=500
+      - HEADROOM_COMPRESS_USER_MESSAGES=true
+      - HEADROOM_COMPRESS_SYSTEM_MESSAGES=false
       - HF_HOME=/models
+      - HF_HUB_OFFLINE=0
+      - TRANSFORMERS_OFFLINE=0
       - HF_ENDPOINT=https://hf-mirror.com
       - HEADROOM_LOG_LEVEL=INFO
       - TZ=Asia/Shanghai
