@@ -24,6 +24,8 @@ type LogFilter struct {
 	Group             string
 	RequestID         string
 	UpstreamRequestID string
+	// AdminUserIds 限定只统计这些用户 ID 的日志（用于令牌汇总只看管理员令牌）
+	AdminUserIds []int
 }
 
 // applyWithPrefix 将过滤条件应用到查询上。
@@ -63,6 +65,9 @@ func (f *LogFilter) applyWithPrefix(tx *gorm.DB, prefix string) (*gorm.DB, error
 	}
 	if f.Group != "" {
 		tx = tx.Where(prefix+logGroupCol+" = ?", f.Group)
+	}
+	if len(f.AdminUserIds) > 0 {
+		tx = tx.Where(prefix+"user_id IN ?", f.AdminUserIds)
 	}
 	return tx, nil
 }

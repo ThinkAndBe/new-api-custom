@@ -47,12 +47,34 @@ func buildTokenSummary(filter model.LogFilter) ([]logTokenSummary, int64, error)
 }
 
 // GetLogsTokenSummary 管理员获取令牌维度汇总（JSON，用于页面内展示）。
+// 管理员视角下，使用日志和用户报表的令牌维度是重叠的；这里只统计超管（role>=10）用户下的令牌，
+// 避免与用户报表重复，让管理员聚焦于"系统级/共享"令牌的用量。
 func GetLogsTokenSummary(c *gin.Context) {
 	filter, err := parseExportFilter(c, false)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
+	// 限定只统计管理员（role>=10）用户的令牌
+	adminUserIds, err := model.GetAllAdminUserIds()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if len(adminUserIds) == 0 {
+		// 没有管理员用户，直接返回空
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+			"data": gin.H{
+				"rows":  []logTokenSummary{},
+				"total": 0,
+				"count": "0",
+			},
+		})
+		return
+	}
+	filter.AdminUserIds = adminUserIds
 	rows, totalCount, err := buildTokenSummary(filter)
 	if err != nil {
 		common.ApiError(c, err)
@@ -62,9 +84,9 @@ func GetLogsTokenSummary(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data": gin.H{
-			"rows":       rows,
-			"total":      len(rows),
-			"count":      strconv.FormatInt(totalCount, 10),
+			"rows":  rows,
+			"total": len(rows),
+			"count": strconv.FormatInt(totalCount, 10),
 		},
 	})
 }

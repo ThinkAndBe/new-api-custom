@@ -58,6 +58,8 @@ type ChannelOtherSettings struct {
 	HealthCheckEnabled                    bool                `json:"health_check_enabled,omitempty"`
 	HealthCheckIntervalMinutes            int                 `json:"health_check_interval_minutes,omitempty"`
 	HealthCheckFailureThreshold           int                 `json:"health_check_failure_threshold,omitempty"`
+	// HealthCheckDisabled opt-out 语义：true=禁止该渠道参与自动恢复探测
+	HealthCheckDisabled                   bool                `json:"health_check_disabled,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

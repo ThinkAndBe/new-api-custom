@@ -71,10 +71,15 @@ func checkAllChannelsHealth() {
 		return
 	}
 	for _, ch := range channels {
+		// 默认只探测「自动禁用」的渠道（被动恢复模式）
+		// 正常启用的渠道靠真实请求失败自动禁用，无需定时探测，避免浪费 token
+		if ch.Status != common.ChannelStatusAutoDisabled {
+			continue
+		}
+
 		settings := ch.GetOtherSettings()
-		if !settings.HealthCheckEnabled {
-			// 如果健康监测已关闭，清除内存状态
-			resetHealthState(ch.Id)
+		// opt-out 语义：默认参与自动恢复，只有显式设置 health_check_disabled=true 才跳过
+		if settings.HealthCheckDisabled {
 			continue
 		}
 
@@ -85,7 +90,7 @@ func checkAllChannelsHealth() {
 			continue
 		}
 
-		// 判断是否到检测间隔
+		// 判断是否到检测间隔（用渠道配置的间隔，默认 5 分钟）
 		interval := settings.HealthCheckIntervalMinutes
 		if interval <= 0 {
 			interval = 5

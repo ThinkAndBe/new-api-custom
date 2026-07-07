@@ -25,11 +25,13 @@ import {
   Modal,
   Space,
   SplitButtonGroup,
+  Switch,
   Tag,
   Tooltip,
   Typography,
 } from '@douyinfe/semi-ui';
 import {
+  API,
   timestamp2string,
   renderGroup,
   renderQuota,
@@ -272,6 +274,119 @@ const isRequestPassThroughEnabled = (record) => {
     return parsed?.pass_through_body_enabled === true;
   } catch (error) {
     return false;
+  }
+};
+
+// 从 record.setting 读取 headroom_enabled 状态
+const isHeadroomEnabled = (record) => {
+  if (!record || record.children !== undefined) {
+    return false;
+  }
+  const settingValue = record.setting;
+  if (!settingValue) {
+    return false;
+  }
+  if (typeof settingValue === 'object') {
+    return settingValue.headroom_enabled === true;
+  }
+  if (typeof settingValue !== 'string') {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(settingValue);
+    return parsed?.headroom_enabled === true;
+  } catch (error) {
+    return false;
+  }
+};
+
+// 从 record.settings 读取监测状态（opt-out 语义：默认开启）
+const isHealthCheckEnabled = (record) => {
+  if (!record || record.children !== undefined) {
+    return true; // 默认开启
+  }
+  const settingValue = record.settings;
+  if (!settingValue) {
+    return true; // 未配置 = 默认开启
+  }
+  try {
+    const parsed =
+      typeof settingValue === 'string'
+        ? JSON.parse(settingValue)
+        : settingValue;
+    return parsed?.health_check_disabled !== true;
+  } catch (error) {
+    return true; // 解析失败 = 默认开启
+  }
+};
+
+// 快速切换渠道的 Headroom 压缩开关
+const toggleHeadroom = async (record, refresh, t) => {
+  const currentEnabled = isHeadroomEnabled(record);
+  let setting = {};
+  try {
+    setting =
+      typeof record.setting === 'string'
+        ? JSON.parse(record.setting)
+        : record.setting || {};
+  } catch (error) {
+    setting = {};
+  }
+  setting.headroom_enabled = !currentEnabled;
+  if (!setting.headroom_url) {
+    setting.headroom_url = 'http://headroom:8787';
+  }
+  try {
+    const res = await API.put('/api/channel/', {
+      id: record.id,
+      setting: JSON.stringify(setting),
+    });
+    if (res.data.success) {
+      showSuccess(
+        currentEnabled
+          ? t('已关闭 Headroom 压缩')
+          : t('已开启 Headroom 压缩'),
+      );
+      refresh();
+    } else {
+      showError(res.data.message);
+    }
+  } catch (error) {
+    showError(error.message || t('操作失败'));
+  }
+};
+
+// 快速切换渠道的健康监测开关（opt-out 语义：默认开启，关闭=禁止自动恢复）
+const toggleHealthCheck = async (record, refresh, t) => {
+  const currentEnabled = isHealthCheckEnabled(record);
+  let settings = {};
+  try {
+    settings =
+      typeof record.settings === 'string'
+        ? JSON.parse(record.settings)
+        : record.settings || {};
+  } catch (error) {
+    settings = {};
+  }
+  // 用 health_check_disabled 字段（opt-out）：true=关闭监测，false/未设置=开启监测
+  settings.health_check_disabled = currentEnabled; // 当前开启 → 关闭它
+  try {
+    const res = await API.put('/api/channel/', {
+      id: record.id,
+      settings: JSON.stringify(settings),
+    });
+    if (res.data.success) {
+      showSuccess(
+        currentEnabled
+          ? t('已关闭自动恢复')
+          : t('已开启自动恢复'),
+      );
+      refresh();
+    } else {
+      showError(res.data.message);
+    }
+  } catch (error) {
+    showError(error.message || t('操作失败'));
   }
 };
 
@@ -693,6 +808,18 @@ export const getChannelsColumns = ({
           const moreMenuItems = [
             {
               node: 'item',
+              name: t('复制'),
+              type: 'tertiary',
+              onClick: () => {
+                Modal.confirm({
+                  title: t('确定是否要复制此渠道？'),
+                  content: t('复制渠道的所有信息'),
+                  onOk: () => copySelectedChannel(record),
+                });
+              },
+            },
+            {
+              node: 'item',
               name: t('删除'),
               type: 'danger',
               onClick: () => {
@@ -710,18 +837,6 @@ export const getChannelsColumns = ({
                       }, 100);
                     })();
                   },
-                });
-              },
-            },
-            {
-              node: 'item',
-              name: t('复制'),
-              type: 'tertiary',
-              onClick: () => {
-                Modal.confirm({
-                  title: t('确定是否要复制此渠道？'),
-                  content: t('复制渠道的所有信息'),
-                  onOk: () => copySelectedChannel(record),
                 });
               },
             },
@@ -795,9 +910,9 @@ export const getChannelsColumns = ({
 	                    setShowModelTestModal(true);
 	                  }}
 />
-	              </SplitButtonGroup>
+              </SplitButtonGroup>
 
-	              {record.status === 1 ? (
+              {record.status === 1 ? (
                 <Button
                   type='danger'
                   size='small'
@@ -859,6 +974,30 @@ export const getChannelsColumns = ({
                   {t('编辑')}
                 </Button>
               )}
+
+              {/* 快捷开关：压缩 / 恢复 */}
+              <span className='inline-flex items-center gap-1.5'>
+                <Tooltip content={isHeadroomEnabled(record) ? t('关闭压缩') : t('开启压缩')} position='bottom'>
+                  <span className='inline-flex items-center gap-0.5'>
+                    <span className='text-xs text-muted-foreground'>{t('压缩')}</span>
+                    <Switch
+                      size='small'
+                      checked={isHeadroomEnabled(record)}
+                      onChange={() => toggleHeadroom(record, refresh, t)}
+                    />
+                  </span>
+                </Tooltip>
+                <Tooltip content={isHealthCheckEnabled(record) ? t('关闭自动恢复') : t('开启自动恢复')} position='bottom'>
+                  <span className='inline-flex items-center gap-0.5'>
+                    <span className='text-xs text-muted-foreground'>{t('恢复')}</span>
+                    <Switch
+                      size='small'
+                      checked={isHealthCheckEnabled(record)}
+                      onChange={() => toggleHealthCheck(record, refresh, t)}
+                    />
+                  </span>
+                </Tooltip>
+              </span>
 
               <Dropdown
                 trigger='click'

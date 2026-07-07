@@ -1872,12 +1872,9 @@ data.upstream_model_update_last_detected_models = [];
     settings.schedule_pause_enabled =
       localInputs.schedule_pause_enabled === true;
     settings.schedule_pause_rules = localInputs.schedule_pause_rules || [];
-    settings.health_check_enabled =
-      localInputs.health_check_enabled === true;
+    // 自动恢复：仅保留探测间隔，health_check_enabled/failure_threshold 已废弃
     settings.health_check_interval_minutes =
       parseInt(localInputs.health_check_interval_minutes) || 5;
-    settings.health_check_failure_threshold =
-      parseInt(localInputs.health_check_failure_threshold) || 3;
 
     localInputs.settings = JSON.stringify(settings);
 
@@ -1914,6 +1911,7 @@ data.upstream_model_update_last_detected_models = [];
     delete localInputs.health_check_enabled;
     delete localInputs.health_check_interval_minutes;
     delete localInputs.health_check_failure_threshold;
+    delete localInputs.health_check_disabled;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -2607,61 +2605,29 @@ data.upstream_model_update_last_detected_models = [];
                   )}
                 </div>
 
-                {/* Health Monitoring Section */}
+                {/* Auto Recovery Section */}
                 <div className='py-3 border-b border-gray-100'>
                   <Text className='text-sm font-medium text-gray-500 mb-3 block'>
-                    {t('健康监测')}
+                    {t('自动恢复')}
                   </Text>
 
-                  <Form.Switch
-                    field='health_check_enabled'
-                    label={t('开启健康监测')}
-                    checkedText={t('开')}
-                    uncheckedText={t('关')}
+                  <Form.InputNumber
+                    field='health_check_interval_minutes'
+                    label={t('恢复探测间隔（分钟）')}
+                    min={1}
+                    max={1440}
+                    step={1}
+                    defaultValue={5}
                     onChange={(value) =>
                       handleChannelOtherSettingsChange(
-                        'health_check_enabled',
+                        'health_check_interval_minutes',
                         value,
                       )
                     }
                     extraText={t(
-                      '开启后，后台定时发送测试请求检测渠道可用性，连续失败达阈值自动禁用，恢复后自动启用',
+                      '渠道被自动禁用后，每隔该时间探测一次是否恢复，默认 5 分钟。正常渠道不会探测，不消耗 token',
                     )}
                   />
-                  {inputs.health_check_enabled && (
-                    <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2'>
-                      <Form.InputNumber
-                        field='health_check_interval_minutes'
-                        label={t('检测间隔（分钟）')}
-                        min={1}
-                        max={1440}
-                        step={1}
-                        defaultValue={5}
-                        onChange={(value) =>
-                          handleChannelOtherSettingsChange(
-                            'health_check_interval_minutes',
-                            value,
-                          )
-                        }
-                        extraText={t('每次检测间隔，默认 5 分钟')}
-                      />
-                      <Form.InputNumber
-                        field='health_check_failure_threshold'
-                        label={t('连续失败阈值')}
-                        min={1}
-                        max={10}
-                        step={1}
-                        defaultValue={3}
-                        onChange={(value) =>
-                          handleChannelOtherSettingsChange(
-                            'health_check_failure_threshold',
-                            value,
-                          )
-                        }
-                        extraText={t('连续失败次数达到阈值后自动禁用渠道，默认 3 次')}
-                      />
-                    </div>
-                  )}
                 </div>
 
                 {/* Extra Settings Section */}

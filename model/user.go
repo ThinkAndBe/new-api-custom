@@ -1230,3 +1230,14 @@ func RootUserExists() bool {
 	}
 	return true
 }
+
+// GetAllAdminUserIds 返回所有管理员（role >= RoleAdminUser）的用户 ID 列表。
+// 用于令牌汇总只统计管理员令牌的场景。
+func GetAllAdminUserIds() ([]int, error) {
+	var ids []int
+	err := DB.Model(&User{}).Where("role >= ?", common.RoleAdminUser).Pluck("id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}

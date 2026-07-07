@@ -147,8 +147,10 @@ var QuotaForNewUser = 0
 var QuotaForInviter = 0
 var QuotaForInvitee = 0
 var ChannelDisableThreshold = 5.0
-var AutomaticDisableChannelEnabled = false
-var AutomaticEnableChannelEnabled = false
+// AutomaticDisableChannelEnabled 真实请求失败时自动禁用渠道（默认开启）
+var AutomaticDisableChannelEnabled = true
+// AutomaticEnableChannelEnabled 健康检测成功时自动恢复渠道（默认开启）
+var AutomaticEnableChannelEnabled = true
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 
