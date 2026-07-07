@@ -195,6 +195,9 @@ if _kompress_available:
 else:
     KOMPRESS_MODEL = os.getenv("HEADROOM_KOMPRESS_MODEL", "disabled") or None
 COMPRESS_SYSTEM_MESSAGES = os.getenv("HEADROOM_COMPRESS_SYSTEM_MESSAGES", "true").lower() == "true"
+# 0.30.0+：强制保留比例。None=模型自决定，0.3=保留30%（激进），0.5=保留50%（安全）
+_target_ratio_str = os.getenv("HEADROOM_TARGET_RATIO", "")
+TARGET_RATIO = float(_target_ratio_str) if _target_ratio_str else None
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -265,13 +268,16 @@ async def compress_endpoint(request: Request) -> JSONResponse:
     try:
         from headroom.compress import CompressConfig
 
-        cfg = CompressConfig(
+        cfg_kwargs = dict(
             compress_user_messages=COMPRESS_USER_MESSAGES,
             compress_system_messages=COMPRESS_SYSTEM_MESSAGES,
             protect_recent=PROTECT_RECENT,
             min_tokens_to_compress=MIN_TOKENS_TO_COMPRESS,
             kompress_model=KOMPRESS_MODEL,
         )
+        if TARGET_RATIO is not None:
+            cfg_kwargs["target_ratio"] = TARGET_RATIO
+        cfg = CompressConfig(**cfg_kwargs)
         result = headroom_compress(messages, model=model, config=cfg)
     except Exception as exc:
         logger.exception("compress failed: %s", exc)
