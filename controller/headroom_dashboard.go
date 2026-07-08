@@ -26,7 +26,7 @@ type HeadroomLogRow struct {
 	HeadroomSaved int     `json:"headroom_tokens_saved"`
 	HeadroomInput int     `json:"headroom_tokens_input"`
 	HeadroomRatio float64 `json:"headroom_ratio"`
-	// PromptTokens 是使用日志里记录的实际输入 token（压缩后），与使用日志一致
+	// PromptTokens 是使用日志里的实际输入 token（已减去缓存 token）
 	PromptTokens      int `json:"prompt_tokens"`
 	CompletionTokens  int `json:"completion_tokens"`
 }
@@ -104,6 +104,13 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 		input := intFromAny(other["headroom_tokens_input"])
 		ratio := floatFromAny(other["headroom_ratio"])
 		chName := channelNames[log.ChannelId]
+		// 实际输入 token = log.prompt_tokens - cache_tokens
+		// 因为 prompt_tokens 包含了缓存命中的 token，去掉缓存才是真正发送的新 token
+		cacheTokens := intFromAny(other["cache_tokens"])
+		actualInput := log.PromptTokens - cacheTokens
+		if actualInput < 0 {
+			actualInput = log.PromptTokens
+		}
 		rows = append(rows, HeadroomLogRow{
 			CreatedAt:        log.CreatedAt,
 			Username:         log.Username,
@@ -115,7 +122,7 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 			HeadroomSaved:    saved,
 			HeadroomInput:    input,
 			HeadroomRatio:    ratio,
-			PromptTokens:     log.PromptTokens,
+			PromptTokens:     actualInput,
 			CompletionTokens: log.CompletionTokens,
 		})
 	}
