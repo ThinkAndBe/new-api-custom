@@ -26,6 +26,9 @@ type HeadroomLogRow struct {
 	HeadroomSaved int     `json:"headroom_tokens_saved"`
 	HeadroomInput int     `json:"headroom_tokens_input"`
 	HeadroomRatio float64 `json:"headroom_ratio"`
+	// PromptTokens 是使用日志里记录的实际输入 token（压缩后），与使用日志一致
+	PromptTokens      int `json:"prompt_tokens"`
+	CompletionTokens  int `json:"completion_tokens"`
 }
 
 type HeadroomAggRow struct {
@@ -102,16 +105,18 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 		ratio := floatFromAny(other["headroom_ratio"])
 		chName := channelNames[log.ChannelId]
 		rows = append(rows, HeadroomLogRow{
-			CreatedAt:     log.CreatedAt,
-			Username:      log.Username,
-			ModelName:     log.ModelName,
-			TokenName:     log.TokenName,
-			ChannelId:     log.ChannelId,
-			ChannelName:   chName,
-			RequestID:     log.RequestId,
-			HeadroomSaved: saved,
-			HeadroomInput: input,
-			HeadroomRatio: ratio,
+			CreatedAt:        log.CreatedAt,
+			Username:         log.Username,
+			ModelName:        log.ModelName,
+			TokenName:        log.TokenName,
+			ChannelId:        log.ChannelId,
+			ChannelName:      chName,
+			RequestID:        log.RequestId,
+			HeadroomSaved:    saved,
+			HeadroomInput:    input,
+			HeadroomRatio:    ratio,
+			PromptTokens:     log.PromptTokens,
+			CompletionTokens: log.CompletionTokens,
 		})
 	}
 	return rows, nil
@@ -338,7 +343,7 @@ func ExportHeadroom(c *gin.Context) {
 				fmt.Sprintf("%.1f%%", r.AverageRatio*100)})
 		}
 	default: // detail
-		w.Write([]string{"时间", "用户", "令牌", "模型", "渠道", "节省 Tokens", "原输入 Tokens", "压缩率", "请求ID"})
+		w.Write([]string{"时间", "用户", "令牌", "模型", "渠道", "原输入 Tokens", "节省 Tokens", "实际输入 Tokens", "输出 Tokens", "压缩率", "请求ID"})
 		for _, r := range rows {
 			chName := r.ChannelName
 			if chName == "" {
@@ -347,7 +352,8 @@ func ExportHeadroom(c *gin.Context) {
 			w.Write([]string{
 				time.Unix(r.CreatedAt, 0).Format("2006-01-02 15:04:05"),
 				r.Username, r.TokenName, r.ModelName, chName,
-				strconv.Itoa(r.HeadroomSaved), strconv.Itoa(r.HeadroomInput),
+				strconv.Itoa(r.HeadroomInput), strconv.Itoa(r.HeadroomSaved),
+				strconv.Itoa(r.PromptTokens), strconv.Itoa(r.CompletionTokens),
 				fmt.Sprintf("%.1f%%", r.HeadroomRatio*100), r.RequestID,
 			})
 		}

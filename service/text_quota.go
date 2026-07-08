@@ -186,17 +186,11 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	summary.CompletionTokens = usage.CompletionTokens
 	summary.TotalTokens = usage.PromptTokens + usage.CompletionTokens
 
-	// Headroom 压缩生效时，始终用压缩后实际发送的 token 数覆盖 prompt_tokens。
-	// 无论上游返回什么 usage（OpenAI 原生 / Claude→OpenAI 转换 / 原生 Claude），
-	// 计费都应基于压缩后的实际发送量，而非上游可能未压缩的原始估算值。
-	// 修复 ch=3 (火山ap) prompt_tokens > headroom_input 的问题。
-	if relayInfo.HeadroomTokensSaved > 0 && relayInfo.HeadroomTokensInput > 0 {
-		actualSent := relayInfo.HeadroomTokensInput - relayInfo.HeadroomTokensSaved
-		if actualSent > 0 && actualSent < summary.PromptTokens {
-			summary.PromptTokens = actualSent
-			summary.TotalTokens = summary.PromptTokens + summary.CompletionTokens
-		}
-	}
+	// Headroom 压缩后，不覆盖上游返回的 PromptTokens。
+	// 上游返回的 usage 是基于压缩后请求体的真实计费值（含缓存命中），
+	// 强行覆盖会导致 prompt_tokens < cache_tokens 从而出现负数。
+	// 压缩看板的「原输入 Tokens」来自 headroom_tokens_input，
+	// 「实际输入 Tokens」来自 log.prompt_tokens，两者来源不同但各自准确。
 
 	summary.CacheTokens = usage.PromptTokensDetails.CachedTokens
 	summary.CacheCreationTokens = usage.PromptTokensDetails.CachedCreationTokens

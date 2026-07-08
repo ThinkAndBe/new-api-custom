@@ -269,8 +269,10 @@ const HeadroomDashboard = () => {
     { title: t('用户'), dataIndex: 'username' },
     { title: t('模型'), dataIndex: 'model_name' },
     { title: t('渠道'), dataIndex: 'channel_name', render: (v, r) => v || `渠道#${r.channel_id}` },
-    { title: t('节省 Tokens'), dataIndex: 'headroom_tokens_saved', render: renderNumber },
     { title: t('原输入 Tokens'), dataIndex: 'headroom_tokens_input', render: renderNumber },
+    { title: t('节省 Tokens'), dataIndex: 'headroom_tokens_saved', render: renderNumber },
+    { title: t('实际输入 Tokens'), dataIndex: 'prompt_tokens', render: renderNumber },
+    { title: t('输出 Tokens'), dataIndex: 'completion_tokens', render: renderNumber },
     { title: t('压缩率'), dataIndex: 'headroom_ratio', render: (v) => `${((v || 0) * 100).toFixed(1)}%` },
   ];
 

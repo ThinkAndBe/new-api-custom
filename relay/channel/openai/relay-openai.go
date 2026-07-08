@@ -177,13 +177,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	if !containStreamUsage {
 		// 上游未返回 usage，本地估算
 		promptTokens := info.GetEstimatePromptTokens()
-		// 如果 Headroom 压缩生效，用压缩后的实际发送 token 数替代估算值
-		if info.HeadroomTokensSaved > 0 && info.HeadroomTokensInput > 0 {
-			actualSent := info.HeadroomTokensInput - info.HeadroomTokensSaved
-			if actualSent > 0 && actualSent < promptTokens {
-				promptTokens = actualSent
-			}
-		}
+		// Headroom 压缩后不覆盖 promptTokens，避免与缓存 token 冲突出现负数
 		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, promptTokens)
 		usage.CompletionTokens += toolCount * 7
 	} else {
