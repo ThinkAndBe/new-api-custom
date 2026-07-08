@@ -717,19 +717,21 @@ export const useDashboardCharts = (
           subtext: `${t('总计')}：${renderNumber(totalUserTokens)}`,
         },
       }));
+    },
+    [dataExportDefaultTime, t],
+  );
 
-      // ===== 渠道 Token 调用排行（基于 channel_name 字段）=====
-      const channelTokenTotal = new Map();
-      data.forEach((item) => {
-        const channelName = item.channel_name || `渠道${item.channel_id || '未知'}`;
-        const prev = channelTokenTotal.get(channelName) || 0;
-        channelTokenTotal.set(
-          channelName,
-          prev + (item.token_used || 0),
-        );
-      });
-      const channelTokenRankValues = Array.from(channelTokenTotal.entries())
-        .map(([Channel, TokenUsed]) => ({ Channel, TokenUsed }))
+  // ========== 渠道维度图表数据处理 ==========
+  // data 来自 /api/data/channels，每条含 channel_name + token_used + quota + count
+  const updateChannelChartData = useCallback(
+    (data) => {
+      // ===== 渠道 Token 调用排行 =====
+      const channelTokenRankValues = (data || [])
+        .map((item) => ({
+          Channel: item.channel_name || `渠道${item.channel_id || '未知'}`,
+          TokenUsed: item.token_used || 0,
+        }))
+        .filter((item) => item.TokenUsed > 0)
         .sort((a, b) => b.TokenUsed - a.TokenUsed)
         .slice(0, 10);
       const totalChannelTokens = channelTokenRankValues.reduce(
@@ -746,7 +748,7 @@ export const useDashboardCharts = (
         },
       }));
     },
-    [dataExportDefaultTime, t],
+    [t],
   );
 
   // ========== 初始化图表主题 ==========
@@ -767,6 +769,7 @@ export const useDashboardCharts = (
     spec_channel_token_rank,
     updateChartData,
     updateUserChartData,
+    updateChannelChartData,
     generateModelColors,
   };
 };

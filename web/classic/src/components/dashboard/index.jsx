@@ -95,6 +95,13 @@ const Dashboard = () => {
     }
   };
 
+  const loadChannelData = async () => {
+    if (dashboardData.isAdminUser) {
+      const channelData = await dashboardData.loadChannelQuotaData();
+      dashboardCharts.updateChannelChartData(channelData || []);
+    }
+  };
+
   const initChart = async () => {
     await dashboardData.loadQuotaData().then((data) => {
       if (data && data.length > 0) {
@@ -102,6 +109,7 @@ const Dashboard = () => {
       }
     });
     await loadUserData();
+    await loadChannelData();
     await dashboardData.loadUptimeData();
   };
 
@@ -111,11 +119,13 @@ const Dashboard = () => {
       dashboardCharts.updateChartData(data);
     }
     await loadUserData();
+    await loadChannelData();
   };
 
   const handleSearchConfirm = async () => {
     await dashboardData.handleSearchConfirm(dashboardCharts.updateChartData);
     await loadUserData();
+    await loadChannelData();
   };
 
   // ========== 数据准备 ==========

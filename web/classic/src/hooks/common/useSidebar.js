@@ -34,6 +34,7 @@ export const DEFAULT_ADMIN_CONFIG = {
   console: {
     enabled: true,
     detail: true,
+    headroom: true,
     token: true,
     log: true,
     midjourney: true,
@@ -47,7 +48,6 @@ export const DEFAULT_ADMIN_CONFIG = {
   admin: {
     enabled: true,
     channel: true,
-    headroom: true,
     models: true,
     deployment: true,
     redemption: true,

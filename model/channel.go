@@ -423,6 +423,21 @@ func GetChannelById(id int, selectAll bool) (*Channel, error) {
 	return channel, nil
 }
 
+// GetChannelIdNameMap 返回所有渠道的 id->name 映射，用于数据看板渠道维度聚合
+func GetChannelIdNameMap() map[int]string {
+	var channels []Channel
+	err := DB.Omit("key").Select("id, name").Find(&channels).Error
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to get channel id-name map: %v", err))
+		return make(map[int]string)
+	}
+	result := make(map[int]string, len(channels))
+	for _, ch := range channels {
+		result[ch.Id] = ch.Name
+	}
+	return result
+}
+
 func BatchInsertChannels(channels []Channel) error {
 	if len(channels) == 0 {
 		return nil

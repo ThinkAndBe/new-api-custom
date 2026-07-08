@@ -48,6 +48,7 @@ export default function SettingsSidebarModulesAdmin(props) {
     console: {
       enabled: true,
       detail: true,
+      headroom: true,
       token: true,
       log: true,
       midjourney: true,
@@ -61,7 +62,6 @@ export default function SettingsSidebarModulesAdmin(props) {
     admin: {
       enabled: true,
       channel: true,
-      headroom: true,
       models: true,
       deployment: true,
       redemption: true,
@@ -110,6 +110,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       console: {
         enabled: true,
         detail: true,
+        headroom: true,
         token: true,
         log: true,
         midjourney: true,
@@ -226,6 +227,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       description: t('数据管理和日志查看'),
       modules: [
         { key: 'detail', title: t('数据看板'), description: t('系统数据统计') },
+        { key: 'headroom', title: t('压缩看板'), description: t('Headroom 压缩节省报表') },
         { key: 'token', title: t('令牌管理'), description: t('API令牌管理') },
         { key: 'log', title: t('使用日志'), description: t('API使用记录') },
         {
@@ -255,7 +257,6 @@ export default function SettingsSidebarModulesAdmin(props) {
       description: t('系统管理功能'),
       modules: [
         { key: 'channel', title: t('渠道管理'), description: t('API渠道配置') },
-        { key: 'headroom', title: t('Headroom看板'), description: t('Headroom 压缩节省报表') },
         { key: 'models', title: t('模型管理'), description: t('AI模型配置') },
         {
           key: 'deployment',
