@@ -137,12 +137,12 @@ func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaDat
 }
 
 // GetQuotaDataGroupByChannel 按渠道聚合数据看板数据，用于渠道Token排行
-// channel_id=0 的记录（历史数据或未记录渠道的请求）聚合到"未知渠道"
+// 排除 channel_id=0 的历史数据（升级前的数据未记录渠道）
 func GetQuotaDataGroupByChannel(startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
 	err = DB.Table("quota_data").
 		Select("channel_id, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
-		Where("created_at >= ? and created_at <= ?", startTime, endTime).
+		Where("created_at >= ? and created_at <= ? and channel_id > 0", startTime, endTime).
 		Group("channel_id").
 		Find(&quotaDatas).Error
 	return quotaDatas, err
