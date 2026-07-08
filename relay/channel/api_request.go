@@ -543,12 +543,68 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 						if compressResult.TokensBefore > 0 {
 							info.HeadroomTokensInput = compressResult.TokensBefore
 						}
-						if compressResult.TokensSaved > 0 {
-							var originalBody map[string]interface{}
-							if common2.Unmarshal(bodyBytes, &originalBody) == nil {
-								var compressedMsgs interface{}
-								if common2.Unmarshal(compressResult.Messages, &compressedMsgs) == nil {
-									originalBody["messages"] = compressedMsgs
+					if compressResult.TokensSaved > 0 {
+						var originalBody map[string]interface{}
+						if common2.Unmarshal(bodyBytes, &originalBody) == nil {
+							var compressedMsgs interface{}
+							if common2.Unmarshal(compressResult.Messages, &compressedMsgs) == nil {
+								// 修复：headroom 压缩可能把 content blocks 格式破坏
+								// 确保每条 message 的 content 格式正确：
+								// - 如果原始 content 是字符串，压缩后也应该是字符串
+								// - 如果原始 content 是数组（content blocks），压缩后也应该是数组且每个元素有 type 字段
+								if compressedMsgsList, ok := compressedMsgs.([]interface{}); ok {
+									for i, msg := range compressedMsgsList {
+										if msgMap, ok := msg.(map[string]interface{}); ok {
+											compressedContent := msgMap["content"]
+											// 检查原始消息的 content 类型
+											if i < len(originalBody["messages"].([]interface{})) {
+												origMsg := originalBody["messages"].([]interface{})[i]
+												if origMsgMap, ok := origMsg.(map[string]interface{}); ok {
+													origContent := origMsgMap["content"]
+													// 如果原始 content 是字符串但压缩后变成了数组，取第一个文本
+													if _, origIsString := origContent.(string); origIsString {
+														if compArr, ok := compressedContent.([]interface{}); ok && len(compArr) > 0 {
+															// 压缩后变成了 content blocks，提取文本拼接成字符串
+															var texts []string
+															for _, block := range compArr {
+																if blockMap, ok := block.(map[string]interface{}); ok {
+																	if text, ok := blockMap["text"].(string); ok {
+																		texts = append(texts, text)
+																	}
+																}
+															}
+															if len(texts) > 0 {
+																msgMap["content"] = strings.Join(texts, "\n")
+															}
+														}
+													}
+													// 如果原始 content 是数组但压缩后元素缺 type 字段
+													if _, origIsArray := origContent.([]interface{}); origIsArray {
+														if compArr, ok := compressedContent.([]interface{}); ok {
+															fixedArr := make([]interface{}, 0, len(compArr))
+															for _, block := range compArr {
+																if blockStr, ok := block.(string); ok {
+																	// 压缩后变成了纯字符串，包装成 content block
+																	fixedArr = append(fixedArr, map[string]interface{}{
+																		"type": "text",
+																		"text": blockStr,
+																	})
+																} else if blockMap, ok := block.(map[string]interface{}); ok {
+																	if _, hasType := blockMap["type"]; !hasType {
+																		blockMap["type"] = "text"
+																	}
+																	fixedArr = append(fixedArr, blockMap)
+																}
+															}
+															msgMap["content"] = fixedArr
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+								originalBody["messages"] = compressedMsgs
 									newBodyBytes, marshalErr := common2.Marshal(originalBody)
 									if marshalErr == nil {
 										req.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
