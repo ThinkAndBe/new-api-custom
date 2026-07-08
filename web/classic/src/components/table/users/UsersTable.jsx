@@ -168,6 +168,7 @@ const UsersTable = (usersData) => {
     showResetPasskeyUserModal,
     showResetTwoFAUserModal,
     showUserSubscriptionsUserModal,
+    handleReactivateUser,
   ]);
 
   // Handle compact mode by removing fixed positioning
