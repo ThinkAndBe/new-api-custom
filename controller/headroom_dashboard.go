@@ -97,11 +97,11 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 		if err := common.UnmarshalJsonStr(log.Other, &other); err != nil {
 			continue
 		}
-		saved := intFromAny(other["headroom_tokens_saved"])
-		if saved <= 0 {
+		input := intFromAny(other["headroom_tokens_input"])
+		if input <= 0 {
 			continue
 		}
-		input := intFromAny(other["headroom_tokens_input"])
+		saved := intFromAny(other["headroom_tokens_saved"])
 		ratio := floatFromAny(other["headroom_ratio"])
 		chName := channelNames[log.ChannelId]
 		// 实际输入 token = log.prompt_tokens（含缓存，是真正发给 API 的总量）

@@ -462,7 +462,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		// prompt/cache fields here, otherwise old upstream payloads may be double-counted.
 		other["input_tokens_total"] = usage.InputTokens
 	}
-	if relayInfo.HeadroomTokensSaved > 0 {
+	// 记录 headroom 压缩信息：即使 saved=0（noop）也记录 input，用于统计压缩覆盖率
+	if relayInfo.HeadroomTokensInput > 0 {
 		other["headroom_tokens_saved"] = relayInfo.HeadroomTokensSaved
 		other["headroom_tokens_input"] = relayInfo.HeadroomTokensInput
 		other["headroom_ratio"] = relayInfo.HeadroomRatio

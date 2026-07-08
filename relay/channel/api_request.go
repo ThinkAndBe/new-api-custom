@@ -525,8 +525,8 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 			req.ContentLength = int64(len(bodyBytes))
 
 			compressURL := fmt.Sprintf("%s/v1/compress", strings.TrimRight(headroomURL, "/"))
-			// 超时从 30s 降到 5s：压缩服务不可用时避免客户端长时间等待
-			compressClient := &http.Client{Timeout: 5 * time.Second}
+			// 超时 15 秒：大请求（>50 万 token）的 Kompress ML 推理需要较长时间
+			compressClient := &http.Client{Timeout: 15 * time.Second}
 			compressResp, compressErr := compressClient.Post(compressURL, "application/json", bytes.NewReader(bodyBytes))
 			if compressErr == nil && compressResp != nil {
 				defer compressResp.Body.Close()
@@ -538,29 +538,37 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 						TokensSaved      int             `json:"tokens_saved"`
 						CompressionRatio float64         `json:"compression_ratio"`
 					}
-					if decodeErr := common2.DecodeJson(compressResp.Body, &compressResult); decodeErr == nil && compressResult.TokensSaved > 0 {
-						var originalBody map[string]interface{}
-						if common2.Unmarshal(bodyBytes, &originalBody) == nil {
-							var compressedMsgs interface{}
-							if common2.Unmarshal(compressResult.Messages, &compressedMsgs) == nil {
-								originalBody["messages"] = compressedMsgs
-								newBodyBytes, marshalErr := common2.Marshal(originalBody)
-								if marshalErr == nil {
-									req.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
-									req.ContentLength = int64(len(newBodyBytes))
-									info.HeadroomTokensSaved = compressResult.TokensSaved
-									info.HeadroomTokensInput = compressResult.TokensBefore
-									// Headroom 的 compression_ratio 是保留率(压缩后/压缩前)，转换为节省率 = saved / input
-									if compressResult.TokensBefore > 0 {
-										info.HeadroomRatio = float64(compressResult.TokensSaved) / float64(compressResult.TokensBefore)
-									} else {
-										info.HeadroomRatio = compressResult.CompressionRatio
+					if decodeErr := common2.DecodeJson(compressResp.Body, &compressResult); decodeErr == nil {
+						// 即使 tokens_saved=0（noop），也记录 headroom_input 到日志，便于统计压缩覆盖率
+						if compressResult.TokensBefore > 0 {
+							info.HeadroomTokensInput = compressResult.TokensBefore
+						}
+						if compressResult.TokensSaved > 0 {
+							var originalBody map[string]interface{}
+							if common2.Unmarshal(bodyBytes, &originalBody) == nil {
+								var compressedMsgs interface{}
+								if common2.Unmarshal(compressResult.Messages, &compressedMsgs) == nil {
+									originalBody["messages"] = compressedMsgs
+									newBodyBytes, marshalErr := common2.Marshal(originalBody)
+									if marshalErr == nil {
+										req.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
+										req.ContentLength = int64(len(newBodyBytes))
+										info.HeadroomTokensSaved = compressResult.TokensSaved
+										// Headroom 的 compression_ratio 是保留率(压缩后/压缩前)，转换为节省率 = saved / input
+										if compressResult.TokensBefore > 0 {
+											info.HeadroomRatio = float64(compressResult.TokensSaved) / float64(compressResult.TokensBefore)
+										} else {
+											info.HeadroomRatio = compressResult.CompressionRatio
+										}
+										logger.LogInfo(c, fmt.Sprintf("headroom compression: %d -> %d tokens, saved %d (%.1f%%)",
+											compressResult.TokensBefore, compressResult.TokensAfter,
+											compressResult.TokensSaved, info.HeadroomRatio*100))
 									}
-									logger.LogInfo(c, fmt.Sprintf("headroom compression: %d -> %d tokens, saved %d (%.1f%%)",
-										compressResult.TokensBefore, compressResult.TokensAfter,
-										compressResult.TokensSaved, info.HeadroomRatio*100))
 								}
 							}
+						} else {
+							// noop: headroom 判定不需要压缩，记录原因
+							logger.LogInfo(c, fmt.Sprintf("headroom noop: tokens_before=%d, no compression needed", compressResult.TokensBefore))
 						}
 					}
 			} else {
