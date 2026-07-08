@@ -500,14 +500,13 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	}
 
 	// Headroom 压缩：在发送请求前，如果启用了 Headroom，对请求体进行压缩
-	// 支持所有带 messages 字段的请求（Chat/Completions/Responses）
-	// 注意：Claude Messages 格式跳过压缩，因为 content blocks 格式可能被破坏
+	// 支持所有带 messages 字段的请求（Chat/Completions/Claude Messages/Responses）
 	if operation_setting.HeadroomGlobalEnabled && info.ChannelSetting.HeadroomEnabled &&
 		(info.RelayMode == constant.RelayModeChatCompletions ||
 			info.RelayMode == constant.RelayModeCompletions ||
 			info.RelayMode == constant.RelayModeResponses ||
-			info.RelayMode == constant.RelayModeUnknown) &&
-		info.RelayFormat != types.RelayFormatClaude {
+			info.RelayMode == constant.RelayModeUnknown ||
+			info.RelayFormat == types.RelayFormatClaude) {
 		// 优先级：渠道配置 HeadroomURL > 环境变量 HEADROOM_URL > 默认值
 		headroomURL := info.ChannelSetting.HeadroomURL
 		if headroomURL == "" {
@@ -550,54 +549,54 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 							var compressedMsgs interface{}
 							if common2.Unmarshal(compressResult.Messages, &compressedMsgs) == nil {
 								// 修复：headroom 压缩可能把 content blocks 格式破坏
-								// 确保每条 message 的 content 格式正确：
-								// - 如果原始 content 是字符串，压缩后也应该是字符串
-								// - 如果原始 content 是数组（content blocks），压缩后也应该是数组且每个元素有 type 字段
+								// 遍历每条消息，确保 content 格式与上游 API 兼容：
+								//  - content 是数组时，每个元素必须是 dict 且含 type 字段
+								//  - 原始 content 是字符串时，压缩后也还原成字符串
 								if compressedMsgsList, ok := compressedMsgs.([]interface{}); ok {
+									origMsgs, _ := originalBody["messages"].([]interface{})
 									for i, msg := range compressedMsgsList {
-										if msgMap, ok := msg.(map[string]interface{}); ok {
-											compressedContent := msgMap["content"]
-											// 检查原始消息的 content 类型
-											if origMsgs, ok := originalBody["messages"].([]interface{}); ok && i < len(origMsgs) {
-												origMsg := origMsgs[i]
-												if origMsgMap, ok := origMsg.(map[string]interface{}); ok {
-													origContent := origMsgMap["content"]
-													// 如果原始 content 是字符串但压缩后变成了数组，取第一个文本
-													if _, origIsString := origContent.(string); origIsString {
-														if compArr, ok := compressedContent.([]interface{}); ok && len(compArr) > 0 {
-															// 压缩后变成了 content blocks，提取文本拼接成字符串
-															var texts []string
-															for _, block := range compArr {
-																if blockMap, ok := block.(map[string]interface{}); ok {
-																	if text, ok := blockMap["text"].(string); ok {
-																		texts = append(texts, text)
-																	}
+										msgMap, ok := msg.(map[string]interface{})
+										if !ok {
+											continue
+										}
+										compressedContent := msgMap["content"]
+										// 如果压缩后 content 是数组，修复每个元素：补全 type 字段，字符串包装为 block
+										if compArr, ok := compressedContent.([]interface{}); ok {
+											fixedArr := make([]interface{}, 0, len(compArr))
+											for _, block := range compArr {
+												switch b := block.(type) {
+												case string:
+													fixedArr = append(fixedArr, map[string]interface{}{
+														"type": "text",
+														"text": b,
+													})
+												case map[string]interface{}:
+													if _, hasType := b["type"]; !hasType {
+														b["type"] = "text"
+													}
+													fixedArr = append(fixedArr, b)
+												default:
+													fixedArr = append(fixedArr, block)
+												}
+											}
+											msgMap["content"] = fixedArr
+										}
+										// 如果原始 content 是字符串但压缩后变成了数组，
+										// 提取所有 text 拼接回字符串（保持原始格式）
+										if i < len(origMsgs) {
+											if origMsgMap, ok := origMsgs[i].(map[string]interface{}); ok {
+												if _, origIsString := origMsgMap["content"].(string); origIsString {
+													if compArr, ok := compressedContent.([]interface{}); ok && len(compArr) > 0 {
+														var texts []string
+														for _, block := range compArr {
+															if blockMap, ok := block.(map[string]interface{}); ok {
+																if text, ok := blockMap["text"].(string); ok {
+																	texts = append(texts, text)
 																}
-															}
-															if len(texts) > 0 {
-																msgMap["content"] = strings.Join(texts, "\n")
 															}
 														}
-													}
-													// 如果原始 content 是数组但压缩后元素缺 type 字段
-													if _, origIsArray := origContent.([]interface{}); origIsArray {
-														if compArr, ok := compressedContent.([]interface{}); ok {
-															fixedArr := make([]interface{}, 0, len(compArr))
-															for _, block := range compArr {
-																if blockStr, ok := block.(string); ok {
-																	// 压缩后变成了纯字符串，包装成 content block
-																	fixedArr = append(fixedArr, map[string]interface{}{
-																		"type": "text",
-																		"text": blockStr,
-																	})
-																} else if blockMap, ok := block.(map[string]interface{}); ok {
-																	if _, hasType := blockMap["type"]; !hasType {
-																		blockMap["type"] = "text"
-																	}
-																	fixedArr = append(fixedArr, blockMap)
-																}
-															}
-															msgMap["content"] = fixedArr
+														if len(texts) > 0 {
+															msgMap["content"] = strings.Join(texts, "\n")
 														}
 													}
 												}
@@ -606,30 +605,30 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 									}
 								}
 								originalBody["messages"] = compressedMsgs
-									newBodyBytes, marshalErr := common2.Marshal(originalBody)
-									if marshalErr == nil {
-										req.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
-										req.ContentLength = int64(len(newBodyBytes))
-										info.HeadroomTokensSaved = compressResult.TokensSaved
-										// Headroom 的 compression_ratio 是保留率(压缩后/压缩前)，转换为节省率 = saved / input
-										if compressResult.TokensBefore > 0 {
-											info.HeadroomRatio = float64(compressResult.TokensSaved) / float64(compressResult.TokensBefore)
-										} else {
-											info.HeadroomRatio = compressResult.CompressionRatio
-										}
-										logger.LogInfo(c, fmt.Sprintf("headroom compression: %d -> %d tokens, saved %d (%.1f%%)",
-											compressResult.TokensBefore, compressResult.TokensAfter,
-											compressResult.TokensSaved, info.HeadroomRatio*100))
+								newBodyBytes, marshalErr := common2.Marshal(originalBody)
+								if marshalErr == nil {
+									req.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
+									req.ContentLength = int64(len(newBodyBytes))
+									info.HeadroomTokensSaved = compressResult.TokensSaved
+									// Headroom 的 compression_ratio 是保留率(压缩后/压缩前)，转换为节省率 = saved / input
+									if compressResult.TokensBefore > 0 {
+										info.HeadroomRatio = float64(compressResult.TokensSaved) / float64(compressResult.TokensBefore)
+									} else {
+										info.HeadroomRatio = compressResult.CompressionRatio
 									}
+									logger.LogInfo(c, fmt.Sprintf("headroom compression: %d -> %d tokens, saved %d (%.1f%%)",
+										compressResult.TokensBefore, compressResult.TokensAfter,
+										compressResult.TokensSaved, info.HeadroomRatio*100))
 								}
 							}
-						} else {
-							// noop: headroom 判定不需要压缩，记录原因
-							logger.LogInfo(c, fmt.Sprintf("headroom noop: tokens_before=%d, no compression needed", compressResult.TokensBefore))
 						}
+					} else {
+						// noop: headroom 判定不需要压缩，记录原因
+						logger.LogInfo(c, fmt.Sprintf("headroom noop: tokens_before=%d, no compression needed", compressResult.TokensBefore))
 					}
-			} else {
-				logger.LogInfo(c, fmt.Sprintf("headroom compression bad status: %d, using original body", compressResp.StatusCode))
+					}
+				} else {
+					logger.LogInfo(c, fmt.Sprintf("headroom compression bad status: %d, using original body", compressResp.StatusCode))
 			}
 		} else if compressErr != nil {
 			logger.LogInfo(c, fmt.Sprintf("headroom compression failed: %v, using original body", compressErr))

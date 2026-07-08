@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +30,15 @@ func DisableChannel(channelError types.ChannelError, reason string) {
 
 	// 解析 429 错误中的恢复时间（如 "It will reset at 2026-07-13 00:00:00 +0800 CST"）
 	recoveryAt := parseQuotaResetTime(reason)
+	if recoveryAt > 0 {
+		common.SysLog(fmt.Sprintf("通道「%s」（#%d）解析到额度恢复时间：%s (unix=%d)",
+			channelError.ChannelName, channelError.ChannelId,
+			time.Unix(recoveryAt, 0).Format("2006-01-02 15:04:05"), recoveryAt))
+	} else if isLikelyQuotaError(reason) {
+		// 看起来是额度错误但没解析出时间，记录便于排查
+		common.SysLog(fmt.Sprintf("通道「%s」（#%d）疑似额度错误但未解析到恢复时间，原始原因：%s",
+			channelError.ChannelName, channelError.ChannelId, common.LocalLogPreview(reason)))
+	}
 
 	success := model.UpdateChannelStatusWithRecovery(channelError.ChannelId, channelError.UsingKey, common.ChannelStatusAutoDisabled, reason, recoveryAt)
 	if success {
@@ -42,48 +52,116 @@ func DisableChannel(channelError types.ChannelError, reason string) {
 }
 
 // parseQuotaResetTime 从 429 错误信息中解析恢复时间
-// 示例："It will reset at 2026-07-13 00:00:00 +0800 CST"
+// 支持多种格式：
+//   - "It will reset at 2026-07-13 00:00:00 +0800 CST"（阿里云 DashScope）
+//   - "reset at 2026-07-13 00:00:00"（无时区，默认 Asia/Shanghai）
+//   - "Try again at 2026-07-13T00:00:00Z"（OpenAI ISO 8601）
+//   - "Retry-After: 3600"（秒数）
+//   - "请于 2026-07-13 00:00:00 后重试"（中文）
 func parseQuotaResetTime(reason string) int64 {
-	// 匹配 "reset at YYYY-MM-DD HH:MM:SS" 格式
-	re := regexp.MustCompile(`reset at (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})`)
-	matches := re.FindStringSubmatch(reason)
-	if len(matches) < 2 {
-		return 0
-	}
-	// 尝试解析时间（带时区）
-	layouts := []string{
-		"2006-01-02 15:04:05 -0700 MST",
-		"2006-01-02 15:04:05 -0700",
-		"2006-01-02 15:04:05 MST",
-		"2006-01-02 15:04:05",
-	}
-	// 提取时区信息
-	tzMatch := regexp.MustCompile(`(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(.+)$`).FindStringSubmatch(reason)
-	timeStr := matches[1]
-	tzStr := ""
-	if len(tzMatch) >= 3 {
-		tzStr = strings.TrimSpace(tzMatch[2])
-	}
-	for _, layout := range layouts {
-		var t time.Time
-		var err error
-		if tzStr != "" && (strings.Contains(layout, "MST") || strings.Contains(layout, "-0700")) {
-			t, err = time.Parse(layout, timeStr+" "+tzStr)
-		} else {
-			t, err = time.Parse(layout, timeStr)
+	now := time.Now()
+
+	// 1. Retry-After: <seconds> 秒数格式
+	retryAfterRe := regexp.MustCompile(`(?i)retry[-_ ]?after[:\s]+(\d+)`)
+	if m := retryAfterRe.FindStringSubmatch(reason); len(m) >= 2 {
+		if secs, err := strconv.ParseInt(m[1], 10, 64); err == nil && secs > 0 && secs < 30*24*3600 {
+			return now.Unix() + secs
 		}
-		if err == nil {
-			// 如果没时区信息，默认用 +0800 (CST)
-			if t.Location() == time.UTC && tzStr == "" {
-				loc, _ := time.LoadLocation("Asia/Shanghai")
-				if loc != nil {
-					t, _ = time.ParseInLocation(layout, timeStr, loc)
-				}
+	}
+
+	// 2. "reset at YYYY-MM-DD HH:MM:SS [tz]" 格式（含 "It will reset at"）
+	timeStr, tzStr := extractDateTimeWithTz(reason, `reset at (\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})`)
+	if t, ok := parseWithOptionalTz(timeStr, tzStr); ok {
+		return t.Unix()
+	}
+
+	// 3. "Try again at YYYY-MM-DDTHH:MM:SSZ"（OpenAI ISO 8601）
+	if m := regexp.MustCompile(`Try again at (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)`).FindStringSubmatch(reason); len(m) >= 2 {
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+			if t, err := time.Parse(layout, m[1]); err == nil {
+				return t.Unix()
 			}
+		}
+	}
+
+	// 4. "请于 YYYY-MM-DD HH:MM:SS 后重试" 中文格式
+	if m := regexp.MustCompile(`(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):(\d{2}).*重试`).FindStringSubmatch(reason); len(m) >= 5 {
+		timeStr := fmt.Sprintf("%s %s:%s:%s", m[1], m[2], m[3], m[4])
+		if t, ok := parseWithOptionalTz(timeStr, ""); ok {
 			return t.Unix()
 		}
 	}
+
 	return 0
+}
+
+// extractDateTimeWithTz 提取 "前缀 (日期时间) [时区]" 中的日期时间和时区
+func extractDateTimeWithTz(reason, pattern string) (timeStr string, tzStr string) {
+	re := regexp.MustCompile(pattern)
+	m := re.FindStringSubmatch(reason)
+	if len(m) < 2 {
+		return "", ""
+	}
+	// 把日期时间统一成 "2006-01-02 15:04:05" 格式（T 替换为空格）
+	timeStr = strings.ReplaceAll(m[1], "T", " ")
+	// 尝试从匹配位置后面提取时区
+	tzRe := regexp.MustCompile(`\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}\s+(.+?)$`)
+	if tzMatch := tzRe.FindStringSubmatch(reason); len(tzMatch) >= 2 {
+		rest := strings.TrimSpace(tzMatch[1])
+		// 去掉末尾可能的标点
+		rest = strings.TrimRight(rest, ".,;。")
+		// 只保留第一个 token 作为时区
+		if fields := strings.Fields(rest); len(fields) > 0 {
+			tzStr = fields[0]
+		}
+	}
+	return timeStr, tzStr
+}
+
+// parseWithOptionalTz 解析时间，可选时区
+func parseWithOptionalTz(timeStr, tzStr string) (time.Time, bool) {
+	if timeStr == "" {
+		return time.Time{}, false
+	}
+	// 尝试的 layout 列表
+	baseLayout := "2006-01-02 15:04:05"
+	// 带时区
+	if tzStr != "" {
+		for _, layout := range []string{
+			baseLayout + " -0700 MST",
+			baseLayout + " -0700",
+			baseLayout + " MST",
+		} {
+			if t, err := time.Parse(layout, timeStr+" "+tzStr); err == nil {
+				return t, true
+			}
+		}
+	}
+	// 不带时区，默认 Asia/Shanghai
+	if loc, err := time.LoadLocation("Asia/Shanghai"); err == nil {
+		if t, err := time.ParseInLocation(baseLayout, timeStr, loc); err == nil {
+			return t, true
+		}
+	}
+	// 最后兜底用 UTC
+	if t, err := time.Parse(baseLayout, timeStr); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+// isLikelyQuotaError 粗略判断错误原因是否疑似额度/限流错误（用于日志排查）
+func isLikelyQuotaError(reason string) bool {
+	if reason == "" {
+		return false
+	}
+	lower := strings.ToLower(reason)
+	for _, kw := range []string{"429", "quota", "exceeded", "rate limit", "throttl", "reset at", "额度", "配额", "限流"} {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
 }
 
 func EnableChannel(channelId int, usingKey string, channelName string) {

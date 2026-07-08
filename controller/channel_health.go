@@ -121,14 +121,22 @@ func checkSingleChannelHealth(ch *model.Channel, state *channelHealthState, test
 		}
 
 		// 检查是否有预设恢复时间（429 额度重置）
+		// recovery_at 存储为 JSON number，从 other_info 解析出来是 float64
 		recoveryAt := int64(0)
 		if r, ok := info["recovery_at"].(float64); ok {
 			recoveryAt = int64(r)
 		} else if r, ok := info["recovery_at"].(int64); ok {
 			recoveryAt = r
+		} else if r, ok := info["recovery_at"].(int); ok {
+			recoveryAt = int64(r)
 		}
 
-		if isQuotaExhaustedReason(reason) {
+		isQuota := isQuotaExhaustedReason(reason)
+		common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 检查恢复: reason=%s, isQuota=%v, recoveryAt=%d, now=%d, otherInfo=%v",
+			healthMonitorLogPrefix, ch.Name, ch.Id,
+			common.LocalLogPreview(reason), isQuota, recoveryAt, time.Now().Unix(), info))
+
+		if isQuota {
 			if recoveryAt > 0 {
 				// 有恢复时间：到时间后直接恢复（不需探测，因为额度已重置）
 				if time.Now().Unix() >= recoveryAt {
@@ -137,9 +145,13 @@ func checkSingleChannelHealth(ch *model.Channel, state *channelHealthState, test
 					return
 				}
 				// 没到恢复时间，跳过探测
+				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度未到恢复时间，跳过探测 (剩余 %s)",
+					healthMonitorLogPrefix, ch.Name, ch.Id,
+					time.Unix(recoveryAt, 0).Sub(time.Now()).Truncate(time.Second)))
 				return
 			}
 			// 没有恢复时间的额度用尽，跳过探测（需要手动恢复）
+			common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度用尽但无恢复时间，需手动恢复", healthMonitorLogPrefix, ch.Name, ch.Id))
 			return
 		}
 	}
