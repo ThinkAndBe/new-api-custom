@@ -328,6 +328,7 @@ export const getUsersColumns = ({
   showResetPasskeyModal,
   showResetTwoFAModal,
   showUserSubscriptionsModal,
+  handleReactivate,
 }) => {
   return [
     {
@@ -395,6 +396,7 @@ export const getUsersColumns = ({
           showResetPasskeyModal,
           showResetTwoFAModal,
           showUserSubscriptionsModal,
+          handleReactivate,
           t,
         }),
     },
