@@ -26,7 +26,7 @@ type HeadroomLogRow struct {
 	HeadroomSaved int     `json:"headroom_tokens_saved"`
 	HeadroomInput int     `json:"headroom_tokens_input"`
 	HeadroomRatio float64 `json:"headroom_ratio"`
-	// PromptTokens 是使用日志里的实际输入 token（已减去缓存 token）
+	// PromptTokens 是使用日志里的实际输入 token（含缓存，即发给 API 的总量）
 	PromptTokens      int `json:"prompt_tokens"`
 	CompletionTokens  int `json:"completion_tokens"`
 }
