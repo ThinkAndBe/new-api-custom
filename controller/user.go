@@ -993,6 +993,38 @@ func DeleteUser(c *gin.Context) {
 	return
 }
 
+// ReactivateUser 管理员恢复已注销的用户
+func ReactivateUser(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	originUser, err := model.GetUserById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if originUser.Status != common.UserStatusDeactivated {
+		common.ApiErrorMsg(c, "该用户未处于注销状态")
+		return
+	}
+	err = model.ReactivateUser(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAuditFor(c, originUser.Id, "user.reactivate", map[string]interface{}{
+		"username": originUser.Username,
+		"id":       originUser.Id,
+	})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "用户已恢复",
+	})
+	return
+}
+
 func DeleteSelf(c *gin.Context) {
 	id := c.GetInt("id")
 	user, _ := model.GetUserById(id, false)
@@ -1002,14 +1034,15 @@ func DeleteSelf(c *gin.Context) {
 		return
 	}
 
-	err := model.DeleteUserById(id)
+	// 注销：标记为已注销状态，7天后自动删除
+	err := model.DeactivateUser(id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "",
+		"message": "账号已注销，7天后自动删除。如需恢复，请联系管理员。",
 	})
 	return
 }

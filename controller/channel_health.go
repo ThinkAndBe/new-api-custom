@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -111,6 +112,20 @@ func checkAllChannelsHealth() {
 }
 
 func checkSingleChannelHealth(ch *model.Channel, state *channelHealthState, testUserID int) {
+	// 检查禁用原因：如果是 429/额度用尽导致的禁用，不自动恢复
+	// 因为测试请求不消耗额度，探测会"成功"但实际请求还是会 429
+	if ch.Status == common.ChannelStatusAutoDisabled {
+		info := ch.GetOtherInfo()
+		reason := ""
+		if r, ok := info["status_reason"].(string); ok {
+			reason = r
+		}
+		if isQuotaExhaustedReason(reason) {
+			// 额度用尽的渠道不参与自动恢复，需要手动恢复或等额度重置
+			return
+		}
+	}
+
 	// 使用 testChannel 做真实探活请求
 	result := testChannel(ch, testUserID, "", "", false)
 
@@ -186,3 +201,31 @@ func formatTestError(newAPIErr *types.NewAPIError, localErr error) string {
 // resolveChannelTestUserID 是从 channel-test.go 引用的辅助函数。
 // 为避免循环依赖，此处不再重复实现，testChannel 内部会自行处理。
 // testChannel 中当 testUserID=0 时会通过 resolveChannelTestUserID(nil) 获取 root 用户。
+// isQuotaExhaustedReason 判断渠道禁用原因是否为额度用尽（429/quota）
+// 这类原因禁用的渠道不应自动恢复，因为测试请求不消耗额度，探测会"成功"但实际请求仍会 429
+func isQuotaExhaustedReason(reason string) bool {
+	if reason == "" {
+		return false
+	}
+	lower := strings.ToLower(reason)
+	// 匹配 429 状态码、额度用尽、配额超限等关键词
+	keywords := []string{
+		"429",
+		"quota",
+		"exceeded",
+		"weekly usage",
+		"daily usage",
+		"monthly usage",
+		"rate limit",
+		"insufficient",
+		"额度",
+		"配额",
+		"限流",
+	}
+	for _, kw := range keywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}

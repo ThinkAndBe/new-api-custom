@@ -82,6 +82,20 @@ const UsersTable = (usersData) => {
     setShowEnableDisableModal(true);
   };
 
+  const handleReactivateUser = async (user) => {
+    try {
+      const res = await API.post(`/api/user/${user.id}/reactivate`);
+      if (res.data.success) {
+        showSuccess(t('用户已恢复'));
+        await refresh();
+      } else {
+        showError(res.data.message);
+      }
+    } catch (e) {
+      showError(e?.response?.data?.message || t('操作失败'));
+    }
+  };
+
   const showDeleteUserModal = (user) => {
     setModalUser(user);
     setShowDeleteModal(true);
@@ -141,6 +155,7 @@ const UsersTable = (usersData) => {
       showResetPasskeyModal: showResetPasskeyUserModal,
       showResetTwoFAModal: showResetTwoFAUserModal,
       showUserSubscriptionsModal: showUserSubscriptionsUserModal,
+      handleReactivate: handleReactivateUser,
     });
   }, [
     t,

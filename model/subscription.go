@@ -398,6 +398,29 @@ func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	return count, nil
 }
 
+// CountActiveUserSubscriptionsByPlan 统计某套餐下有效的用户订阅数量
+func CountActiveUserSubscriptionsByPlan(planId int) (int64, error) {
+	if planId <= 0 {
+		return 0, errors.New("invalid planId")
+	}
+	var count int64
+	now := time.Now().Unix()
+	if err := DB.Model(&UserSubscription{}).
+		Where("plan_id = ? AND status = 1 AND end_time > ?", planId, now).
+		Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// DeleteSubscriptionPlan 删除套餐（仅允许无有效订阅时删除）
+func DeleteSubscriptionPlan(planId int) error {
+	if planId <= 0 {
+		return errors.New("invalid planId")
+	}
+	return DB.Delete(&SubscriptionPlan{}, planId).Error
+}
+
 func getUserGroupByIdTx(tx *gorm.DB, userId int) (string, error) {
 	if userId <= 0 {
 		return "", errors.New("invalid userId")

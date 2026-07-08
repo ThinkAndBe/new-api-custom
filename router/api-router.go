@@ -139,6 +139,7 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.POST("/", controller.CreateUser)
 				adminRoute.POST("/manage", controller.ManageUser)
 				adminRoute.PUT("/", controller.UpdateUser)
+				adminRoute.POST("/:id/reactivate", controller.ReactivateUser)
 				adminRoute.DELETE("/:id", controller.DeleteUser)
 				adminRoute.DELETE("/:id/reset_passkey", controller.AdminResetPasskey)
 
@@ -168,6 +169,7 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionAdminRoute.POST("/plans", controller.AdminCreateSubscriptionPlan)
 			subscriptionAdminRoute.PUT("/plans/:id", controller.AdminUpdateSubscriptionPlan)
 			subscriptionAdminRoute.PATCH("/plans/:id", controller.AdminUpdateSubscriptionPlanStatus)
+			subscriptionAdminRoute.DELETE("/plans/:id", controller.AdminDeleteSubscriptionPlan)
 			subscriptionAdminRoute.POST("/bind", controller.AdminBindSubscription)
 
 			// User subscription management (admin)

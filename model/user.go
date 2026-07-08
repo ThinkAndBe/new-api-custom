@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -54,6 +55,7 @@ type User struct {
 	CreatedAt          int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	LastLoginAt        int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 	MustChangePassword bool           `json:"must_change_password" gorm:"default:false;column:must_change_password"`
+	DeactivatedAt      int64          `json:"deactivated_at" gorm:"default:0;column:deactivated_at"` // 注销时间，7天后自动删除
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -415,6 +417,38 @@ func HardDeleteUserById(id int) error {
 		}
 		return tx.Unscoped().Delete(&User{}, "id = ?", id).Error
 	})
+}
+
+// DeactivateUser 标记用户为已注销状态，7天后自动删除
+func DeactivateUser(id int) error {
+	if id == 0 {
+		return errors.New("id 为空！")
+	}
+	return DB.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status":          common.UserStatusDeactivated,
+		"deactivated_at":  common.GetTimestamp(),
+	}).Error
+}
+
+// ReactivateUser 管理员恢复已注销的用户
+func ReactivateUser(id int) error {
+	if id == 0 {
+		return errors.New("id 为空！")
+	}
+	return DB.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status":          common.UserStatusEnabled,
+		"deactivated_at":  0,
+	}).Error
+}
+
+// CleanDeactivatedUsers 删除超过指定天数的已注销用户
+func CleanDeactivatedUsers(retentionDays int) (int64, error) {
+	if retentionDays <= 0 {
+		retentionDays = 7
+	}
+	cutoff := time.Now().Unix() - int64(retentionDays)*86400
+	result := DB.Unscoped().Where("status = ? AND deactivated_at > 0 AND deactivated_at < ?", common.UserStatusDeactivated, cutoff).Delete(&User{})
+	return result.RowsAffected, result.Error
 }
 
 func inviteUser(inviterId int) (err error) {

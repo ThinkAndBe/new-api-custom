@@ -117,6 +117,9 @@ const renderStatistics = (text, record, showEnableDisableModal, t) => {
   } else if (record.status === 2) {
     tagColor = 'red';
     tagText = t('已禁用');
+  } else if (record.status === 3) {
+    tagColor = 'orange';
+    tagText = t('已注销');
   }
 
   const content = (
@@ -216,6 +219,7 @@ const renderOperations = (
     showResetPasskeyModal,
     showResetTwoFAModal,
     showUserSubscriptionsModal,
+    handleReactivate,
     t,
   },
 ) => {
@@ -255,7 +259,15 @@ const renderOperations = (
 
   return (
     <Space>
-      {record.status === 1 ? (
+      {record.status === 3 ? (
+        <Button
+          type='primary'
+          size='small'
+          onClick={() => handleReactivate(record)}
+        >
+          {t('恢复')}
+        </Button>
+      ) : record.status === 1 ? (
         <Button
           type='danger'
           size='small'

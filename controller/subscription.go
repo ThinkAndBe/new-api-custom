@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -332,6 +333,34 @@ type AdminBindSubscriptionRequest struct {
 	PlanId int `json:"plan_id"`
 }
 
+func AdminDeleteSubscriptionPlan(c *gin.Context) {
+	if !requirePaymentCompliance(c) {
+		return
+	}
+	id, _ := strconv.Atoi(c.Param("id"))
+	if id <= 0 {
+		common.ApiErrorMsg(c, "无效的套餐ID")
+		return
+	}
+	// 检查是否有关联的用户订阅
+	count, err := model.CountActiveUserSubscriptionsByPlan(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if count > 0 {
+		common.ApiErrorMsg(c, fmt.Sprintf("该套餐仍有 %d 个有效用户订阅，无法删除。请先禁用或等待订阅过期。", count))
+		return
+	}
+	err = model.DeleteSubscriptionPlan(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	model.InvalidateSubscriptionPlanCache(id)
+	common.ApiSuccess(c, nil)
+}
+
 func AdminBindSubscription(c *gin.Context) {
 	if !requirePaymentCompliance(c) {
 		return
@@ -353,8 +382,6 @@ func AdminBindSubscription(c *gin.Context) {
 	}
 	common.ApiSuccess(c, nil)
 }
-
-// ---- Admin: user subscription management ----
 
 func AdminListUserSubscriptions(c *gin.Context) {
 	userId, _ := strconv.Atoi(c.Param("id"))

@@ -100,6 +100,29 @@ export const useSubscriptionsData = () => {
     }
   };
 
+  // Delete plan (only allowed when no active user subscriptions)
+  const deletePlan = async (planRecordOrId) => {
+    const planId =
+      typeof planRecordOrId === 'number'
+        ? planRecordOrId
+        : planRecordOrId?.plan?.id;
+    if (!planId) return;
+    setLoading(true);
+    try {
+      const res = await API.delete(`/api/subscription/admin/plans/${planId}`);
+      if (res.data?.success) {
+        showSuccess(t('已删除'));
+        await loadPlans();
+      } else {
+        showError(res.data?.message || t('删除失败'));
+      }
+    } catch (e) {
+      showError(e?.response?.data?.message || t('删除失败'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Modal control functions
   const closeEdit = () => {
     setShowEdit(false);
@@ -155,6 +178,7 @@ export const useSubscriptionsData = () => {
     // Actions
     loadPlans,
     setPlanEnabled,
+    deletePlan,
     refresh,
     closeEdit,
     openCreate,

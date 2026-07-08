@@ -119,6 +119,20 @@ func main() {
 	// 渠道健康监测任务（定时探活，连续失败自动熔断，恢复后自动启用）
 	controller.StartChannelHealthMonitorTask()
 
+	// 已注销用户7天后自动删除（每小时检查一次）
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			deleted, err := model.CleanDeactivatedUsers(7)
+			if err != nil {
+				common.SysError("清理已注销用户失败: " + err.Error())
+			} else if deleted > 0 {
+				common.SysLog(fmt.Sprintf("已自动删除 %d 个注销超过7天的用户", deleted))
+			}
+		}
+	}()
+
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 

@@ -33,6 +33,7 @@ const SubscriptionsTable = (subscriptionsData) => {
     compactMode,
     openEdit,
     setPlanEnabled,
+    deletePlan,
     t,
     enableEpay,
     complianceConfirmed,
@@ -43,6 +44,7 @@ const SubscriptionsTable = (subscriptionsData) => {
       t,
       openEdit,
       setPlanEnabled,
+      deletePlan,
       enableEpay,
       complianceConfirmed,
     });
