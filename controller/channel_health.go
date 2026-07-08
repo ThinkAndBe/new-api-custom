@@ -112,16 +112,34 @@ func checkAllChannelsHealth() {
 }
 
 func checkSingleChannelHealth(ch *model.Channel, state *channelHealthState, testUserID int) {
-	// 检查禁用原因：如果是 429/额度用尽导致的禁用，不自动恢复
-	// 因为测试请求不消耗额度，探测会"成功"但实际请求还是会 429
+	// 检查禁用原因和恢复时间
 	if ch.Status == common.ChannelStatusAutoDisabled {
 		info := ch.GetOtherInfo()
 		reason := ""
 		if r, ok := info["status_reason"].(string); ok {
 			reason = r
 		}
+
+		// 检查是否有预设恢复时间（429 额度重置）
+		recoveryAt := int64(0)
+		if r, ok := info["recovery_at"].(float64); ok {
+			recoveryAt = int64(r)
+		} else if r, ok := info["recovery_at"].(int64); ok {
+			recoveryAt = r
+		}
+
 		if isQuotaExhaustedReason(reason) {
-			// 额度用尽的渠道不参与自动恢复，需要手动恢复或等额度重置
+			if recoveryAt > 0 {
+				// 有恢复时间：到时间后直接恢复（不需探测，因为额度已重置）
+				if time.Now().Unix() >= recoveryAt {
+					service.EnableChannel(ch.Id, "", ch.Name)
+					common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度已重置，自动恢复", healthMonitorLogPrefix, ch.Name, ch.Id))
+					return
+				}
+				// 没到恢复时间，跳过探测
+				return
+			}
+			// 没有恢复时间的额度用尽，跳过探测（需要手动恢复）
 			return
 		}
 	}

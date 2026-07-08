@@ -704,6 +704,12 @@ func hasEnabledMultiKey(keys []string, statusList map[int]int) bool {
 }
 
 func UpdateChannelStatus(channelId int, usingKey string, status int, reason string) bool {
+	return UpdateChannelStatusWithRecovery(channelId, usingKey, status, reason, 0)
+}
+
+// UpdateChannelStatusWithRecovery 更新渠道状态，可选设置恢复时间
+// recoveryAt > 0 时，表示渠道在指定时间后可自动恢复（如 429 额度重置时间）
+func UpdateChannelStatusWithRecovery(channelId int, usingKey string, status int, reason string, recoveryAt int64) bool {
 	if common.MemoryCacheEnabled {
 		channelStatusLock.Lock()
 		defer channelStatusLock.Unlock()
@@ -765,6 +771,11 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 			info := channel.GetOtherInfo()
 			info["status_reason"] = reason
 			info["status_time"] = common.GetTimestamp()
+			if recoveryAt > 0 {
+				info["recovery_at"] = recoveryAt
+			} else {
+				delete(info, "recovery_at")
+			}
 			channel.SetOtherInfo(info)
 			channel.Status = status
 			shouldUpdateAbilities = true
