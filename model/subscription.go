@@ -405,8 +405,9 @@ func CountActiveUserSubscriptionsByPlan(planId int) (int64, error) {
 	}
 	var count int64
 	now := time.Now().Unix()
+	// status 是 string 类型（active/expired/cancelled），不是整数
 	if err := DB.Model(&UserSubscription{}).
-		Where("plan_id = ? AND status = 1 AND end_time > ?", planId, now).
+		Where("plan_id = ? AND status = 'active' AND end_time > ?", planId, now).
 		Count(&count).Error; err != nil {
 		return 0, err
 	}

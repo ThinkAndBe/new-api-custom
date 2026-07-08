@@ -390,6 +390,16 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	return &user, err
 }
 
+// GetUserByIdUnscoped 查询用户（包含软删除的）
+func GetUserByIdUnscoped(id int) (*User, error) {
+	if id == 0 {
+		return nil, errors.New("id 为空！")
+	}
+	user := User{Id: id}
+	err := DB.Unscoped().Omit("password", "access_token").First(&user, "id = ?", id).Error
+	return &user, err
+}
+
 func GetUserIdByAffCode(affCode string) (int, error) {
 	if affCode == "" {
 		return 0, errors.New("affCode 为空！")
@@ -430,14 +440,16 @@ func DeactivateUser(id int) error {
 	}).Error
 }
 
-// ReactivateUser 管理员恢复已注销的用户
+// ReactivateUser 管理员恢复已注销/软删除的用户
 func ReactivateUser(id int) error {
 	if id == 0 {
 		return errors.New("id 为空！")
 	}
-	return DB.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
+	// 恢复软删除的用户（清除 DeletedAt）+ 恢复状态
+	return DB.Unscoped().Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":          common.UserStatusEnabled,
 		"deactivated_at":  0,
+		"deleted_at":      nil,
 	}).Error
 }
 

@@ -223,8 +223,8 @@ const renderOperations = (
     t,
   },
 ) => {
-  // 已注销用户（status=3）：只显示恢复按钮
-  if (record.status === 3) {
+  // 已注销用户（status=3 或软删除 DeletedAt 有值）：只显示恢复按钮
+  if (record.status === 3 || (record.DeletedAt !== null && record.DeletedAt !== undefined)) {
     return (
       <Space>
         <Button
@@ -236,11 +236,6 @@ const renderOperations = (
         </Button>
       </Space>
     );
-  }
-
-  // 软删除的用户：不显示任何操作
-  if (record.DeletedAt !== null) {
-    return <></>;
   }
 
   const moreMenu = [

@@ -1000,12 +1000,14 @@ func ReactivateUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	originUser, err := model.GetUserById(id, false)
+	// 用 Unscoped 查询，能查到软删除的用户
+	originUser, err := model.GetUserByIdUnscoped(id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	if originUser.Status != common.UserStatusDeactivated {
+	// 允许恢复已注销(status=3)或软删除(DeletedAt有值)的用户
+	if originUser.Status != common.UserStatusDeactivated && originUser.DeletedAt.Time.IsZero() {
 		common.ApiErrorMsg(c, "该用户未处于注销状态")
 		return
 	}
