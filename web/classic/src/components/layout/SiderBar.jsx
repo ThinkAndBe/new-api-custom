@@ -81,6 +81,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             : 'tableHiddle',
       },
       {
+        text: t('压缩看板'),
+        itemKey: 'headroom',
+        to: '/headroom',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
         text: t('令牌管理'),
         itemKey: 'token',
         to: '/token',
@@ -152,12 +158,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('渠道管理'),
         itemKey: 'channel',
         to: '/channel',
-        className: isAdmin() ? '' : 'tableHiddle',
-      },
-      {
-        text: t('压缩看板'),
-        itemKey: 'headroom',
-        to: '/headroom',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {

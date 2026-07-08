@@ -199,6 +199,7 @@ const Dashboard = () => {
               spec_user_rank={dashboardCharts.spec_user_rank}
               spec_user_trend={dashboardCharts.spec_user_trend}
               spec_user_token_rank={dashboardCharts.spec_user_token_rank}
+              spec_channel_token_rank={dashboardCharts.spec_channel_token_rank}
             isAdminUser={dashboardData.isAdminUser}
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}

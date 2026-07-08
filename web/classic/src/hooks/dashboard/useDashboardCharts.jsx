@@ -426,6 +426,49 @@ export const useDashboardCharts = (
     color: { type: 'ordinal', range: USER_COLORS },
   });
 
+  // ========== Admin: 渠道调用 Token 排行 ==========
+  const [spec_channel_token_rank, setSpecChannelTokenRank] = useState({
+    type: 'bar',
+    data: [{ id: 'channelTokenRankData', values: [] }],
+    xField: 'TokenUsed',
+    yField: 'Channel',
+    seriesField: 'Channel',
+    direction: 'horizontal',
+    legends: { visible: false },
+    title: {
+      visible: true,
+      text: t('渠道调用 Token 排行'),
+      subtext: '',
+    },
+    bar: {
+      state: { hover: { stroke: '#000', lineWidth: 1 } },
+    },
+    label: {
+      visible: true,
+      position: 'outside',
+      formatMethod: (value, datum) =>
+        renderNumber(datum['TokenUsed'] || 0),
+    },
+    axes: [{
+      orient: 'left',
+      type: 'band',
+      label: { visible: true },
+    }, {
+      orient: 'bottom',
+      type: 'linear',
+      visible: false,
+    }],
+    tooltip: {
+      mark: {
+        content: [{
+          key: (datum) => datum['Channel'],
+          value: (datum) => renderNumber(datum['TokenUsed'] || 0),
+        }],
+      },
+    },
+    color: { type: 'ordinal', range: USER_COLORS },
+  });
+
   // ========== 数据处理函数 ==========
   const generateModelColors = useCallback((uniqueModels, modelColors) => {
     const newModelColors = {};
@@ -674,6 +717,34 @@ export const useDashboardCharts = (
           subtext: `${t('总计')}：${renderNumber(totalUserTokens)}`,
         },
       }));
+
+      // ===== 渠道 Token 调用排行（基于 channel_name 字段）=====
+      const channelTokenTotal = new Map();
+      data.forEach((item) => {
+        const channelName = item.channel_name || `渠道${item.channel_id || '未知'}`;
+        const prev = channelTokenTotal.get(channelName) || 0;
+        channelTokenTotal.set(
+          channelName,
+          prev + (item.token_used || 0),
+        );
+      });
+      const channelTokenRankValues = Array.from(channelTokenTotal.entries())
+        .map(([Channel, TokenUsed]) => ({ Channel, TokenUsed }))
+        .sort((a, b) => b.TokenUsed - a.TokenUsed)
+        .slice(0, 10);
+      const totalChannelTokens = channelTokenRankValues.reduce(
+        (s, i) => s + i.TokenUsed,
+        0,
+      );
+
+      setSpecChannelTokenRank((prev) => ({
+        ...prev,
+        data: [{ id: 'channelTokenRankData', values: channelTokenRankValues }],
+        title: {
+          ...prev.title,
+          subtext: `${t('总计')}：${renderNumber(totalChannelTokens)}`,
+        },
+      }));
     },
     [dataExportDefaultTime, t],
   );
@@ -693,6 +764,7 @@ export const useDashboardCharts = (
     spec_user_rank,
     spec_user_trend,
     spec_user_token_rank,
+    spec_channel_token_rank,
     updateChartData,
     updateUserChartData,
     generateModelColors,

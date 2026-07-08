@@ -32,6 +32,7 @@ const ChartsPanel = ({
   spec_user_rank,
   spec_user_trend,
   spec_user_token_rank,
+  spec_channel_token_rank,
   isAdminUser,
   CARD_PROPS,
   CHART_CONFIG,
@@ -67,6 +68,9 @@ const ChartsPanel = ({
             {isAdminUser && (
               <TabPane tab={<span>{t('用户Token排行')}</span>} itemKey='7' />
             )}
+            {isAdminUser && (
+              <TabPane tab={<span>{t('渠道Token排行')}</span>} itemKey='8' />
+            )}
           </Tabs>
         </div>
       }
@@ -93,6 +97,9 @@ const ChartsPanel = ({
         )}
         {activeChartTab === '7' && isAdminUser && (
           <VChart spec={spec_user_token_rank} option={CHART_CONFIG} />
+        )}
+        {activeChartTab === '8' && isAdminUser && (
+          <VChart spec={spec_channel_token_rank} option={CHART_CONFIG} />
         )}
       </div>
     </Card>
