@@ -382,11 +382,12 @@ export const getSubscriptionsColumns = ({
       title: t('操作'),
       dataIndex: 'operate',
       fixed: 'right',
-      width: 160,
+      width: 200,
       render: (text, record) =>
         renderOperations(text, record, {
           openEdit,
           setPlanEnabled,
+          deletePlan,
           t,
           complianceConfirmed,
         }),
