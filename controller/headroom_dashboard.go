@@ -104,13 +104,9 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 		input := intFromAny(other["headroom_tokens_input"])
 		ratio := floatFromAny(other["headroom_ratio"])
 		chName := channelNames[log.ChannelId]
-		// 实际输入 token = log.prompt_tokens - cache_tokens
-		// 因为 prompt_tokens 包含了缓存命中的 token，去掉缓存才是真正发送的新 token
-		cacheTokens := intFromAny(other["cache_tokens"])
-		actualInput := log.PromptTokens - cacheTokens
-		if actualInput < 0 {
-			actualInput = log.PromptTokens
-		}
+		// 实际输入 token = log.prompt_tokens（含缓存，是真正发给 API 的总量）
+		// 注意：prompt_tokens 用上游 tokenizer，headroom_tokens_input 用 new-api-generic 估算
+		// 两者数值不同但各自准确，不强行对齐
 		rows = append(rows, HeadroomLogRow{
 			CreatedAt:        log.CreatedAt,
 			Username:         log.Username,
@@ -122,7 +118,7 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 			HeadroomSaved:    saved,
 			HeadroomInput:    input,
 			HeadroomRatio:    ratio,
-			PromptTokens:     actualInput,
+			PromptTokens:     log.PromptTokens,
 			CompletionTokens: log.CompletionTokens,
 		})
 	}
