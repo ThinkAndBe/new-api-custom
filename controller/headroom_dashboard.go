@@ -27,6 +27,7 @@ type HeadroomLogRow struct {
 	HeadroomInput int     `json:"headroom_tokens_input"`
 	HeadroomRatio float64 `json:"headroom_ratio"`
 	// PromptTokens 是使用日志里的实际输入 token（含缓存，即发给 API 的总量）
+	// Claude 格式下 = prompt_tokens + cache_tokens，OpenAI 格式下 = prompt_tokens
 	PromptTokens      int `json:"prompt_tokens"`
 	CompletionTokens  int `json:"completion_tokens"`
 }
@@ -104,9 +105,17 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 		saved := intFromAny(other["headroom_tokens_saved"])
 		ratio := floatFromAny(other["headroom_ratio"])
 		chName := channelNames[log.ChannelId]
-		// 实际输入 token = log.prompt_tokens（含缓存，是真正发给 API 的总量）
-		// 注意：prompt_tokens 用上游 tokenizer，headroom_tokens_input 用 new-api-generic 估算
-		// 两者数值不同但各自准确，不强行对齐
+		// 实际输入 token = prompt_tokens + cache_tokens
+		// OpenAI 格式: prompt_tokens 已含缓存，cache_tokens 单独记录（不重复加）
+		// Claude 格式: prompt_tokens 不含缓存，需要加 cache_tokens 才是真正发给 API 的总量
+		cacheTokens := intFromAny(other["cache_tokens"])
+		actualInput := log.PromptTokens
+		// 判断是否是 Claude 语义：claude 格式下 prompt_tokens 不含缓存
+		if isClaude, ok := other["claude"].(bool); ok && isClaude {
+			actualInput += cacheTokens
+		} else if usageSemantic, ok := other["usage_semantic"].(string); ok && usageSemantic == "anthropic" {
+			actualInput += cacheTokens
+		}
 		rows = append(rows, HeadroomLogRow{
 			CreatedAt:        log.CreatedAt,
 			Username:         log.Username,
@@ -118,7 +127,7 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 			HeadroomSaved:    saved,
 			HeadroomInput:    input,
 			HeadroomRatio:    ratio,
-			PromptTokens:     log.PromptTokens,
+			PromptTokens:     actualInput,
 			CompletionTokens: log.CompletionTokens,
 		})
 	}
