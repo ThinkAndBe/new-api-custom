@@ -500,13 +500,14 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	}
 
 	// Headroom 压缩：在发送请求前，如果启用了 Headroom，对请求体进行压缩
-	// 支持所有带 messages 字段的请求（Chat/Completions/Claude Messages/Responses）
+	// 支持所有带 messages 字段的请求（Chat/Completions/Responses）
+	// 注意：Claude Messages 格式跳过压缩，因为 content blocks 格式可能被破坏
 	if operation_setting.HeadroomGlobalEnabled && info.ChannelSetting.HeadroomEnabled &&
 		(info.RelayMode == constant.RelayModeChatCompletions ||
 			info.RelayMode == constant.RelayModeCompletions ||
 			info.RelayMode == constant.RelayModeResponses ||
-			info.RelayMode == constant.RelayModeUnknown ||
-			info.RelayFormat == types.RelayFormatClaude) {
+			info.RelayMode == constant.RelayModeUnknown) &&
+		info.RelayFormat != types.RelayFormatClaude {
 		// 优先级：渠道配置 HeadroomURL > 环境变量 HEADROOM_URL > 默认值
 		headroomURL := info.ChannelSetting.HeadroomURL
 		if headroomURL == "" {
@@ -557,8 +558,8 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 										if msgMap, ok := msg.(map[string]interface{}); ok {
 											compressedContent := msgMap["content"]
 											// 检查原始消息的 content 类型
-											if i < len(originalBody["messages"].([]interface{})) {
-												origMsg := originalBody["messages"].([]interface{})[i]
+											if origMsgs, ok := originalBody["messages"].([]interface{}); ok && i < len(origMsgs) {
+												origMsg := origMsgs[i]
 												if origMsgMap, ok := origMsg.(map[string]interface{}); ok {
 													origContent := origMsgMap["content"]
 													// 如果原始 content 是字符串但压缩后变成了数组，取第一个文本
