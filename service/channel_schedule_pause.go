@@ -47,6 +47,9 @@ func processSchedulePause() {
 		return
 	}
 	now := time.Now()
+	weekdayStr := []string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}[int(now.Weekday())]
+	pausedCount := 0
+	resumedCount := 0
 	for _, ch := range channels {
 		// 只处理状态为 1（启用）或 4（定时暂停中）的渠道
 		if ch.Status != common.ChannelStatusEnabled && ch.Status != common.ChannelStatusSchedulePaused {
@@ -57,35 +60,52 @@ func processSchedulePause() {
 			// 如果渠道状态是 4 但已关闭定时暂停，恢复为 1
 			if ch.Status == common.ChannelStatusSchedulePaused {
 				model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusEnabled, "定时暂停已关闭，自动恢复")
+				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 定时暂停已关闭，自动恢复", schedulePauseLogPrefix, ch.Name, ch.Id))
+				resumedCount++
 			}
 			continue
 		}
 
-		shouldPause := isInAnyPauseWindow(now, settings.SchedulePauseRules)
+		shouldPause, matchedRule := isInAnyPauseWindowWithRule(now, settings.SchedulePauseRules)
 
 		switch {
 		case shouldPause && ch.Status == common.ChannelStatusEnabled:
 			// 进入暂停
-			chName := ch.Name
-			if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusSchedulePaused, "定时暂停") {
-				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 已暂停", schedulePauseLogPrefix, chName, ch.Id))
+			reason := "定时暂停"
+			if matchedRule != nil && matchedRule.Reason != "" {
+				reason = "定时暂停：" + matchedRule.Reason
+			}
+			if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusSchedulePaused, reason) {
+				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 已暂停 (%s %s %s~%s)",
+					schedulePauseLogPrefix, ch.Name, ch.Id, weekdayStr, reason, matchedRule.Start, matchedRule.End))
+				pausedCount++
 			}
 		case !shouldPause && ch.Status == common.ChannelStatusSchedulePaused:
 			// 恢复
-			chName := ch.Name
 			if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusEnabled, "定时暂停结束，自动恢复") {
-				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 已恢复", schedulePauseLogPrefix, chName, ch.Id))
+				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 已恢复 (%s 暂停窗口已结束)", schedulePauseLogPrefix, ch.Name, ch.Id, weekdayStr))
+				resumedCount++
 			}
 		}
+	}
+	if pausedCount > 0 || resumedCount > 0 {
+		common.SysLog(fmt.Sprintf("%s 扫描完成 %s %s: 暂停%d 恢复%d", schedulePauseLogPrefix, weekdayStr, now.Format("15:04"), pausedCount, resumedCount))
 	}
 }
 
 // isInAnyPauseWindow 判断当前时间是否在任一暂停规则窗口内
 func isInAnyPauseWindow(now time.Time, rules []dto.SchedulePauseRule) bool {
+	_, rule := isInAnyPauseWindowWithRule(now, rules)
+	return rule != nil
+}
+
+// isInAnyPauseWindowWithRule 返回是否在暂停窗口内，以及命中的规则
+func isInAnyPauseWindowWithRule(now time.Time, rules []dto.SchedulePauseRule) (bool, *dto.SchedulePauseRule) {
 	weekday := int(now.Weekday()) // 0=Sunday, 1=Monday, ..., 6=Saturday
 	currentMinutes := now.Hour()*60 + now.Minute()
 
-	for _, rule := range rules {
+	for i := range rules {
+		rule := &rules[i]
 		// 检查星期匹配
 		dayMatch := false
 		for _, d := range rule.Days {
@@ -108,16 +128,16 @@ func isInAnyPauseWindow(now time.Time, rules []dto.SchedulePauseRule) bool {
 		// 判断：支持跨天（start > end 时，表示到次日）
 		if startMin <= endMin {
 			if currentMinutes >= startMin && currentMinutes < endMin {
-				return true
+				return true, rule
 			}
 		} else {
 			// 跨天：当天 start~次日 end
 			if currentMinutes >= startMin || currentMinutes < endMin {
-				return true
+				return true, rule
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 // parseTimeToMinutes 解析 "HH:MM" 格式为分钟数

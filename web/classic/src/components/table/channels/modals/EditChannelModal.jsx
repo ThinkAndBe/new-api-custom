@@ -49,6 +49,7 @@ import {
   Tooltip,
   Collapse,
   Dropdown,
+  TimePicker,
 } from '@douyinfe/semi-ui';
 import {
   getChannelModels,
@@ -4075,6 +4076,25 @@ const SchedulePauseRuleEditor = ({ rules, onChange, t }) => {
     t('周六'),
   ];
 
+  // "HH:MM" -> Date 对象（用今天日期填充）
+  const timeStrToDate = (str) => {
+    if (!str || !/^\d{2}:\d{2}$/.test(str)) {
+      return null;
+    }
+    const [h, m] = str.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+
+  // Date 对象 -> "HH:MM"
+  const dateToTimeStr = (date) => {
+    if (!date) return '';
+    const h = String(date.getHours()).padStart(2, '0');
+    const m = String(date.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
   const addRule = useCallback(() => {
     const newRules = [
       ...(rules || []),
@@ -4129,19 +4149,33 @@ const SchedulePauseRuleEditor = ({ rules, onChange, t }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {rules.map((rule, idx) => (
-        <div
-          key={idx}
-          style={{
-            border: '1px solid var(--semi-color-border)',
-            borderRadius: 6,
-            padding: 10,
-            position: 'relative',
-          }}
-        >
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+      {rules.map((rule, idx) => {
+        const isCrossDay =
+          rule.start &&
+          rule.end &&
+          /^\d{2}:\d{2}$/.test(rule.start) &&
+          /^\d{2}:\d{2}$/.test(rule.end) &&
+          rule.start >= rule.end;
+
+        return (
+          <div
+            key={idx}
+            style={{
+              border: '1px solid var(--semi-color-border)',
+              borderRadius: 6,
+              padding: 10,
+              position: 'relative',
+            }}
+          >
             {/* 星期选择 */}
-            <div style={{ display: 'flex', gap: 2 }}>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 2,
+                marginBottom: 8,
+              }}
+            >
               {daysLabels.map((label, day) => (
                 <Tag
                   key={day}
@@ -4155,49 +4189,66 @@ const SchedulePauseRuleEditor = ({ rules, onChange, t }) => {
               ))}
             </div>
 
-            {/* 开始时间 */}
-            <Form.Input
-              field={`pause_start_${idx}`}
-              value={rule.start}
-              style={{ width: 80 }}
-              size='small'
-              placeholder='14:00'
-              onChange={(v) => updateRule(idx, 'start', v)}
-            />
-
-            <span style={{ fontSize: 12 }}>—</span>
-
-            {/* 结束时间 */}
-            <Form.Input
-              field={`pause_end_${idx}`}
-              value={rule.end}
-              style={{ width: 80 }}
-              size='small'
-              placeholder='16:00'
-              onChange={(v) => updateRule(idx, 'end', v)}
-            />
-
-            {/* 原因 */}
-            <Form.Input
-              field={`pause_reason_${idx}`}
-              value={rule.reason || ''}
-              style={{ width: 130 }}
-              size='small'
-              placeholder={t('原因（可选）')}
-              onChange={(v) => updateRule(idx, 'reason', v)}
-            />
-
-            {/* 删除按钮 */}
-            <Button
-              size='small'
-              type='danger'
-              onClick={() => removeRule(idx)}
+            {/* 时间选择行 */}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                alignItems: 'center',
+              }}
             >
-              {t('删除')}
-            </Button>
+              <span style={{ fontSize: 12, color: 'var(--semi-color-text-2)' }}>
+                {t('暂停')}
+              </span>
+              <TimePicker
+                value={timeStrToDate(rule.start)}
+                format='HH:mm'
+                type='time'
+                size='small'
+                style={{ width: 100 }}
+                onChange={(date) =>
+                  updateRule(idx, 'start', dateToTimeStr(date))
+                }
+              />
+              <span style={{ fontSize: 12, color: 'var(--semi-color-text-2)' }}>
+                ~
+              </span>
+              <TimePicker
+                value={timeStrToDate(rule.end)}
+                format='HH:mm'
+                type='time'
+                size='small'
+                style={{ width: 100 }}
+                onChange={(date) =>
+                  updateRule(idx, 'end', dateToTimeStr(date))
+                }
+              />
+              {isCrossDay && (
+                <Tag size='small' color='orange'>
+                  {t('次日')}
+                </Tag>
+              )}
+
+              <Input
+                value={rule.reason || ''}
+                size='small'
+                style={{ width: 130 }}
+                placeholder={t('原因（可选）')}
+                onChange={(v) => updateRule(idx, 'reason', v)}
+              />
+
+              <Button
+                size='small'
+                type='danger'
+                onClick={() => removeRule(idx)}
+              >
+                {t('删除')}
+              </Button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       <div>
         <Button size='small' onClick={addRule}>
           {t('添加暂停规则')}
