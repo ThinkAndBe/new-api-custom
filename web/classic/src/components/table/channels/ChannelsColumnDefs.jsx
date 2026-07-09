@@ -181,6 +181,12 @@ const renderStatus = (status, channelInfo = undefined, t) => {
           {t('自动禁用')}
         </Tag>
       );
+    case 4:
+      return (
+        <Tag color='blue' shape='circle'>
+          {t('定时暂停')}
+        </Tag>
+      );
     default:
       return (
         <Tag color='grey' shape='circle'>
@@ -208,6 +214,12 @@ const renderMultiKeyStatus = (status, keySize, enabledKeySize, t) => {
       return (
         <Tag color='yellow' shape='circle'>
           {t('自动禁用')} {enabledKeySize}/{keySize}
+        </Tag>
+      );
+    case 4:
+      return (
+        <Tag color='blue' shape='circle'>
+          {t('定时暂停')} {enabledKeySize}/{keySize}
         </Tag>
       );
     default:
