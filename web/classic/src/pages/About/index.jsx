@@ -39,8 +39,8 @@ const About = () => {
     const { success, message, data } = res.data;
     if (success) {
       let aboutContent = data;
-      if (!data.startsWith('https://')) {
-        aboutContent = marked.parse(data);
+      if (!data || !data.startsWith('https://')) {
+        aboutContent = data ? marked.parse(data) : '';
       }
       setAbout(aboutContent);
       localStorage.setItem('about', aboutContent);

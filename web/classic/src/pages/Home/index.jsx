@@ -87,14 +87,14 @@ const Home = () => {
     const { success, message, data } = res.data;
     if (success) {
       let content = data;
-      if (!data.startsWith('https://')) {
-        content = marked.parse(data);
+      if (!data || !data.startsWith('https://')) {
+        content = data ? marked.parse(data) : '';
       }
       setHomePageContent(content);
       localStorage.setItem('home_page_content', content);
 
       // 如果内容是 URL，则发送主题模式
-      if (data.startsWith('https://')) {
+      if (data && data.startsWith('https://')) {
         const iframe = document.querySelector('iframe');
         if (iframe) {
           iframe.onload = () => {

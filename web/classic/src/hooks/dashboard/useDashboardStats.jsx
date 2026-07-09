@@ -72,7 +72,7 @@ export const useDashboardStats = (
         items: [
           {
             title: t('请求次数'),
-            value: userState.user?.request_count,
+            value: userState?.user?.request_count,
             icon: <IconSend />,
             avatarColor: 'green',
             trendData: [],
