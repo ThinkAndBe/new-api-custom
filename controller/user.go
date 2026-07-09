@@ -156,9 +156,9 @@ func ChangePasswordOnFirstLogin(c *gin.Context) {
 		return
 	}
 
-	// 查用户并验证旧密码
+	// 查用户（不通过 ValidateAndFill，因为不需要密码验证登录）
 	user := model.User{Username: pendingUsername}
-	if err := user.ValidateAndFill(); err != nil {
+	if err := model.DB.Where("username = ?", pendingUsername).First(&user).Error; err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "用户验证失败",

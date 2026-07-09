@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useRef } from 'react';
-import { Modal, Form } from '@douyinfe/semi-ui';
+import { Modal, Form, DatePicker, Select, Input } from '@douyinfe/semi-ui';
 
 const SearchModal = ({
   searchModalVisible,
@@ -38,9 +38,10 @@ const SearchModal = ({
     className: 'w-full mb-2 !rounded-lg',
   };
 
-  const createFormField = (Component, props) => (
-    <Component {...FORM_FIELD_PROPS} {...props} />
-  );
+  const createFormField = (Component, props) => {
+    if (!Component) return null;
+    return <Component {...FORM_FIELD_PROPS} {...props} />;
+  };
 
   const { start_timestamp, end_timestamp, username } = inputs;
 
@@ -55,46 +56,52 @@ const SearchModal = ({
       centered
     >
       <Form ref={formRef} layout='vertical' className='w-full'>
-        {createFormField(Form.DatePicker, {
-          field: 'start_timestamp',
-          label: t('起始时间'),
-          initValue: start_timestamp,
-          value: start_timestamp,
-          type: 'dateTime',
-          name: 'start_timestamp',
-          onChange: (value) => handleInputChange(value, 'start_timestamp'),
-        })}
+        <DatePicker
+          {...FORM_FIELD_PROPS}
+          field='start_timestamp'
+          label={t('起始时间')}
+          initValue={start_timestamp}
+          value={start_timestamp}
+          type='dateTime'
+          name='start_timestamp'
+          onChange={(value) => handleInputChange(value, 'start_timestamp')}
+        />
 
-        {createFormField(Form.DatePicker, {
-          field: 'end_timestamp',
-          label: t('结束时间'),
-          initValue: end_timestamp,
-          value: end_timestamp,
-          type: 'dateTime',
-          name: 'end_timestamp',
-          onChange: (value) => handleInputChange(value, 'end_timestamp'),
-        })}
+        <DatePicker
+          {...FORM_FIELD_PROPS}
+          field='end_timestamp'
+          label={t('结束时间')}
+          initValue={end_timestamp}
+          value={end_timestamp}
+          type='dateTime'
+          name='end_timestamp'
+          onChange={(value) => handleInputChange(value, 'end_timestamp')}
+        />
 
-        {createFormField(Form.Select, {
-          field: 'data_export_default_time',
-          label: t('时间粒度'),
-          initValue: dataExportDefaultTime,
-          placeholder: t('时间粒度'),
-          name: 'data_export_default_time',
-          optionList: timeOptions,
-          onChange: (value) =>
-            handleInputChange(value, 'data_export_default_time'),
-        })}
+        <Select
+          {...FORM_FIELD_PROPS}
+          field='data_export_default_time'
+          label={t('时间粒度')}
+          initValue={dataExportDefaultTime}
+          placeholder={t('时间粒度')}
+          name='data_export_default_time'
+          optionList={timeOptions}
+          onChange={(value) =>
+            handleInputChange(value, 'data_export_default_time')
+          }
+        />
 
-        {isAdminUser &&
-          createFormField(Form.Input, {
-            field: 'username',
-            label: t('用户名称'),
-            value: username,
-            placeholder: t('可选值'),
-            name: 'username',
-            onChange: (value) => handleInputChange(value, 'username'),
-          })}
+        {isAdminUser && (
+          <Input
+            {...FORM_FIELD_PROPS}
+            field='username'
+            label={t('用户名称')}
+            value={username}
+            placeholder={t('可选值')}
+            name='username'
+            onChange={(value) => handleInputChange(value, 'username')}
+          />
+        )}
       </Form>
     </Modal>
   );

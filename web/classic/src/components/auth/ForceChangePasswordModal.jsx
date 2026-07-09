@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Form, Typography, Banner } from '@douyinfe/semi-ui';
+import { Modal, Form, Typography, Banner, Button } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showSuccess } from '../../helpers';
 
@@ -47,6 +47,12 @@ const ForceChangePasswordModal = ({
       showError(e.message || t('网络错误'));
     }
     setLoading(false);
+  };
+
+  const handleSubmitClick = () => {
+    if (formApi) {
+      formApi.submitForm();
+    }
   };
 
   return (
@@ -102,13 +108,14 @@ const ForceChangePasswordModal = ({
         />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-          <Form.Submit
+          <Button
             type='primary'
             theme='solid'
             loading={loading}
+            onClick={handleSubmitClick}
           >
             {t('确认修改并登录')}
-          </Form.Submit>
+          </Button>
         </div>
       </Form>
     </Modal>
