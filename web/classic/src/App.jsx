@@ -54,6 +54,7 @@ const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const HeadroomDashboard = lazy(() => import('./pages/Headroom'));
 const About = lazy(() => import('./pages/About'));
+const UsageGuide = lazy(() => import('./pages/UsageGuide'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
@@ -274,6 +275,16 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <PersonalSetting />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/usage-guide'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <UsageGuide />
               </Suspense>
             </PrivateRoute>
           }

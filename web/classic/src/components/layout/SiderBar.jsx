@@ -50,6 +50,7 @@ const routerMap = {
   deployment: '/console/deployment',
   playground: '/console/playground',
   personal: '/console/personal',
+  'usage-guide': '/console/usage-guide',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -140,6 +141,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('个人设置'),
         itemKey: 'personal',
         to: '/personal',
+      },
+      {
+        text: t('使用教程'),
+        itemKey: 'usage-guide',
+        to: '/console/usage-guide',
       },
     ];
 
