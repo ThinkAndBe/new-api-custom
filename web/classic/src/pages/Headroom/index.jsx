@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Button, Card, Select, Spin, Table, Typography } from '@douyinfe/semi-ui';
+import { Button, Card, DatePicker, Spin, Table, Typography } from '@douyinfe/semi-ui';
 import { VChart } from '@visactor/react-vchart';
 import { useTranslation } from 'react-i18next';
-import { API, renderNumber } from '../../helpers';
+import { API, renderNumber, timestamp2string } from '../../helpers';
 import { downloadCSV } from '../../helpers/csv';
 
 const { Title, Text } = Typography;
@@ -97,21 +97,24 @@ const HeadroomDashboard = () => {
   const [monthly, setMonthly] = useState([]);
   const [yearly, setYearly] = useState([]);
 
-  // 选中的预设时间范围：today / yesterday / 7d / 30d / all
-  // appliedPreset 是当前生效的（用于查询），pendingPreset 是下拉框刚选的（点击查询后生效）
-  const [appliedPreset, setAppliedPreset] = useState('7d');
-  const [pendingPreset, setPendingPreset] = useState('7d');
+  // 时间范围：使用和数剧看板一致的时间戳字符串格式
+  // appliedStart/appliedEnd 是当前生效的（用于查询），pending 是选择中的
+  const [appliedStart, setAppliedStart] = useState(() => timestamp2string(getPresetRange('7d')[0]));
+  const [appliedEnd, setAppliedEnd] = useState(() => timestamp2string(getPresetRange('7d')[1]));
+  const [pendingStart, setPendingStart] = useState(appliedStart);
+  const [pendingEnd, setPendingEnd] = useState(appliedEnd);
 
-  // 计算当前生效预设的 [startTs, endTs]
+  // 计算查询参数
   const buildParams = useCallback(() => {
     const params = {};
-    const range = computeRange(appliedPreset);
-    if (range && range.length === 2) {
-      params.start_timestamp = range[0];
-      params.end_timestamp = range[1];
+    if (appliedStart) {
+      params.start_timestamp = Math.floor(Date.parse(appliedStart) / 1000);
+    }
+    if (appliedEnd) {
+      params.end_timestamp = Math.floor(Date.parse(appliedEnd) / 1000);
     }
     return params;
-  }, [appliedPreset]);
+  }, [appliedStart, appliedEnd]);
 
   const loadAggData = useCallback(async () => {
     const params = buildParams();
@@ -175,9 +178,23 @@ const HeadroomDashboard = () => {
     }
   };
 
-  // 点击“查询”按钮：将下拉框选择应用到查询
+  // 点击”查询”按钮：将 pending 时间应用到查询
   const handleQuery = () => {
-    setAppliedPreset(pendingPreset);
+    setAppliedStart(pendingStart);
+    setAppliedEnd(pendingEnd);
+  };
+
+  // 快捷预设
+  const applyPreset = (preset) => {
+    const range = getPresetRange(preset);
+    if (range && range.length === 2) {
+      const startStr = timestamp2string(range[0]);
+      const endStr = timestamp2string(range[1]);
+      setPendingStart(startStr);
+      setPendingEnd(endStr);
+      setAppliedStart(startStr);
+      setAppliedEnd(endStr);
+    }
   };
 
   const handleExport = async (view) => {
@@ -289,19 +306,23 @@ const HeadroomDashboard = () => {
           <div className='flex items-center justify-between flex-wrap gap-4'>
             <Title heading={3}>{t('压缩看板')}</Title>
             <div className='flex items-center gap-2 flex-wrap'>
-              <Select
-                size='small'
-                style={{ width: 140 }}
-                value={pendingPreset}
-                onChange={(v) => setPendingPreset(v)}
-                optionList={[
-                  { label: t('今天'), value: 'today' },
-                  { label: t('昨天'), value: 'yesterday' },
-                  { label: t('最近 7 天'), value: '7d' },
-                  { label: t('最近 30 天'), value: '30d' },
-                  { label: t('全部'), value: 'all' },
-                ]}
+              <DatePicker
+                type='dateTimeRange'
+                density='compact'
+                value={[pendingStart ? new Date(pendingStart) : null, pendingEnd ? new Date(pendingEnd) : null]}
+                onChange={(dates) => {
+                  if (dates && dates.length === 2) {
+                    setPendingStart(dates[0] ? timestamp2string(Math.floor(dates[0].getTime() / 1000)) : '');
+                    setPendingEnd(dates[1] ? timestamp2string(Math.floor(dates[1].getTime() / 1000)) : '');
+                  }
+                }}
+                style={{ width: 380 }}
               />
+              <Button size='small' onClick={() => applyPreset('today')}>{t('今天')}</Button>
+              <Button size='small' onClick={() => applyPreset('yesterday')}>{t('昨天')}</Button>
+              <Button size='small' onClick={() => applyPreset('7d')}>{t('最近 7 天')}</Button>
+              <Button size='small' onClick={() => applyPreset('30d')}>{t('最近 30 天')}</Button>
+              <Button size='small' onClick={() => applyPreset('all')}>{t('全部')}</Button>
               <Button size='small' theme='solid' type='primary' onClick={handleQuery}>
                 {t('查询')}
               </Button>
