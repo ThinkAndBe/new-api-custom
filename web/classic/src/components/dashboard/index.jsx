@@ -17,8 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useContext, useEffect } from 'react';
-import { getRelativeTime } from '../../helpers';
+import React, { useContext, useEffect, useState, useCallback } from 'react';
+import { Modal, Select, Spin, Typography } from '@douyinfe/semi-ui';
+import { API, showError, showSuccess, getRelativeTime } from '../../helpers';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 
@@ -160,6 +161,103 @@ const Dashboard = () => {
     initChart();
   }, []);
 
+  // ========== 模型配置下载 ==========
+  const [configModalVisible, setConfigModalVisible] = useState(false);
+  const [tokens, setTokens] = useState([]);
+  const [selectedTokenId, setSelectedTokenId] = useState('');
+  const [tokenKey, setTokenKey] = useState('');
+  const [loadingTokens, setLoadingTokens] = useState(false);
+  const [loadingKey, setLoadingKey] = useState(false);
+  const [userModels, setUserModels] = useState([]);
+  const [statusState] = useContext(StatusContext);
+  const serverAddress = statusState?.status?.server_address || '';
+
+  const handleDownloadConfig = useCallback(async () => {
+    setLoadingTokens(true);
+    setConfigModalVisible(true);
+    try {
+      const [tokenRes, modelRes] = await Promise.all([
+        API.get('/api/token/?p=1&size=100'),
+        API.get('/api/user/models'),
+      ]);
+      if (tokenRes.data.success) {
+        const items = tokenRes.data.data?.items || [];
+        const active = items.filter((t) => t.status === 1);
+        setTokens(active);
+        if (active.length > 0) setSelectedTokenId(String(active[0].id));
+      }
+      if (modelRes.data.success) {
+        setUserModels(modelRes.data.data || []);
+      }
+    } catch {
+      showError('加载失败');
+    } finally {
+      setLoadingTokens(false);
+    }
+  }, []);
+
+  // 选中令牌后获取真实 key
+  useEffect(() => {
+    if (!selectedTokenId || !configModalVisible) {
+      setTokenKey('');
+      return;
+    }
+    setLoadingKey(true);
+    setTokenKey('');
+    API.post(`/api/token/${selectedTokenId}/key`)
+      .then((res) => {
+        if (res.data.success) setTokenKey(res.data.data?.key || '');
+        else showError(res.data.message);
+      })
+      .catch(() => showError('获取密钥失败'))
+      .finally(() => setLoadingKey(false));
+  }, [selectedTokenId, configModalVisible]);
+
+  const doDownload = useCallback(() => {
+    if (!tokenKey) {
+      showError('请先选择令牌');
+      return;
+    }
+    const baseUrl = serverAddress
+      ? serverAddress.replace(/\/$/, '')
+      : window.location.origin;
+    const models = userModels.map((name) => {
+      const supportsReasoning = /think|reason|o1|o3|o4|glm-5|deepseek-v4|qwen3/i.test(name);
+      const supportsToolCall = !/embed|rerank|tts|whisper|dall|midjourney|stable/i.test(name);
+      const supportsImages = /vision|glm-4v|gpt-4o|claude|gemini|qwen-vl/i.test(name);
+      return {
+        id: name,
+        name: name,
+        provider: 'openai',
+        url: `${baseUrl}/v1`,
+        apiKey: tokenKey,
+        maxInputTokens: 1000000,
+        maxOutputTokens: 64000,
+        supportsToolCall,
+        supportsImages,
+        supportsReasoning,
+      };
+    });
+    const json = JSON.stringify({ models }, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'models.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setConfigModalVisible(false);
+    showSuccess('配置文件已下载');
+  }, [tokenKey, serverAddress, userModels]);
+
+  const t = dashboardData.t || ((s) => s);
+  const tokenOptions = tokens.map((tk) => ({
+    value: String(tk.id),
+    label: tk.name || `Token #${tk.id}`,
+  }));
+
   return (
     <div className='h-full'>
       <DashboardHeader
@@ -170,6 +268,7 @@ const Dashboard = () => {
         loading={dashboardData.loading}
         quotaData={dashboardData.quotaData}
         inputs={dashboardData.inputs}
+        onDownloadConfig={handleDownloadConfig}
         t={dashboardData.t}
       />
 
@@ -293,6 +392,55 @@ const Dashboard = () => {
           </div>
         </div>
       )}
+
+      <Modal
+        title={t('下载模型配置')}
+        visible={configModalVisible}
+        onCancel={() => setConfigModalVisible(false)}
+        onOk={doDownload}
+        okText={t('下载 models.json')}
+        width={480}
+        centered
+      >
+        {loadingTokens ? (
+          <div style={{ textAlign: 'center', padding: 20 }}>
+            <Spin />
+          </div>
+        ) : tokens.length === 0 ? (
+          <Typography.Text type='danger'>
+            {t('暂无可用令牌，请先创建令牌')}
+          </Typography.Text>
+        ) : (
+          <div>
+            <Typography.Text
+              strong
+              style={{ display: 'block', marginBottom: 8 }}
+            >
+              {t('选择令牌')}
+            </Typography.Text>
+            <Select
+              value={selectedTokenId}
+              onChange={setSelectedTokenId}
+              style={{ width: '100%' }}
+              optionList={tokenOptions}
+              placeholder={t('请选择令牌')}
+            />
+            <div style={{ marginTop: 12 }}>
+              {loadingKey ? (
+                <Spin size='small' />
+              ) : tokenKey ? (
+                <Typography.Text type='success'>
+                  {t('共')} {userModels.length} {t('个模型可用，点击下方按钮下载')}
+                </Typography.Text>
+              ) : (
+                <Typography.Text type='tertiary'>
+                  {t('选择令牌后自动获取密钥')}
+                </Typography.Text>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
