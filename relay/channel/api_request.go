@@ -552,7 +552,7 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 								// 遍历每条消息，确保 content 格式与上游 API 兼容：
 								//  - content 是数组时，每个元素必须是 dict 且含 type 字段
 								//  - 原始 content 是字符串时，压缩后也还原成字符串
-								if compressedMsgsList, ok := compressedMsgs.([]interface{}); ok {
+							    if compressedMsgsList, ok := compressedMsgs.([]interface{}); ok {
 									origMsgs, _ := originalBody["messages"].([]interface{})
 									for i, msg := range compressedMsgsList {
 										msgMap, ok := msg.(map[string]interface{})
@@ -560,10 +560,58 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 											continue
 										}
 										compressedContent := msgMap["content"]
-										// 如果压缩后 content 是数组，修复每个元素：补全 type 字段，字符串包装为 block
-										if compArr, ok := compressedContent.([]interface{}); ok {
-											fixedArr := make([]interface{}, 0, len(compArr))
-											for _, block := range compArr {
+
+										// 先确定原始 content 类型
+										origContentIsString := false
+										if i < len(origMsgs) {
+											if origMsgMap, ok := origMsgs[i].(map[string]interface{}); ok {
+												if _, isStr := origMsgMap["content"].(string); isStr {
+													origContentIsString = true
+												}
+											}
+										}
+
+										// 情况1: 原始 content 是字符串 -> 压缩后也必须是字符串
+										if origContentIsString {
+											switch cc := compressedContent.(type) {
+											case string:
+												// 已经是字符串，无需处理
+											case []interface{}:
+												// 压缩后变成了数组，提取所有 text 拼接回字符串
+												var texts []string
+												for _, block := range cc {
+													switch b := block.(type) {
+													case string:
+														texts = append(texts, b)
+													case map[string]interface{}:
+														if text, ok := b["text"].(string); ok {
+															texts = append(texts, text)
+														}
+													}
+												}
+												if len(texts) > 0 {
+													msgMap["content"] = strings.Join(texts, "\n")
+												}
+											case nil:
+												// content 为 nil，保持
+											}
+											continue
+										}
+
+										// 情况2: 原始 content 是数组（content blocks）
+										// 压缩后必须是数组，每个元素必须是 dict 且含 type 字段
+										switch cc := compressedContent.(type) {
+										case string:
+											// 压缩后变成了字符串，包装回 content block
+											msgMap["content"] = []interface{}{
+												map[string]interface{}{
+													"type": "text",
+													"text": cc,
+												},
+											}
+										case []interface{}:
+											fixedArr := make([]interface{}, 0, len(cc))
+											for _, block := range cc {
 												switch b := block.(type) {
 												case string:
 													fixedArr = append(fixedArr, map[string]interface{}{
@@ -574,33 +622,26 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 													if _, hasType := b["type"]; !hasType {
 														b["type"] = "text"
 													}
+													// 确保有 text 字段（type=text 时必须有）
+													if b["type"] == "text" {
+														if _, hasText := b["text"]; !hasText {
+															b["text"] = ""
+														}
+													}
 													fixedArr = append(fixedArr, b)
+												case float64, int, int64, bool:
+													// 基本类型，包装成 text block
+													fixedArr = append(fixedArr, map[string]interface{}{
+														"type": "text",
+														"text": fmt.Sprintf("%v", b),
+													})
 												default:
-													fixedArr = append(fixedArr, block)
+													// 未知类型，跳过（避免发送无效数据导致 400）
 												}
 											}
 											msgMap["content"] = fixedArr
-										}
-										// 如果原始 content 是字符串但压缩后变成了数组，
-										// 提取所有 text 拼接回字符串（保持原始格式）
-										if i < len(origMsgs) {
-											if origMsgMap, ok := origMsgs[i].(map[string]interface{}); ok {
-												if _, origIsString := origMsgMap["content"].(string); origIsString {
-													if compArr, ok := compressedContent.([]interface{}); ok && len(compArr) > 0 {
-														var texts []string
-														for _, block := range compArr {
-															if blockMap, ok := block.(map[string]interface{}); ok {
-																if text, ok := blockMap["text"].(string); ok {
-																	texts = append(texts, text)
-																}
-															}
-														}
-														if len(texts) > 0 {
-															msgMap["content"] = strings.Join(texts, "\n")
-														}
-													}
-												}
-											}
+										case nil:
+											// content 为 nil，保持
 										}
 									}
 								}
