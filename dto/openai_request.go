@@ -250,6 +250,47 @@ type FunctionRequest struct {
 	Arguments   string `json:"arguments,omitempty"`
 }
 
+// MarshalJSON 清理 parameters 中的 null 值
+// 某些客户端（如 ZCode）会发送 "required": null 或 "enum": null，
+// 但部分上游 API（如 DeepSeek）严格要求这些字段是 array 类型，
+// null 会导致 400: "Invalid schema for function: null is not of type array"
+func (f FunctionRequest) MarshalJSON() ([]byte, error) {
+	type Alias FunctionRequest
+	if f.Parameters != nil {
+		f.Parameters = sanitizeSchemaNulls(f.Parameters)
+	}
+	return common.Marshal(Alias(f))
+}
+
+// sanitizeSchemaNulls 递归清理 JSON schema 中的 null 值
+// 将应为数组的字段（required, enum 等）的 null 替换为 []
+// 其他 null 值直接移除
+func sanitizeSchemaNulls(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		result := make(map[string]interface{}, len(val))
+		for k, child := range val {
+			if child == nil {
+				// 这些字段在 JSON Schema 中必须是 array，null -> []
+				if k == "required" || k == "enum" || k == "items" || k == "prefixItems" {
+					result[k] = []interface{}{}
+				}
+				// 其他 null 值直接跳过
+				continue
+			}
+			result[k] = sanitizeSchemaNulls(child)
+		}
+		return result
+	case []interface{}:
+		for i, item := range val {
+			val[i] = sanitizeSchemaNulls(item)
+		}
+		return val
+	default:
+		return v
+	}
+}
+
 type StreamOptions struct {
 	IncludeUsage bool `json:"include_usage,omitempty"`
 	// IncludeObfuscation is only for /v1/responses stream payload.
