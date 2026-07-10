@@ -859,12 +859,45 @@ func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOther
 		}
 	}
 
+	// 清理 tools schema 中的 null 值
+	// 某些客户端（如 WorkBuddy/ZCode）发送的 tools schema 中，
+	// required/enum 等字段可能为 null，部分上游 API 不接受 null（必须 array）
+	if tools, exists := data["tools"]; exists {
+		data["tools"] = sanitizeToolsSchemaNulls(tools)
+	}
+
 	jsonDataAfter, err := common.Marshal(data)
 	if err != nil {
 		common.SysError("RemoveDisabledFields Marshal error :" + err.Error())
 		return jsonData, nil
 	}
 	return jsonDataAfter, nil
+}
+
+// sanitizeToolsSchemaNulls 清理 tools 数组中每个 function parameters 的 null 值
+// required/enum/items/prefixItems 的 null 替换为 []，其他 null 移除
+func sanitizeToolsSchemaNulls(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		result := make(map[string]interface{}, len(val))
+		for k, child := range val {
+			if child == nil {
+				if k == "required" || k == "enum" || k == "items" || k == "prefixItems" {
+					result[k] = []interface{}{}
+				}
+				continue
+			}
+			result[k] = sanitizeToolsSchemaNulls(child)
+		}
+		return result
+	case []interface{}:
+		for i, item := range val {
+			val[i] = sanitizeToolsSchemaNulls(item)
+		}
+		return val
+	default:
+		return v
+	}
 }
 
 func hasRemovableDisabledField(jsonData []byte, channelOtherSettings dto.ChannelOtherSettings) bool {
