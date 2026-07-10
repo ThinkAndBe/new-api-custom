@@ -99,8 +99,8 @@ const HeadroomDashboard = () => {
 
   // 时间范围：使用和数剧看板一致的时间戳字符串格式
   // appliedStart/appliedEnd 是当前生效的（用于查询），pending 是选择中的
-  const [appliedStart, setAppliedStart] = useState(() => timestamp2string(computeRange('7d')[0]));
-  const [appliedEnd, setAppliedEnd] = useState(() => timestamp2string(computeRange('7d')[1]));
+  const [appliedStart, setAppliedStart] = useState(() => timestamp2string(computeRange('today')[0]));
+  const [appliedEnd, setAppliedEnd] = useState(() => timestamp2string(computeRange('today')[1]));
   const [pendingStart, setPendingStart] = useState(appliedStart);
   const [pendingEnd, setPendingEnd] = useState(appliedEnd);
 
@@ -319,7 +319,6 @@ const HeadroomDashboard = () => {
               <Button size='small' onClick={() => applyPreset('yesterday')}>{t('昨天')}</Button>
               <Button size='small' onClick={() => applyPreset('7d')}>{t('最近 7 天')}</Button>
               <Button size='small' onClick={() => applyPreset('30d')}>{t('最近 30 天')}</Button>
-              <Button size='small' onClick={() => applyPreset('all')}>{t('全部')}</Button>
               <Button size='small' theme='solid' type='primary' onClick={handleQuery}>
                 {t('查询')}
               </Button>
