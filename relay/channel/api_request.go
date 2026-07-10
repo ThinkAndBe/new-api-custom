@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -330,6 +331,8 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 		return nil, err
 	}
 	applyHeaderOverrideToRequest(req, headerOverride)
+	// 最终安全网：清理 tools schema null + content blocks 格式修复
+	sanitizeRequestFinal(req)
 	resp, err := doRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
@@ -685,8 +688,9 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	// ========== content blocks 格式安全网 ==========
 	// 无论是否经过 headroom 压缩，发送前都对 messages 做一次格式校验
 	// 防止 content 是数组但元素不是 dict 或缺少 type 字段导致上游 400
+	// 同时清理 tools schema 中的 null 值（required/enum 等字段 null -> []）
 	if req.Body != nil {
-		safeBody, changed := sanitizeMessagesContentBlocks(req)
+		safeBody, changed := sanitizeRequestBody(req)
 		if changed {
 			req.Body = io.NopCloser(bytes.NewReader(safeBody))
 			req.ContentLength = int64(len(safeBody))
@@ -729,17 +733,29 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	return resp, nil
 }
 
-// sanitizeMessagesContentBlocks 在发送请求前对所有 message content 做格式安全网：
-// 如果 content 是数组，确保每个元素是 dict 且含 type 字段。
-// 返回修复后的 body bytes 和是否修改过。
-func sanitizeMessagesContentBlocks(req *http.Request) ([]byte, bool) {
+// sanitizeRequestFinal 最终安全网，在任何请求发出前清理 body
+func sanitizeRequestFinal(req *http.Request) {
+	if req.Body == nil {
+		return
+	}
+	safeBody, changed := sanitizeRequestBody(req)
+	if changed {
+		req.Body = io.NopCloser(bytes.NewReader(safeBody))
+		req.ContentLength = int64(len(safeBody))
+		req.Header.Set("Content-Length", fmt.Sprintf("%d", len(safeBody)))
+	}
+}
+
+// sanitizeRequestBody 在发送请求前做最终格式安全网：
+// 1. messages content blocks 格式校验（确保数组元素是 dict 且含 type）
+// 2. tools schema null 清理（required/enum 等 null -> []）
+func sanitizeRequestBody(req *http.Request) ([]byte, bool) {
 	if req.Body == nil {
 		return nil, false
 	}
 	bodyBytes, err := io.ReadAll(req.Body)
 	req.Body.Close()
 	if err != nil || len(bodyBytes) == 0 {
-		// 恢复 body
 		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		return bodyBytes, false
 	}
@@ -750,55 +766,57 @@ func sanitizeMessagesContentBlocks(req *http.Request) ([]byte, bool) {
 		return bodyBytes, false
 	}
 
-	msgs, ok := body["messages"].([]interface{})
-	if !ok {
-		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-		return bodyBytes, false
+	changed := false
+
+	// 1. 清理 tools schema 中的 null 值
+	if tools, exists := body["tools"]; exists && tools != nil {
+		cleaned := sanitizeToolsSchemaNulls(tools)
+		if !reflect.DeepEqual(tools, cleaned) {
+			body["tools"] = cleaned
+			changed = true
+		}
 	}
 
-	changed := false
-	for _, msg := range msgs {
-		msgMap, ok := msg.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		switch content := msgMap["content"].(type) {
-		case []interface{}:
-			fixedArr := make([]interface{}, 0, len(content))
-			for _, block := range content {
-				switch b := block.(type) {
-				case map[string]interface{}:
-					if _, hasType := b["type"]; !hasType {
-						b["type"] = "text"
-						changed = true
-					}
-					if b["type"] == "text" {
-						if _, hasText := b["text"]; !hasText {
-							b["text"] = ""
+	// 2. 修复 messages content blocks 格式
+	if msgs, ok := body["messages"].([]interface{}); ok {
+		for _, msg := range msgs {
+			msgMap, ok := msg.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			switch content := msgMap["content"].(type) {
+			case []interface{}:
+				fixedArr := make([]interface{}, 0, len(content))
+				for _, block := range content {
+					switch b := block.(type) {
+					case map[string]interface{}:
+						if _, hasType := b["type"]; !hasType {
+							b["type"] = "text"
 							changed = true
 						}
+						if b["type"] == "text" {
+							if _, hasText := b["text"]; !hasText {
+								b["text"] = ""
+								changed = true
+							}
+						}
+						fixedArr = append(fixedArr, b)
+					case string:
+						fixedArr = append(fixedArr, map[string]interface{}{
+							"type": "text",
+							"text": b,
+						})
+						changed = true
+					default:
+						fixedArr = append(fixedArr, map[string]interface{}{
+							"type": "text",
+							"text": fmt.Sprintf("%v", b),
+						})
+						changed = true
 					}
-					fixedArr = append(fixedArr, b)
-				case string:
-					fixedArr = append(fixedArr, map[string]interface{}{
-						"type": "text",
-						"text": b,
-					})
-					changed = true
-				default:
-					// 非法类型（int/float/bool/nil），包装为 text block
-					fixedArr = append(fixedArr, map[string]interface{}{
-						"type": "text",
-						"text": fmt.Sprintf("%v", b),
-					})
-					changed = true
 				}
+				msgMap["content"] = fixedArr
 			}
-			msgMap["content"] = fixedArr
-		case string, nil:
-			// 字符串或 nil，格式正确，跳过
-		default:
-			// 其他类型（int/float/bool），保持原样
 		}
 	}
 
@@ -813,6 +831,35 @@ func sanitizeMessagesContentBlocks(req *http.Request) ([]byte, bool) {
 		return bodyBytes, false
 	}
 	return newBody, true
+}
+
+// sanitizeToolsSchemaNulls 递归清理 tools schema 中的 null 值
+func sanitizeToolsSchemaNulls(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		result := make(map[string]interface{}, len(val))
+		for k, child := range val {
+			if child == nil {
+				if k == "required" || k == "enum" || k == "items" || k == "prefixItems" {
+					result[k] = []interface{}{}
+				}
+				continue
+			}
+			result[k] = sanitizeToolsSchemaNulls(child)
+		}
+		return result
+	case []interface{}:
+		for i, item := range val {
+			val[i] = sanitizeToolsSchemaNulls(item)
+		}
+		return val
+	default:
+		return v
+	}
+}
+
+func sanitizeMessagesContentBlocks(req *http.Request) ([]byte, bool) {
+	return sanitizeRequestBody(req)
 }
 
 func DoTaskApiRequest(a TaskAdaptor, c *gin.Context, info *common.RelayInfo, requestBody io.Reader) (*http.Response, error) {
