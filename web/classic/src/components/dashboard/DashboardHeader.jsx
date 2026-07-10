@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import { Button, Toast } from '@douyinfe/semi-ui';
-import { RefreshCw, Search, Download } from 'lucide-react';
+import { RefreshCw, Search, Download, Settings } from 'lucide-react';
 import { downloadCSV, genExportFilename, timestamp2string } from '../../helpers';
 
 const DashboardHeader = ({
@@ -30,6 +30,7 @@ const DashboardHeader = ({
   loading,
   quotaData,
   inputs,
+  onShowQuickConfig,
   t,
 }) => {
   const ICON_BUTTON_CLASS = 'text-white hover:bg-opacity-80 !rounded-full';
@@ -95,6 +96,12 @@ const DashboardHeader = ({
           icon={<Download size={16} />}
           onClick={handleExport}
           className={`bg-orange-500 hover:bg-orange-600 ${ICON_BUTTON_CLASS}`}
+        />
+        <Button
+          type='tertiary'
+          icon={<Settings size={16} />}
+          onClick={onShowQuickConfig}
+          className={`bg-purple-500 hover:bg-purple-600 ${ICON_BUTTON_CLASS}`}
         />
       </div>
     </div>
