@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -768,13 +767,10 @@ func sanitizeRequestBody(req *http.Request) ([]byte, bool) {
 
 	changed := false
 
-	// 1. 清理 tools schema 中的 null 值
+	// 1. 清理 tools schema 中的 null 值（始终执行，不依赖 DeepEqual）
 	if tools, exists := body["tools"]; exists && tools != nil {
-		cleaned := sanitizeToolsSchemaNulls(tools)
-		if !reflect.DeepEqual(tools, cleaned) {
-			body["tools"] = cleaned
-			changed = true
-		}
+		body["tools"] = sanitizeToolsSchemaNulls(tools)
+		changed = true
 	}
 
 	// 2. 修复 messages content blocks 格式
