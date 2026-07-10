@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect } from 'react';
 import { getRelativeTime } from '../../helpers';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
@@ -30,7 +30,6 @@ import AnnouncementsPanel from './AnnouncementsPanel';
 import FaqPanel from './FaqPanel';
 import UptimePanel from './UptimePanel';
 import SearchModal from './modals/SearchModal';
-import QuickConfigModal from './modals/QuickConfigModal';
 
 import { useDashboardData } from '../../hooks/dashboard/useDashboardData';
 import { useDashboardStats } from '../../hooks/dashboard/useDashboardStats';
@@ -161,10 +160,6 @@ const Dashboard = () => {
     initChart();
   }, []);
 
-  const [quickConfigVisible, setQuickConfigVisible] = useState(false);
-  const [statusState] = useContext(StatusContext);
-  const serverAddress = statusState?.status?.server_address || '';
-
   return (
     <div className='h-full'>
       <DashboardHeader
@@ -175,7 +170,6 @@ const Dashboard = () => {
         loading={dashboardData.loading}
         quotaData={dashboardData.quotaData}
         inputs={dashboardData.inputs}
-        onShowQuickConfig={() => setQuickConfigVisible(true)}
         t={dashboardData.t}
       />
 
@@ -190,13 +184,6 @@ const Dashboard = () => {
         timeOptions={dashboardData.timeOptions}
         handleInputChange={dashboardData.handleInputChange}
         t={dashboardData.t}
-      />
-
-      <QuickConfigModal
-        visible={quickConfigVisible}
-        onClose={() => setQuickConfigVisible(false)}
-        t={dashboardData.t}
-        serverAddress={serverAddress}
       />
 
       <StatsCards
