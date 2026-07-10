@@ -17,7 +17,7 @@ import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { useContext } from 'react';
 
-const { Title, Text, Paragraph, Code } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 const UsageGuide = () => {
   const { t } = useTranslation();
@@ -270,7 +270,7 @@ const UsageGuide = () => {
                 <Text strong>{t('方法一：直接替换文件')}</Text>
               </Paragraph>
               <Paragraph type='tertiary' size='small'>
-                {t('将下载的')} <Code>models.json</Code>{' '}
+                {t('将下载的')} <Typography.Code>models.json</Typography.Code>{' '}
                 {t('文件替换到以下路径：')}
               </Paragraph>
               <div
@@ -281,7 +281,7 @@ const UsageGuide = () => {
                   marginBottom: 12,
                 }}
               >
-                <Code copyable>~/.workbuddy/models.json</Code>
+                <Typography.Code copyable>~/.workbuddy/models.json</Typography.Code>
               </div>
 
               <Paragraph style={{ marginTop: 12 }}>
@@ -295,16 +295,16 @@ const UsageGuide = () => {
                   <Text size='small' style={{ width: 80 }}>
                     url:
                   </Text>
-                  <Code copyable>{baseUrl}/v1</Code>
+                  <Typography.Code copyable>{baseUrl}/v1</Typography.Code>
                   <CopyButton text={`${baseUrl}/v1`} field='url' />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Text size='small' style={{ width: 80 }}>
                     apiKey:
                   </Text>
-                  <Code copyable>
+                  <Typography.Code copyable>
                     {tokenKey ? `${tokenKey.slice(0, 12)}...` : 'sk-xxx'}
-                  </Code>
+                  </Typography.Code>
                   {tokenKey && (
                     <CopyButton text={tokenKey} field='apikey' />
                   )}
