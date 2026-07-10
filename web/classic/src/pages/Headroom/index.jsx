@@ -99,8 +99,8 @@ const HeadroomDashboard = () => {
 
   // 时间范围：使用和数剧看板一致的时间戳字符串格式
   // appliedStart/appliedEnd 是当前生效的（用于查询），pending 是选择中的
-  const [appliedStart, setAppliedStart] = useState(() => timestamp2string(getPresetRange('7d')[0]));
-  const [appliedEnd, setAppliedEnd] = useState(() => timestamp2string(getPresetRange('7d')[1]));
+  const [appliedStart, setAppliedStart] = useState(() => timestamp2string(computeRange('7d')[0]));
+  const [appliedEnd, setAppliedEnd] = useState(() => timestamp2string(computeRange('7d')[1]));
   const [pendingStart, setPendingStart] = useState(appliedStart);
   const [pendingEnd, setPendingEnd] = useState(appliedEnd);
 
@@ -149,7 +149,7 @@ const HeadroomDashboard = () => {
     }
   }, [buildParams]);
 
-  // appliedPreset 变化时重新加载全部数据
+  // appliedStart/appliedEnd 变化时重新加载全部数据
   useEffect(() => {
     const loadAll = async () => {
       setLoading(true);
@@ -163,7 +163,7 @@ const HeadroomDashboard = () => {
     };
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedPreset]);
+  }, [appliedStart, appliedEnd]);
 
   const handlePageChange = async (page, pageSize) => {
     setRecentPage(page);
@@ -186,7 +186,7 @@ const HeadroomDashboard = () => {
 
   // 快捷预设
   const applyPreset = (preset) => {
-    const range = getPresetRange(preset);
+    const range = computeRange(preset);
     if (range && range.length === 2) {
       const startStr = timestamp2string(range[0]);
       const endStr = timestamp2string(range[1]);
@@ -294,10 +294,7 @@ const HeadroomDashboard = () => {
   ];
 
   // 当前生效范围的友好展示
-  const currentRange = computeRange(appliedPreset);
-  const rangeLabel = currentRange
-    ? `${new Date(currentRange[0] * 1000).toLocaleString()} ~ ${new Date(currentRange[1] * 1000).toLocaleString()}`
-    : t('全部留存数据');
+  const currentRangeLabel = `${appliedStart || '?'} ~ ${appliedEnd || '?'}`;
 
   return (
     <div className='mt-[60px] px-2'>
@@ -345,7 +342,7 @@ const HeadroomDashboard = () => {
           </div>
           <div>
             <Text type='tertiary' size='small'>
-              {t('当前查询范围')}：{rangeLabel}
+              {t('当前查询范围')}：{currentRangeLabel}
             </Text>
           </div>
 
