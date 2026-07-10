@@ -169,7 +169,7 @@ const Dashboard = () => {
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [loadingKey, setLoadingKey] = useState(false);
   const [userModels, setUserModels] = useState([]);
-  const [statusState] = useContext(StatusContext);
+  // 复用已有的 statusState（第59行已声明），不重复 useContext
   const serverAddress = statusState?.status?.server_address || '';
 
   const handleDownloadConfig = useCallback(async () => {
