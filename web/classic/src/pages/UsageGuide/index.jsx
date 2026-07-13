@@ -124,22 +124,26 @@ const UsageGuide = () => {
     if (!json) return '';
     const dirName = type === 'codebuddy' ? '.codebuddy' : '.workbuddy';
     const productName = type === 'codebuddy' ? 'CodeBuddy' : 'WorkBuddy';
-    return `#!/bin/bash
-# ${productName} 自动配置脚本
-# 运行后会自动替换 ~/${dirName}/models.json
-set -e
+    return `# ${productName} 自动配置脚本 (PowerShell)
+# 在 PowerShell 中粘贴运行即可
+$configDir = Join-Path $env:USERPROFILE "${dirName}"
+$configFile = Join-Path $configDir "models.json"
 
-CONFIG_DIR="$HOME/${dirName}"
-CONFIG_FILE="$CONFIG_DIR/models.json"
+if (-not (Test-Path $configDir)) {
+    New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+}
 
-mkdir -p "$CONFIG_DIR"
-echo '${json}' > "$CONFIG_FILE"
+$json = @'
+${json}
+'@
 
-echo "✅ 配置已写入: $CONFIG_FILE"
-echo "📊 共 ${userModels.length} 个模型"
-echo "🔗 API: ${baseUrl}/v1"
-echo ""
-echo "重启 ${productName} 即可生效"`;
+$json | Out-File -FilePath $configFile -Encoding UTF8 -Force
+
+Write-Host "✅ 配置已写入: $configFile" -ForegroundColor Green
+Write-Host "📊 共 ${userModels.length} 个模型"
+Write-Host "🔗 API: ${baseUrl}/v1"
+Write-Host ""
+Write-Host "重启 ${productName} 即可生效"`;
   }, [modelsJson, userModels.length, baseUrl]);
 
   const handleDownloadScript = useCallback((type = 'workbuddy') => {
@@ -148,11 +152,11 @@ echo "重启 ${productName} 即可生效"`;
       showError(t('请先选择令牌'));
       return;
     }
-    const blob = new Blob([script], { type: 'text/x-shellscript' });
+    const blob = new Blob([script], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `setup-${type}.sh`;
+    a.download = `setup-${type}.ps1`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -273,7 +277,7 @@ echo "重启 ${productName} 即可生效"`;
                 <Text strong>{t('方式一：一键自动配置脚本')}</Text>
               </div>
               <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
-                {t('在终端中粘贴并运行，自动创建/替换配置文件：')}
+                {t('在 PowerShell 中粘贴并运行，自动创建/替换配置文件：')}
               </Text>
 
               {/* WorkBuddy 脚本 */}
@@ -296,7 +300,7 @@ echo "重启 ${productName} 即可生效"`;
                   icon={<Download size={14} />}
                   onClick={() => handleDownloadScript('workbuddy')}
                 >
-                  {t('下载 .sh')}
+                  {t('下载 .ps1')}
                 </Button>
               </div>
 
@@ -320,7 +324,7 @@ echo "重启 ${productName} 即可生效"`;
                   icon={<Download size={14} />}
                   onClick={() => handleDownloadScript('codebuddy')}
                 >
-                  {t('下载 .sh')}
+                  {t('下载 .ps1')}
                 </Button>
               </div>
             </div>
