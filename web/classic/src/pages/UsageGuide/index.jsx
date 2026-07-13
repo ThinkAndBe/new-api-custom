@@ -270,7 +270,7 @@ const UsageGuide = () => {
                 <Text strong>{t('方法一：直接替换文件')}</Text>
               </Paragraph>
               <Paragraph type='tertiary' size='small'>
-                {t('将下载的')} <Typography.Code>models.json</Typography.Code>{' '}
+                {t('将下载的')} <Text code>models.json</Text>{' '}
                 {t('文件替换到以下路径：')}
               </Paragraph>
               <div
@@ -281,7 +281,7 @@ const UsageGuide = () => {
                   marginBottom: 12,
                 }}
               >
-                <Typography.Code copyable>~/.workbuddy/models.json</Typography.Code>
+                <Text code copyable>~/.workbuddy/models.json</Text>
               </div>
 
               <Paragraph style={{ marginTop: 12 }}>
@@ -295,16 +295,16 @@ const UsageGuide = () => {
                   <Text size='small' style={{ width: 80 }}>
                     url:
                   </Text>
-                  <Typography.Code copyable>{baseUrl}/v1</Typography.Code>
+                  <Text code copyable>{baseUrl}/v1</Text>
                   <CopyButton text={`${baseUrl}/v1`} field='url' />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Text size='small' style={{ width: 80 }}>
                     apiKey:
                   </Text>
-                  <Typography.Code copyable>
+                  <Text code copyable>
                     {tokenKey ? `${tokenKey.slice(0, 12)}...` : 'sk-xxx'}
-                  </Typography.Code>
+                  </Text>
                   {tokenKey && (
                     <CopyButton text={tokenKey} field='apikey' />
                   )}
