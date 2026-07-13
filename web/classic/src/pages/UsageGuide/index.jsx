@@ -106,7 +106,8 @@ const UsageGuide = () => {
       showError(t('请先选择令牌'));
       return;
     }
-    const blob = new Blob([json], { type: 'application/json' });
+    // 无 BOM 的 UTF-8（带 BOM 会导致部分客户端解析失败）
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -132,7 +133,9 @@ if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Ou
 $json = @'
 ${json}
 '@
-[System.IO.File]::WriteAllText((Join-Path $dir 'models.json'), $json, [System.Text.Encoding]::UTF8)
+# 使用无 BOM 的 UTF-8 编码写入（带 BOM 会导致客户端解析失败）
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText((Join-Path $dir 'models.json'), $json, $utf8NoBom)
 Write-Host ''
 Write-Host '✅ 配置已写入: ' (Join-Path $dir 'models.json') -ForegroundColor Green
 Write-Host '📊 共 ${userModels.length} 个模型'
