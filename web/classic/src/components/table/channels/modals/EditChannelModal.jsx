@@ -219,7 +219,10 @@ const EditChannelModal = (props) => {
     upstream_model_update_last_detected_models: [],
     upstream_model_update_ignored_models: '',
     schedule_pause_enabled: false,
-    schedule_pause_rules: [],
+    schedule_pause_rules: [
+      { days: [1, 2, 3, 4, 5], start: '09:00', end: '12:00', reason: '上午' },
+      { days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00', reason: '下午' },
+    ],
     health_check_enabled: false,
     health_check_interval_minutes: 5,
     health_check_failure_threshold: 3,

@@ -919,6 +919,11 @@ func UpdateChannel(c *gin.Context) {
 	// Always copy the original ChannelInfo so that fields like IsMultiKey and MultiKeySize are retained.
 	channel.ChannelInfo = originChannel.ChannelInfo
 
+	// 保留原有的 OtherSettings（定时暂停、健康检查等），避免前端未发送时丢失
+	if channel.OtherSettings == "" || channel.OtherSettings == "{}" {
+		channel.OtherSettings = originChannel.OtherSettings
+	}
+
 	// If the request explicitly specifies a new MultiKeyMode, apply it on top of the original info.
 	if channel.MultiKeyMode != nil && *channel.MultiKeyMode != "" {
 		channel.ChannelInfo.MultiKeyMode = constant.MultiKeyMode(*channel.MultiKeyMode)
