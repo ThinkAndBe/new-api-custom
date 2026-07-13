@@ -1,21 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
-  Select,
   Spin,
   Typography,
   Button,
   Tag,
-  Steps,
   Banner,
   Empty,
+  Select,
+  Divider,
 } from '@douyinfe/semi-ui';
-import { Download, Copy, Check, Key } from 'lucide-react';
+import { Download, Terminal, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showSuccess } from '../../helpers';
-import { UserContext } from '../../context/User';
-import { StatusContext } from '../../context/Status';
 import { useContext } from 'react';
+import { StatusContext } from '../../context/Status';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -27,7 +26,6 @@ const UsageGuide = () => {
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [loadingKey, setLoadingKey] = useState(false);
   const [userModels, setUserModels] = useState([]);
-  const [copied, setCopied] = useState('');
   const [statusState] = useContext(StatusContext);
   const serverAddress = statusState?.status?.server_address || '';
 
@@ -55,7 +53,7 @@ const UsageGuide = () => {
       })
       .catch(() => showError(t('加载失败')))
       .finally(() => setLoadingTokens(false));
-  }, [t]);
+  }, []);
 
   // 选中令牌后获取 key
   useEffect(() => {
@@ -72,19 +70,7 @@ const UsageGuide = () => {
       })
       .catch(() => showError(t('获取密钥失败')))
       .finally(() => setLoadingKey(false));
-  }, [selectedTokenId, t]);
-
-  const handleCopy = useCallback(
-    (text, field) => {
-      if (!text) return;
-      navigator.clipboard.writeText(text).then(() => {
-        showSuccess(t('已复制'));
-        setCopied(field);
-        setTimeout(() => setCopied(''), 2000);
-      });
-    },
-    [t],
-  );
+  }, [selectedTokenId]);
 
   // 生成 models.json
   const modelsJson = useCallback(() => {
@@ -132,226 +118,246 @@ const UsageGuide = () => {
     showSuccess(t('配置文件已下载'));
   }, [modelsJson, t]);
 
-  const jsonContent = modelsJson();
+  // 生成自动替换脚本
+  const autoScript = useCallback(() => {
+    const json = modelsJson();
+    if (!json) return '';
+    // Base64 编码 JSON，避免转义问题
+    const b64 = btoa(unescape(encodeURIComponent(json)));
+    return `#!/bin/bash
+# WorkBuddy / CodeBuddy 自动配置脚本
+# 运行后会自动替换 ~/.workbuddy/models.json
+set -e
+
+CONFIG_DIR="$HOME/.workbuddy"
+CONFIG_FILE="$CONFIG_DIR/models.json"
+
+mkdir -p "$CONFIG_DIR"
+echo '${json}' > "$CONFIG_FILE"
+
+echo "✅ 配置已写入: $CONFIG_FILE"
+echo "📊 共 ${userModels.length} 个模型"
+echo "🔗 API: ${baseUrl}/v1"
+echo ""
+echo "重启 WorkBuddy / CodeBuddy 即可生效"`;
+  }, [modelsJson, userModels.length, baseUrl]);
+
+  const handleDownloadScript = useCallback(() => {
+    const script = autoScript();
+    if (!script) {
+      showError(t('请先选择令牌'));
+      return;
+    }
+    const blob = new Blob([script], { type: 'text/x-shellscript' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'setup-workbuddy.sh';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSuccess(t('脚本已下载'));
+  }, [autoScript, t]);
+
+  const handleCopyScript = useCallback(() => {
+    const script = autoScript();
+    if (!script) {
+      showError(t('请先选择令牌'));
+      return;
+    }
+    navigator.clipboard.writeText(script).then(() => {
+      showSuccess(t('脚本已复制到剪贴板'));
+    });
+  }, [autoScript, t]);
+
   const tokenOptions = tokens.map((tk) => ({
     value: String(tk.id),
     label: tk.name || `Token #${tk.id}`,
   }));
 
-  const CopyButton = ({ text, field }) => (
-    <Button
-      size='small'
-      icon={copied === field ? <Check size={14} /> : <Copy size={14} />}
-      onClick={() => handleCopy(text, field)}
-      type={copied === field ? 'primary' : 'tertiary'}
-    >
-      {copied === field ? t('已复制') : t('复制')}
-    </Button>
-  );
+  const ready = tokenKey && userModels.length > 0;
 
   return (
-    <div className='mt-[60px] px-4 max-w-4xl mx-auto pb-8'>
+    <div className='mt-[60px] px-4 pb-8' style={{ maxWidth: 720, margin: '60px auto 0' }}>
       <Title heading={3} style={{ marginBottom: 4 }}>
         {t('使用教程')}
       </Title>
       <Text type='tertiary'>
-        {t('配置 WorkBuddy / CodeBuddy 客户端连接到本平台')}
+        {t('下载配置文件，一键替换 WorkBuddy / CodeBuddy 设置')}
       </Text>
 
-      <Steps
-        direction='vertical'
-        style={{ marginTop: 24 }}
-        current={tokenKey ? 3 : selectedTokenId ? 1 : 0}
-      >
-        {/* Step 1: 选择令牌 */}
-        <Steps.Step
-          title={t('1. 选择令牌')}
-          description={
-            <Card bordered style={{ marginTop: 8, marginBottom: 8 }}>
-              {loadingTokens ? (
-                <div style={{ textAlign: 'center', padding: 16 }}>
-                  <Spin />
-                </div>
-              ) : tokens.length === 0 ? (
-                <Empty
-                  description={t('暂无可用令牌，请先在「令牌」页面创建')}
-                  style={{ padding: 16 }}
-                />
-              ) : (
-                <div>
-                  <Select
-                    value={selectedTokenId}
-                    onChange={setSelectedTokenId}
-                    style={{ width: '100%' }}
-                    optionList={tokenOptions}
-                    placeholder={t('请选择令牌')}
-                  />
-                  <div style={{ marginTop: 8 }}>
-                    {loadingKey ? (
-                      <Spin size='small' />
-                    ) : tokenKey ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Key size={14} />
-                        <Text code copyable>
-                          {tokenKey.slice(0, 12)}...{tokenKey.slice(-4)}
-                        </Text>
-                        <Tag size='small' color='green'>
-                          {t('已获取密钥')}
-                        </Tag>
-                      </div>
-                    ) : (
-                      <Text type='tertiary' size='small'>
-                        {t('选择令牌后自动获取 API Key')}
-                      </Text>
-                    )}
-                  </div>
-                </div>
-              )}
-            </Card>
-          }
-        />
+      {/* 第一步：选择令牌 */}
+      <Card bordered style={{ marginTop: 24, padding: '20px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%',
+            background: ready ? 'var(--semi-color-success)' : 'var(--semi-color-primary)',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 'bold',
+          }}>
+            {ready ? <Check size={16} /> : '1'}
+          </div>
+          <Text strong style={{ fontSize: 16 }}>{t('选择令牌')}</Text>
+        </div>
 
-        {/* Step 2: 下载配置 */}
-        <Steps.Step
-          title={t('2. 下载 models.json 配置文件')}
-          description={
-            <Card bordered style={{ marginTop: 8, marginBottom: 8 }}>
-              {tokenKey ? (
-                <div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Text type='secondary' size='small'>
-                      {t('根据您的模型权限生成')}（{userModels.length}{' '}
-                      {t('个模型')}）
-                    </Text>
-                    <Button
-                      type='primary'
-                      theme='solid'
-                      icon={<Download size={16} />}
-                      onClick={handleDownload}
-                    >
-                      {t('下载 models.json')}
-                    </Button>
-                  </div>
-                  <pre
-                    style={{
-                      background: 'var(--semi-color-fill-0)',
-                      borderRadius: 8,
-                      padding: 12,
-                      maxHeight: 200,
-                      overflow: 'auto',
-                      fontSize: 12,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {jsonContent || t('请先选择令牌')}
-                  </pre>
+        {loadingTokens ? (
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            <Spin />
+          </div>
+        ) : tokens.length === 0 ? (
+          <Empty description={t('暂无可用令牌，请先在「令牌」页面创建')} />
+        ) : (
+          <div>
+            <Select
+              value={selectedTokenId}
+              onChange={setSelectedTokenId}
+              style={{ width: '100%' }}
+              optionList={tokenOptions}
+              placeholder={t('请选择令牌')}
+            />
+            <div style={{ marginTop: 12 }}>
+              {loadingKey ? (
+                <Spin size='small' />
+              ) : tokenKey ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Tag size='small' color='green' type='solid'>
+                    {t('✓ 密钥已获取')}
+                  </Tag>
+                  <Text type='tertiary' size='small'>
+                    {tokenKey.slice(0, 16)}...{tokenKey.slice(-4)}
+                  </Text>
                 </div>
               ) : (
-                <Text type='tertiary'>{t('请先完成上一步')}</Text>
+                <Text type='tertiary' size='small'>
+                  {t('选择令牌后自动获取 API Key')}
+                </Text>
               )}
-            </Card>
-          }
-        />
+            </div>
+          </div>
+        )}
+      </Card>
 
-        {/* Step 3: 替换配置文件 */}
-        <Steps.Step
-          title={t('3. 替换 WorkBuddy 配置文件')}
-          description={
-            <Card bordered style={{ marginTop: 8, marginBottom: 8 }}>
-              <Paragraph>
-                <Text strong>{t('方法一：直接替换文件')}</Text>
-              </Paragraph>
-              <Paragraph type='tertiary' size='small'>
-                {t('将下载的')} <Text code>models.json</Text>{' '}
-                {t('文件替换到以下路径：')}
-              </Paragraph>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginBottom: 12,
-                }}
+      {/* 第二步：一键配置 */}
+      <Card bordered style={{ marginTop: 16, padding: '20px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%',
+            background: ready ? 'var(--semi-color-success)' : 'var(--semi-color-fill-2)',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 'bold',
+          }}>
+            {ready ? <Check size={16} /> : '2'}
+          </div>
+          <Text strong style={{ fontSize: 16 }}>{t('一键自动配置')}</Text>
+        </div>
+
+        {!ready ? (
+          <Text type='tertiary'>{t('请先选择令牌')}</Text>
+        ) : (
+          <div>
+            <Paragraph type='tertiary' size='small' style={{ marginBottom: 16 }}>
+              {t('选择以下任一方式，自动替换 WorkBuddy / CodeBuddy 配置：')}
+            </Paragraph>
+
+            {/* 方式一：复制脚本直接运行 */}
+            <div style={{
+              border: '1px solid var(--semi-color-border)',
+              borderRadius: 8,
+              padding: 16,
+              marginBottom: 12,
+              background: 'var(--semi-color-fill-0)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Terminal size={18} />
+                <Text strong>{t('方式一：复制脚本到终端运行')}</Text>
+              </div>
+              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 8 }}>
+                {t('在终端中粘贴并运行，自动创建/替换配置文件：')}
+              </Text>
+              <pre style={{
+                background: 'var(--semi-color-bg-1)',
+                borderRadius: 6,
+                padding: 10,
+                fontSize: 12,
+                overflow: 'auto',
+                maxHeight: 120,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                border: '1px solid var(--semi-color-border)',
+              }}>
+                <Text size='small' style={{ fontFamily: 'monospace' }}>
+                  {t('# 复制以下命令到终端运行')}
+                </Text>
+              </pre>
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                <Button
+                  theme='solid'
+                  type='primary'
+                  icon={<Terminal size={14} />}
+                  onClick={handleCopyScript}
+                >
+                  {t('复制脚本')}
+                </Button>
+                <Button
+                  icon={<Download size={14} />}
+                  onClick={handleDownloadScript}
+                >
+                  {t('下载 .sh 文件')}
+                </Button>
+              </div>
+            </div>
+
+            {/* 方式二：下载 models.json 手动替换 */}
+            <div style={{
+              border: '1px solid var(--semi-color-border)',
+              borderRadius: 8,
+              padding: 16,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Download size={18} />
+                <Text strong>{t('方式二：下载 models.json 手动替换')}</Text>
+              </div>
+              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 8 }}>
+                {t('下载后替换到')} <Text code>~/.workbuddy/models.json</Text>
+              </Text>
+              <Button
+                theme='solid'
+                type='tertiary'
+                icon={<Download size={14} />}
+                onClick={handleDownload}
               >
-                <Text code copyable>~/.workbuddy/models.json</Text>
-              </div>
+                {t('下载 models.json')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
 
-              <Paragraph style={{ marginTop: 12 }}>
-                <Text strong>{t('方法二：手动编辑配置')}</Text>
-              </Paragraph>
-              <Paragraph type='tertiary' size='small'>
-                {t('如果已有配置文件，可手动修改以下字段：')}
-              </Paragraph>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Text size='small' style={{ width: 80 }}>
-                    url:
-                  </Text>
-                  <Text code copyable>{baseUrl}/v1</Text>
-                  <CopyButton text={`${baseUrl}/v1`} field='url' />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Text size='small' style={{ width: 80 }}>
-                    apiKey:
-                  </Text>
-                  <Text code copyable>
-                    {tokenKey ? `${tokenKey.slice(0, 12)}...` : 'sk-xxx'}
-                  </Text>
-                  {tokenKey && (
-                    <CopyButton text={tokenKey} field='apikey' />
-                  )}
-                </div>
-              </div>
-            </Card>
-          }
-        />
-
-        {/* Step 4: CodeBuddy 配置 */}
-        <Steps.Step
-          title={t('4. CodeBuddy 配置（可选）')}
-          description={
-            <Card bordered style={{ marginTop: 8, marginBottom: 8 }}>
-              <Paragraph type='tertiary' size='small'>
-                {t('CodeBuddy 使用相同配置，只需修改 API 地址和密钥：')}
-              </Paragraph>
-              <pre
-                style={{
-                  background: 'var(--semi-color-fill-0)',
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: 12,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                }}
-              >{`# CodeBuddy 配置
-API Base URL: ${baseUrl}/v1
-API Key: ${tokenKey || 'sk-xxx'}`}</pre>
-              <div style={{ marginTop: 8 }}>
-                <CopyButton
-                  text={`API Base URL: ${baseUrl}/v1\nAPI Key: ${tokenKey || 'sk-xxx'}`}
-                  field='codebuddy'
-                />
-              </div>
-            </Card>
-          }
-        />
-      </Steps>
+      {/* 配置预览 */}
+      {ready && (
+        <Card bordered title={t('配置预览')} style={{ marginTop: 16 }}>
+          <pre style={{
+            background: 'var(--semi-color-fill-0)',
+            borderRadius: 8,
+            padding: 12,
+            maxHeight: 300,
+            overflow: 'auto',
+            fontSize: 12,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all',
+          }}>
+            {modelsJson()}
+          </pre>
+        </Card>
+      )}
 
       {/* 可用模型列表 */}
       {userModels.length > 0 && (
-        <Card
-          bordered
-          title={t('您的可用模型')}
-          style={{ marginTop: 16 }}
-        >
+        <Card bordered style={{ marginTop: 16 }}>
+          <Text strong style={{ display: 'block', marginBottom: 12 }}>
+            {t('您的可用模型')}（{userModels.length}）
+          </Text>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {userModels.map((model) => (
               <Tag key={model} size='small' color='blue'>
@@ -362,13 +368,13 @@ API Key: ${tokenKey || 'sk-xxx'}`}</pre>
         </Card>
       )}
 
-      {/* 提示 */}
+      <Divider />
+
       <Banner
         type='info'
         description={t(
-          '配置文件中的模型列表根据您的令牌权限动态生成。如需更多模型，请联系管理员调整令牌的模型权限。',
+          '模型列表根据您的令牌权限动态生成。如需更多模型，请联系管理员调整令牌的模型权限。',
         )}
-        style={{ marginTop: 16 }}
       />
     </div>
   );
