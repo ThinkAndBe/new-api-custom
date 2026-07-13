@@ -86,7 +86,7 @@ const UsageGuide = () => {
       );
       return {
         id: name,
-        name: name,
+        name: `ERKE ${name}`,
         provider: 'openai',
         url: `${baseUrl}/v1`,
         apiKey: tokenKey,
