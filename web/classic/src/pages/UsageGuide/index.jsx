@@ -124,26 +124,28 @@ const UsageGuide = () => {
     if (!json) return '';
     const dirName = type === 'codebuddy' ? '.codebuddy' : '.workbuddy';
     const productName = type === 'codebuddy' ? 'CodeBuddy' : 'WorkBuddy';
-    return `# ${productName} 自动配置脚本 (PowerShell)
-# 在 PowerShell 中粘贴运行即可
-$configDir = Join-Path $env:USERPROFILE "${dirName}"
-$configFile = Join-Path $configDir "models.json"
+    // JSON 中不能有特殊字符，用 here-string 写入避免转义问题
+    return `@echo off
+chcp 65001 >nul
+:: ${productName} 自动配置脚本
+:: 双击运行或复制到 CMD 执行
 
-if (-not (Test-Path $configDir)) {
-    New-Item -ItemType Directory -Path $configDir -Force | Out-Null
-}
+set "CONFIG_DIR=%USERPROFILE%\\${dirName}"
+set "CONFIG_FILE=%CONFIG_DIR%\\models.json"
 
-$json = @'
-${json}
-'@
+if not exist "%CONFIG_DIR%" mkdir "%CONFIG_DIR%"
 
-$json | Out-File -FilePath $configFile -Encoding UTF8 -Force
+(
+echo ${json.split('\n').join('\necho ')}
+) > "%CONFIG_FILE%"
 
-Write-Host "✅ 配置已写入: $configFile" -ForegroundColor Green
-Write-Host "📊 共 ${userModels.length} 个模型"
-Write-Host "🔗 API: ${baseUrl}/v1"
-Write-Host ""
-Write-Host "重启 ${productName} 即可生效"`;
+echo.
+echo ✅ 配置已写入: %CONFIG_FILE%
+echo 📊 共 ${userModels.length} 个模型
+echo 🔗 API: ${baseUrl}/v1
+echo.
+echo 重启 ${productName} 即可生效
+pause`;
   }, [modelsJson, userModels.length, baseUrl]);
 
   const handleDownloadScript = useCallback((type = 'workbuddy') => {
@@ -156,7 +158,7 @@ Write-Host "重启 ${productName} 即可生效"`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `setup-${type}.ps1`;
+    a.download = `setup-${type}.bat`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -277,7 +279,7 @@ Write-Host "重启 ${productName} 即可生效"`;
                 <Text strong>{t('方式一：一键自动配置脚本')}</Text>
               </div>
               <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
-                {t('在 PowerShell 中粘贴并运行，自动创建/替换配置文件：')}
+                {t('复制到 CMD 运行，或下载后双击执行：')}
               </Text>
 
               {/* WorkBuddy 脚本 */}
@@ -300,7 +302,7 @@ Write-Host "重启 ${productName} 即可生效"`;
                   icon={<Download size={14} />}
                   onClick={() => handleDownloadScript('workbuddy')}
                 >
-                  {t('下载 .ps1')}
+                  {t('下载 .bat')}
                 </Button>
               </div>
 
@@ -324,7 +326,7 @@ Write-Host "重启 ${productName} 即可生效"`;
                   icon={<Download size={14} />}
                   onClick={() => handleDownloadScript('codebuddy')}
                 >
-                  {t('下载 .ps1')}
+                  {t('下载 .bat')}
                 </Button>
               </div>
             </div>
