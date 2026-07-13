@@ -950,9 +950,12 @@ const EditChannelModal = (props) => {
             parsedSettings.schedule_pause_enabled === true;
           data.schedule_pause_rules = Array.isArray(
             parsedSettings.schedule_pause_rules,
-          )
+          ) && parsedSettings.schedule_pause_rules.length > 0
             ? parsedSettings.schedule_pause_rules
-            : [];
+            : [
+                { days: [1, 2, 3, 4, 5], start: '09:00', end: '12:00', reason: '上午' },
+                { days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00', reason: '下午' },
+              ];
           data.health_check_enabled =
             parsedSettings.health_check_enabled === true;
           data.health_check_interval_minutes =
@@ -979,7 +982,10 @@ const EditChannelModal = (props) => {
           data.upstream_model_update_last_detected_models = [];
           data.upstream_model_update_ignored_models = '';
           data.schedule_pause_enabled = false;
-          data.schedule_pause_rules = [];
+          data.schedule_pause_rules = [
+            { days: [1, 2, 3, 4, 5], start: '09:00', end: '12:00', reason: '上午' },
+            { days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00', reason: '下午' },
+          ];
           data.health_check_enabled = false;
           data.health_check_interval_minutes = 5;
           data.health_check_failure_threshold = 3;
