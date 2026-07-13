@@ -118,18 +118,18 @@ const UsageGuide = () => {
     showSuccess(t('配置文件已下载'));
   }, [modelsJson, t]);
 
-  // 生成自动替换脚本
-  const autoScript = useCallback(() => {
+  // 生成自动替换脚本（type: 'workbuddy' | 'codebuddy'）
+  const autoScript = useCallback((type = 'workbuddy') => {
     const json = modelsJson();
     if (!json) return '';
-    // Base64 编码 JSON，避免转义问题
-    const b64 = btoa(unescape(encodeURIComponent(json)));
+    const dirName = type === 'codebuddy' ? '.codebuddy' : '.workbuddy';
+    const productName = type === 'codebuddy' ? 'CodeBuddy' : 'WorkBuddy';
     return `#!/bin/bash
-# WorkBuddy / CodeBuddy 自动配置脚本
-# 运行后会自动替换 ~/.workbuddy/models.json
+# ${productName} 自动配置脚本
+# 运行后会自动替换 ~/${dirName}/models.json
 set -e
 
-CONFIG_DIR="$HOME/.workbuddy"
+CONFIG_DIR="$HOME/${dirName}"
 CONFIG_FILE="$CONFIG_DIR/models.json"
 
 mkdir -p "$CONFIG_DIR"
@@ -139,11 +139,11 @@ echo "✅ 配置已写入: $CONFIG_FILE"
 echo "📊 共 ${userModels.length} 个模型"
 echo "🔗 API: ${baseUrl}/v1"
 echo ""
-echo "重启 WorkBuddy / CodeBuddy 即可生效"`;
+echo "重启 ${productName} 即可生效"`;
   }, [modelsJson, userModels.length, baseUrl]);
 
-  const handleDownloadScript = useCallback(() => {
-    const script = autoScript();
+  const handleDownloadScript = useCallback((type = 'workbuddy') => {
+    const script = autoScript(type);
     if (!script) {
       showError(t('请先选择令牌'));
       return;
@@ -152,7 +152,7 @@ echo "重启 WorkBuddy / CodeBuddy 即可生效"`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'setup-workbuddy.sh';
+    a.download = `setup-${type}.sh`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -160,8 +160,8 @@ echo "重启 WorkBuddy / CodeBuddy 即可生效"`;
     showSuccess(t('脚本已下载'));
   }, [autoScript, t]);
 
-  const handleCopyScript = useCallback(() => {
-    const script = autoScript();
+  const handleCopyScript = useCallback((type = 'workbuddy') => {
+    const script = autoScript(type);
     if (!script) {
       showError(t('请先选择令牌'));
       return;
@@ -257,7 +257,7 @@ echo "重启 WorkBuddy / CodeBuddy 即可生效"`;
         ) : (
           <div>
             <Paragraph type='tertiary' size='small' style={{ marginBottom: 16 }}>
-              {t('选择以下任一方式，自动替换 WorkBuddy / CodeBuddy 配置：')}
+              {t('选择以下任一方式，自动替换配置文件：')}
             </Paragraph>
 
             {/* 方式一：复制脚本直接运行 */}
@@ -270,40 +270,57 @@ echo "重启 WorkBuddy / CodeBuddy 即可生效"`;
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Terminal size={18} />
-                <Text strong>{t('方式一：复制脚本到终端运行')}</Text>
+                <Text strong>{t('方式一：一键自动配置脚本')}</Text>
               </div>
-              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 8 }}>
+              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
                 {t('在终端中粘贴并运行，自动创建/替换配置文件：')}
               </Text>
-              <pre style={{
-                background: 'var(--semi-color-bg-1)',
-                borderRadius: 6,
-                padding: 10,
-                fontSize: 12,
-                overflow: 'auto',
-                maxHeight: 120,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
-                border: '1px solid var(--semi-color-border)',
-              }}>
-                <Text size='small' style={{ fontFamily: 'monospace' }}>
-                  {t('# 复制以下命令到终端运行')}
-                </Text>
-              </pre>
-              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+
+              {/* WorkBuddy 脚本 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Tag size='small' color='blue'>WorkBuddy</Tag>
+                <Text type='tertiary' size='small'>~/.workbuddy/models.json</Text>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                 <Button
                   theme='solid'
                   type='primary'
+                  size='small'
                   icon={<Terminal size={14} />}
-                  onClick={handleCopyScript}
+                  onClick={() => handleCopyScript('workbuddy')}
                 >
                   {t('复制脚本')}
                 </Button>
                 <Button
+                  size='small'
                   icon={<Download size={14} />}
-                  onClick={handleDownloadScript}
+                  onClick={() => handleDownloadScript('workbuddy')}
                 >
-                  {t('下载 .sh 文件')}
+                  {t('下载 .sh')}
+                </Button>
+              </div>
+
+              {/* CodeBuddy 脚本 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Tag size='small' color='green'>CodeBuddy</Tag>
+                <Text type='tertiary' size='small'>~/.codebuddy/models.json</Text>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button
+                  theme='solid'
+                  type='primary'
+                  size='small'
+                  icon={<Terminal size={14} />}
+                  onClick={() => handleCopyScript('codebuddy')}
+                >
+                  {t('复制脚本')}
+                </Button>
+                <Button
+                  size='small'
+                  icon={<Download size={14} />}
+                  onClick={() => handleDownloadScript('codebuddy')}
+                >
+                  {t('下载 .sh')}
                 </Button>
               </div>
             </div>
@@ -319,7 +336,7 @@ echo "重启 WorkBuddy / CodeBuddy 即可生效"`;
                 <Text strong>{t('方式二：下载 models.json 手动替换')}</Text>
               </div>
               <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 8 }}>
-                {t('下载后替换到')} <Text code>~/.workbuddy/models.json</Text>
+                {t('下载后替换到')} <Text code>~/.workbuddy/models.json</Text> {t('或')} <Text code>~/.codebuddy/models.json</Text>
               </Text>
               <Button
                 theme='solid'
