@@ -124,27 +124,33 @@ const UsageGuide = () => {
     if (!json) return '';
     const dirName = type === 'codebuddy' ? '.codebuddy' : '.workbuddy';
     const productName = type === 'codebuddy' ? 'CodeBuddy' : 'WorkBuddy';
-    // JSON 中不能有特殊字符，用 here-string 写入避免转义问题
+
+    // 生成 PowerShell 脚本，然后 base64 编码（UTF-16LE），用 bat 调用
+    // 这样 bat 可双击执行，PowerShell 处理 JSON 避免特殊字符问题
+    const psScript = `$dir = Join-Path $env:USERPROFILE '${dirName}'
+if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+$json = @'
+${json}
+'@
+[System.IO.File]::WriteAllText((Join-Path $dir 'models.json'), $json, [System.Text.Encoding]::UTF8)
+Write-Host ''
+Write-Host '✅ 配置已写入: ' (Join-Path $dir 'models.json') -ForegroundColor Green
+Write-Host '📊 共 ${userModels.length} 个模型'
+Write-Host '🔗 API: ${baseUrl}/v1'
+Write-Host ''
+Write-Host '重启 ${productName} 即可生效'`;
+
+    // PowerShell -EncodedCommand 要求 UTF-16LE + Base64
+    const utf16le = [];
+    for (let i = 0; i < psScript.length; i++) {
+      const c = psScript.charCodeAt(i);
+      utf16le.push(c & 0xff);
+      utf16le.push((c >> 8) & 0xff);
+    }
+    const b64 = btoa(String.fromCharCode(...utf16le));
+
     return `@echo off
-chcp 65001 >nul
-:: ${productName} 自动配置脚本
-:: 双击运行或复制到 CMD 执行
-
-set "CONFIG_DIR=%USERPROFILE%\\${dirName}"
-set "CONFIG_FILE=%CONFIG_DIR%\\models.json"
-
-if not exist "%CONFIG_DIR%" mkdir "%CONFIG_DIR%"
-
-(
-echo ${json.split('\n').join('\necho ')}
-) > "%CONFIG_FILE%"
-
-echo.
-echo ✅ 配置已写入: %CONFIG_FILE%
-echo 📊 共 ${userModels.length} 个模型
-echo 🔗 API: ${baseUrl}/v1
-echo.
-echo 重启 ${productName} 即可生效
+powershell -ExecutionPolicy Bypass -EncodedCommand ${b64}
 pause`;
   }, [modelsJson, userModels.length, baseUrl]);
 
@@ -154,7 +160,7 @@ pause`;
       showError(t('请先选择令牌'));
       return;
     }
-    const blob = new Blob([script], { type: 'text/plain' });
+    const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
