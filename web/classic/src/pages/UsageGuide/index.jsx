@@ -88,12 +88,12 @@ const UsageGuide = () => {
 
       // --- 智谱 GLM ---
       if (/glm-5/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 4096;
+        maxInputTokens = 128000; maxOutputTokens = 16384;
         supportsToolCall = true; supportsImages = false; supportsReasoning = true;
       }
       // --- DeepSeek ---
       else if (/deepseek-v4-pro/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 8000;
+        maxInputTokens = 100000000; maxOutputTokens = 8000;
         supportsToolCall = true; supportsImages = false; supportsReasoning = true;
       } else if (/deepseek-v4-flash|deepseek-v3/.test(lowerName)) {
         maxInputTokens = 64000; maxOutputTokens = 8000;
