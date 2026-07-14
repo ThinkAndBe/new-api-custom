@@ -87,25 +87,28 @@ const UsageGuide = () => {
       let supportsReasoning = false;
 
       // --- 智谱 GLM ---
+      // 数据来源: litellm model_prices_and_context_window.json
       if (/glm-5/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 16384;
         supportsToolCall = true; supportsImages = false; supportsReasoning = true;
       }
       // --- DeepSeek ---
+      // deepseek-v4-pro: 100M 输入（阿里云百炼）
       else if (/deepseek-v4-pro/.test(lowerName)) {
-        maxInputTokens = 100000000; maxOutputTokens = 8000;
+        maxInputTokens = 100000000; maxOutputTokens = 8192;
         supportsToolCall = true; supportsImages = false; supportsReasoning = true;
       } else if (/deepseek-v4-flash|deepseek-v3/.test(lowerName)) {
-        maxInputTokens = 64000; maxOutputTokens = 8000;
+        maxInputTokens = 1000000; maxOutputTokens = 8192;
         supportsToolCall = true; supportsImages = false; supportsReasoning = false;
       }
       // --- 阿里 Qwen ---
       else if (/qwen3-coder/.test(lowerName)) {
-        maxInputTokens = 256000; maxOutputTokens = 8192;
+        maxInputTokens = 262000; maxOutputTokens = 65536;
         supportsToolCall = true; supportsImages = false; supportsReasoning = true;
-      } else if (/qwen3|qwen-plus/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
+      } else if (/qwen3/.test(lowerName)) {
+        maxInputTokens = 262144; maxOutputTokens = 131072;
+        supportsToolCall = true; supportsImages = /vl|vision/.test(lowerName);
+        supportsReasoning = true;
       }
       // --- Kimi ---
       else if (/kimi/.test(lowerName)) {
@@ -122,7 +125,7 @@ const UsageGuide = () => {
       }
       // --- MiniMax ---
       else if (/minimax/.test(lowerName)) {
-        maxInputTokens = 1000000; maxOutputTokens = 4096;
+        maxInputTokens = 1000000; maxOutputTokens = 8192;
         supportsToolCall = true; supportsImages = false; supportsReasoning = false;
       }
 
