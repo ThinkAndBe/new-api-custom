@@ -84,14 +84,54 @@ const UsageGuide = () => {
       const supportsImages = /vision|glm-4v|gpt-4o|claude|gemini|qwen-vl/i.test(
         name,
       );
+
+      // 根据模型名匹配实际的 token 限制
+      let maxInputTokens = 1000000;
+      let maxOutputTokens = 64000;
+      const lowerName = name.toLowerCase();
+
+      if (/glm-5/.test(lowerName)) {
+        maxInputTokens = 1000000; maxOutputTokens = 64000;
+      } else if (/glm-4/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 4096;
+      } else if (/deepseek-v4-pro/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 8000;
+      } else if (/deepseek-v4-flash|deepseek-v3/.test(lowerName)) {
+        maxInputTokens = 64000; maxOutputTokens = 8000;
+      } else if (/deepseek-r1/.test(lowerName)) {
+        maxInputTokens = 64000; maxOutputTokens = 32000;
+      } else if (/qwen3|qwen-max|qwen-plus/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 8192;
+      } else if (/qwen-turbo/.test(lowerName)) {
+        maxInputTokens = 1000000; maxOutputTokens = 8192;
+      } else if (/kimi/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 8192;
+      } else if (/claude.*sonnet|claude.*opus|claude-3/.test(lowerName)) {
+        maxInputTokens = 200000; maxOutputTokens = 8192;
+      } else if (/claude.*haiku/.test(lowerName)) {
+        maxInputTokens = 200000; maxOutputTokens = 4096;
+      } else if (/gpt-4o|gpt-4.1|gpt-4\.1/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 16384;
+      } else if (/gpt-3.5/.test(lowerName)) {
+        maxInputTokens = 16000; maxOutputTokens = 4096;
+      } else if (/gemini.*pro/.test(lowerName)) {
+        maxInputTokens = 2000000; maxOutputTokens = 8192;
+      } else if (/gemini.*flash/.test(lowerName)) {
+        maxInputTokens = 1000000; maxOutputTokens = 8192;
+      } else if (/doubao/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 4096;
+      } else if (/minimax/.test(lowerName)) {
+        maxInputTokens = 1000000; maxOutputTokens = 4096;
+      }
+
       return {
         id: name,
         name: `ERKE ${name}`,
         provider: 'openai',
         url: `${baseUrl}/v1`,
         apiKey: tokenKey,
-        maxInputTokens: 1000000,
-        maxOutputTokens: 64000,
+        maxInputTokens,
+        maxOutputTokens,
         supportsToolCall,
         supportsImages,
         supportsReasoning,
