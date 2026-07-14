@@ -76,52 +76,118 @@ const UsageGuide = () => {
   const modelsJson = useCallback(() => {
     if (!tokenKey || userModels.length === 0) return '';
     const models = userModels.map((name) => {
-      const supportsReasoning =
-        /think|reason|o1|o3|o4|glm-5|deepseek-v4|qwen3/i.test(name);
-      const supportsToolCall = !/embed|rerank|tts|whisper|dall|midjourney|stable/i.test(
-        name,
-      );
-      const supportsImages = /vision|glm-4v|gpt-4o|claude|gemini|qwen-vl/i.test(
-        name,
-      );
-
-      // 根据模型名匹配实际的 token 限制
-      let maxInputTokens = 1000000;
-      let maxOutputTokens = 64000;
       const lowerName = name.toLowerCase();
 
+      // ========== 模型属性配置表 ==========
+      // 根据模型名匹配：maxInputTokens / maxOutputTokens / supportsToolCall / supportsImages / supportsReasoning
+      let maxInputTokens = 128000;
+      let maxOutputTokens = 4096;
+      let supportsToolCall = true;
+      let supportsImages = false;
+      let supportsReasoning = false;
+
+      // --- GLM 系列 ---
       if (/glm-5/.test(lowerName)) {
         maxInputTokens = 1000000; maxOutputTokens = 64000;
+        supportsToolCall = true; supportsImages = /vision|vl|4v/.test(lowerName);
+        supportsReasoning = true;
+      } else if (/glm-4v|glm-4-v/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 4096;
+        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
       } else if (/glm-4/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 4096;
-      } else if (/deepseek-v4-pro/.test(lowerName)) {
+        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+      }
+      // --- DeepSeek 系列 ---
+      else if (/deepseek-v4-pro/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 8000;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
       } else if (/deepseek-v4-flash|deepseek-v3/.test(lowerName)) {
         maxInputTokens = 64000; maxOutputTokens = 8000;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
       } else if (/deepseek-r1/.test(lowerName)) {
         maxInputTokens = 64000; maxOutputTokens = 32000;
-      } else if (/qwen3|qwen-max|qwen-plus/.test(lowerName)) {
+        supportsToolCall = false; supportsImages = false; supportsReasoning = true;
+      } else if (/deepseek-chat/.test(lowerName)) {
+        maxInputTokens = 64000; maxOutputTokens = 8000;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+      }
+      // --- Qwen 系列 ---
+      else if (/qwen3-coder/.test(lowerName)) {
+        maxInputTokens = 256000; maxOutputTokens = 8192;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
+      } else if (/qwen3/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 8192;
-      } else if (/qwen-turbo/.test(lowerName)) {
-        maxInputTokens = 1000000; maxOutputTokens = 8192;
-      } else if (/kimi/.test(lowerName)) {
+        supportsToolCall = true; supportsImages = /vision|vl/.test(lowerName);
+        supportsReasoning = true;
+      } else if (/qwen-vl|qwen.*vision/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 8192;
-      } else if (/claude.*sonnet|claude.*opus|claude-3/.test(lowerName)) {
+        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
+      } else if (/qwen-max|qwen-plus|qwen-turbo/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 8192;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+      }
+      // --- Kimi 系列 ---
+      else if (/kimi/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 8192;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+      }
+      // --- Claude 系列 ---
+      else if (/claude.*sonnet|claude.*opus|claude-3/.test(lowerName)) {
         maxInputTokens = 200000; maxOutputTokens = 8192;
+        supportsToolCall = true; supportsImages = true; supportsReasoning = /thinking|extended/.test(lowerName);
       } else if (/claude.*haiku/.test(lowerName)) {
         maxInputTokens = 200000; maxOutputTokens = 4096;
-      } else if (/gpt-4o|gpt-4.1|gpt-4\.1/.test(lowerName)) {
+        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
+      }
+      // --- OpenAI GPT 系列 ---
+      else if (/gpt-4o|gpt-4\.1/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 16384;
+        supportsToolCall = true; supportsImages = true; supportsReasoning = /o1|o3|o4|mini/.test(lowerName);
+      } else if (/o1|o3|o4/.test(lowerName)) {
+        maxInputTokens = 200000; maxOutputTokens = 100000;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
+      } else if (/gpt-4-turbo/.test(lowerName)) {
+        maxInputTokens = 128000; maxOutputTokens = 4096;
+        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
+      } else if (/gpt-4/.test(lowerName)) {
+        maxInputTokens = 8192; maxOutputTokens = 4096;
+        supportsToolCall = true; supportsImages = /vision/.test(lowerName); supportsReasoning = false;
       } else if (/gpt-3.5/.test(lowerName)) {
         maxInputTokens = 16000; maxOutputTokens = 4096;
-      } else if (/gemini.*pro/.test(lowerName)) {
+        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+      }
+      // --- Gemini 系列 ---
+      else if (/gemini.*pro/.test(lowerName)) {
         maxInputTokens = 2000000; maxOutputTokens = 8192;
+        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
       } else if (/gemini.*flash/.test(lowerName)) {
         maxInputTokens = 1000000; maxOutputTokens = 8192;
+        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
+      }
+      // --- Doubao 系列 ---
+      else if (/doubao.*vision|doubao.*pro-vision/.test(lowerName)) {
+        maxInputTokens = 32768; maxOutputTokens = 4096;
+        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
       } else if (/doubao/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 4096;
-      } else if (/minimax/.test(lowerName)) {
+        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+      }
+      // --- MiniMax 系列 ---
+      else if (/minimax/.test(lowerName)) {
         maxInputTokens = 1000000; maxOutputTokens = 4096;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+      }
+      // --- 非对话模型（embedding/rerank/tts 等）---
+      else if (/embed|rerank/.test(lowerName)) {
+        maxInputTokens = 8192; maxOutputTokens = 0;
+        supportsToolCall = false; supportsImages = false; supportsReasoning = false;
+      } else if (/tts|whisper|speech/.test(lowerName)) {
+        maxInputTokens = 0; maxOutputTokens = 0;
+        supportsToolCall = false; supportsImages = false; supportsReasoning = false;
+      } else if (/dall|midjourney|stable|image/.test(lowerName)) {
+        maxInputTokens = 0; maxOutputTokens = 0;
+        supportsToolCall = false; supportsImages = true; supportsReasoning = false;
       }
 
       return {
