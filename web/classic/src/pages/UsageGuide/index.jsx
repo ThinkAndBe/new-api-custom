@@ -79,115 +79,51 @@ const UsageGuide = () => {
       const lowerName = name.toLowerCase();
 
       // ========== 模型属性配置表 ==========
-      // 根据模型名匹配：maxInputTokens / maxOutputTokens / supportsToolCall / supportsImages / supportsReasoning
+      // 只配置当前实际使用的热门模型
       let maxInputTokens = 128000;
       let maxOutputTokens = 4096;
       let supportsToolCall = true;
       let supportsImages = false;
       let supportsReasoning = false;
 
-      // --- GLM 系列 ---
+      // --- 智谱 GLM ---
       if (/glm-5/.test(lowerName)) {
-        maxInputTokens = 1000000; maxOutputTokens = 64000;
-        supportsToolCall = true; supportsImages = /vision|vl|4v/.test(lowerName);
-        supportsReasoning = true;
-      } else if (/glm-4v|glm-4-v/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 4096;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
-      } else if (/glm-4/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 4096;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
       }
-      // --- DeepSeek 系列 ---
+      // --- DeepSeek ---
       else if (/deepseek-v4-pro/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 8000;
         supportsToolCall = true; supportsImages = false; supportsReasoning = true;
       } else if (/deepseek-v4-flash|deepseek-v3/.test(lowerName)) {
         maxInputTokens = 64000; maxOutputTokens = 8000;
         supportsToolCall = true; supportsImages = false; supportsReasoning = false;
-      } else if (/deepseek-r1/.test(lowerName)) {
-        maxInputTokens = 64000; maxOutputTokens = 32000;
-        supportsToolCall = false; supportsImages = false; supportsReasoning = true;
-      } else if (/deepseek-chat/.test(lowerName)) {
-        maxInputTokens = 64000; maxOutputTokens = 8000;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
       }
-      // --- Qwen 系列 ---
+      // --- 阿里 Qwen ---
       else if (/qwen3-coder/.test(lowerName)) {
         maxInputTokens = 256000; maxOutputTokens = 8192;
         supportsToolCall = true; supportsImages = false; supportsReasoning = true;
-      } else if (/qwen3/.test(lowerName)) {
+      } else if (/qwen3|qwen-plus/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = /vision|vl/.test(lowerName);
-        supportsReasoning = true;
-      } else if (/qwen-vl|qwen.*vision/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
-      } else if (/qwen-max|qwen-plus|qwen-turbo/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
+        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
       }
-      // --- Kimi 系列 ---
+      // --- Kimi ---
       else if (/kimi/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 8192;
         supportsToolCall = true; supportsImages = false; supportsReasoning = false;
       }
-      // --- Claude 系列 ---
-      else if (/claude.*sonnet|claude.*opus|claude-3/.test(lowerName)) {
-        maxInputTokens = 200000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = /thinking|extended/.test(lowerName);
-      } else if (/claude.*haiku/.test(lowerName)) {
-        maxInputTokens = 200000; maxOutputTokens = 4096;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
-      }
-      // --- OpenAI GPT 系列 ---
-      else if (/gpt-4o|gpt-4\.1/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 16384;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = /o1|o3|o4|mini/.test(lowerName);
-      } else if (/o1|o3|o4/.test(lowerName)) {
-        maxInputTokens = 200000; maxOutputTokens = 100000;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
-      } else if (/gpt-4-turbo/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 4096;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
-      } else if (/gpt-4/.test(lowerName)) {
-        maxInputTokens = 8192; maxOutputTokens = 4096;
-        supportsToolCall = true; supportsImages = /vision/.test(lowerName); supportsReasoning = false;
-      } else if (/gpt-3.5/.test(lowerName)) {
-        maxInputTokens = 16000; maxOutputTokens = 4096;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
-      }
-      // --- Gemini 系列 ---
-      else if (/gemini.*pro/.test(lowerName)) {
-        maxInputTokens = 2000000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
-      } else if (/gemini.*flash/.test(lowerName)) {
-        maxInputTokens = 1000000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
-      }
-      // --- Doubao 系列 ---
-      else if (/doubao.*vision|doubao.*pro-vision/.test(lowerName)) {
+      // --- 豆包 Doubao ---
+      else if (/doubao.*vision/.test(lowerName)) {
         maxInputTokens = 32768; maxOutputTokens = 4096;
         supportsToolCall = true; supportsImages = true; supportsReasoning = false;
       } else if (/doubao/.test(lowerName)) {
         maxInputTokens = 128000; maxOutputTokens = 4096;
         supportsToolCall = true; supportsImages = false; supportsReasoning = false;
       }
-      // --- MiniMax 系列 ---
+      // --- MiniMax ---
       else if (/minimax/.test(lowerName)) {
         maxInputTokens = 1000000; maxOutputTokens = 4096;
         supportsToolCall = true; supportsImages = false; supportsReasoning = false;
-      }
-      // --- 非对话模型（embedding/rerank/tts 等）---
-      else if (/embed|rerank/.test(lowerName)) {
-        maxInputTokens = 8192; maxOutputTokens = 0;
-        supportsToolCall = false; supportsImages = false; supportsReasoning = false;
-      } else if (/tts|whisper|speech/.test(lowerName)) {
-        maxInputTokens = 0; maxOutputTokens = 0;
-        supportsToolCall = false; supportsImages = false; supportsReasoning = false;
-      } else if (/dall|midjourney|stable|image/.test(lowerName)) {
-        maxInputTokens = 0; maxOutputTokens = 0;
-        supportsToolCall = false; supportsImages = true; supportsReasoning = false;
       }
 
       return {
