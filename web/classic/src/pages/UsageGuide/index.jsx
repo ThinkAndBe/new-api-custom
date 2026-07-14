@@ -18,6 +18,78 @@ import { StatusContext } from '../../context/Status';
 
 const { Title, Text, Paragraph } = Typography;
 
+// 模型参数表
+// 数据来源: 七牛云 AI 模型广场 https://www.qiniu.com/ai/models (model_constraints + architecture)
+// 七牛聚合了 DeepSeek/智谱/Qwen/Kimi/MiniMax/豆包等原厂数据，比 OpenRouter 更准确
+const MODEL_PARAMS = {
+  // ========== 智谱 GLM ==========
+  'glm-5.2':         { in: 1000000, out: 128000, tools: true,  vision: false, reasoning: true  },
+  'glm-5.1':         { in: 200000,  out: 128000, tools: true,  vision: false, reasoning: false },
+  'glm-5':           { in: 200000,  out: 128000, tools: true,  vision: false, reasoning: true  },
+  'glm-4.7':         { in: 200000,  out: 200000, tools: true,  vision: false, reasoning: true  },
+  'glm-4.7-flash':   { in: 200000,  out: 200000, tools: true,  vision: false, reasoning: true  },
+  'glm-4.6':         { in: 200000,  out: 200000, tools: true,  vision: false, reasoning: true  },
+  'glm-4.5':         { in: 131072,  out: 98304,  tools: true,  vision: false, reasoning: false },
+  // ========== DeepSeek ==========
+  'deepseek-v4-pro':     { in: 1000000, out: 384000, tools: true, vision: false, reasoning: true  },
+  'deepseek-v4-flash':   { in: 1000000, out: 384000, tools: true, vision: false, reasoning: true  },
+  'deepseek-v3.2':       { in: 128000,  out: 32000,  tools: true, vision: false, reasoning: false },
+  'deepseek-v3.1':       { in: 128000,  out: 32000,  tools: true, vision: false, reasoning: false },
+  'deepseek-v3':         { in: 128000,  out: 16000,  tools: true, vision: false, reasoning: false },
+  'deepseek-r1':         { in: 128000,  out: 32000,  tools: true, vision: false, reasoning: true  },
+  // ========== 阿里 Qwen ==========
+  'qwen3.7-max':         { in: 1000000, out: 65536,  tools: true,  vision: false, reasoning: true  },
+  'qwen3.6-plus':        { in: 1000000, out: 65536,  tools: true,  vision: true,  reasoning: true  },
+  'qwen3.6-27b':         { in: 262100,  out: 262100, tools: true,  vision: true,  reasoning: true  },
+  'qwen3.5-plus':        { in: 1000000, out: 65536,  tools: true,  vision: true,  reasoning: true  },
+  'qwen3-max':           { in: 262144,  out: 65536,  tools: true,  vision: false, reasoning: true  },
+  'qwen3-coder-plus':    { in: 262000,  out: 65536,  tools: true,  vision: false, reasoning: true  },
+  'qwen3-coder':         { in: 262000,  out: 65536,  tools: true,  vision: false, reasoning: true  },
+  'qwen3-plus':          { in: 1000000, out: 65536,  tools: true,  vision: false, reasoning: true  },
+  'qwen-turbo':          { in: 1000000, out: 8192,   tools: true,  vision: false, reasoning: true  },
+  'qwen-plus':           { in: 1000000, out: 65536,  tools: true,  vision: false, reasoning: true  },
+  'qwen3-235b':          { in: 128000,  out: 32000,  tools: true,  vision: false, reasoning: true  },
+  'qwen3-32b':           { in: 131072,  out: 32768,  tools: true,  vision: false, reasoning: true  },
+  // ========== Kimi ==========
+  'kimi-k2.7-code':      { in: 262144,  out: 262144, tools: true, vision: true,  reasoning: true  },
+  'kimi-k2.6':           { in: 262000,  out: 262000, tools: true, vision: true,  reasoning: true  },
+  'kimi-k2.5':           { in: 256000,  out: 256000, tools: true, vision: true,  reasoning: true  },
+  'kimi-k2-thinking':    { in: 256000,  out: 100000, tools: true, vision: false, reasoning: true  },
+  'kimi-k2':             { in: 128000,  out: 128000, tools: true, vision: false, reasoning: false },
+  // ========== MiniMax ==========
+  'minimax-m3':          { in: 1000000, out: 128000, tools: true, vision: true,  reasoning: true  },
+  'minimax-m2.7':        { in: 204800,  out: 128000, tools: true, vision: false, reasoning: true  },
+  'minimax-m2.5':        { in: 204800,  out: 128000, tools: true, vision: false, reasoning: true  },
+  'minimax-m2.1':        { in: 204800,  out: 128000, tools: true, vision: false, reasoning: true  },
+  'minimax-m2':          { in: 200000,  out: 128000, tools: true, vision: false, reasoning: true  },
+  // ========== 豆包 Doubao ==========
+  'doubao-seed-2.0-pro': { in: 256000,  out: 128000, tools: true, vision: true,  reasoning: true  },
+  'doubao-seed-2.0-code':{ in: 256000,  out: 128000, tools: true, vision: true,  reasoning: true  },
+  'doubao-seed-2.0-mini':{ in: 256000,  out: 32000,  tools: true, vision: true,  reasoning: true  },
+  'doubao-seed-1.6':     { in: 256000,  out: 32000,  tools: true, vision: true,  reasoning: true  },
+  'doubao-1.5-vision':   { in: 128000,  out: 16000,  tools: false, vision: true, reasoning: false },
+  'doubao-1.5-thinking': { in: 128000,  out: 16000,  tools: true, vision: false, reasoning: true  },
+  // ========== 其他 ==========
+  'hy3-preview':         { in: 262144,  out: 262144, tools: true, vision: false, reasoning: true  },
+  'longcat-flash':       { in: 256000,  out: 320000, tools: true, vision: false, reasoning: true  },
+};
+
+// 根据七牛数据匹配模型参数
+function getModelParams(modelName) {
+  // 去掉厂商前缀（z-ai/, deepseek/, moonshotai/, minimax/, qwen/, bytedance/ 等）
+  const stripped = modelName.replace(/^[a-z]+\//i, '').toLowerCase();
+  // 精确匹配
+  if (MODEL_PARAMS[stripped]) return MODEL_PARAMS[stripped];
+  // 前缀匹配
+  for (const key of Object.keys(MODEL_PARAMS)) {
+    if (stripped.startsWith(key) || stripped.includes(key)) {
+      return MODEL_PARAMS[key];
+    }
+  }
+  // 兜底
+  return { in: 128000, out: 8192, tools: true, vision: false, reasoning: false };
+}
+
 const UsageGuide = () => {
   const { t } = useTranslation();
   const [tokens, setTokens] = useState([]);
@@ -76,70 +148,18 @@ const UsageGuide = () => {
   const modelsJson = useCallback(() => {
     if (!tokenKey || userModels.length === 0) return '';
     const models = userModels.map((name) => {
-      const lowerName = name.toLowerCase();
-
-      // ========== 模型属性配置表 ==========
-      // 只配置当前实际使用的热门模型
-      let maxInputTokens = 128000;
-      let maxOutputTokens = 4096;
-      let supportsToolCall = true;
-      let supportsImages = false;
-      let supportsReasoning = false;
-
-      // --- 智谱 GLM ---
-      // 数据来源: litellm model_prices_and_context_window.json
-      if (/glm-5/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 16384;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
-      }
-      // --- DeepSeek ---
-      // deepseek-v4-pro: 100M 输入（阿里云百炼）
-      else if (/deepseek-v4-pro/.test(lowerName)) {
-        maxInputTokens = 100000000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
-      } else if (/deepseek-v4-flash|deepseek-v3/.test(lowerName)) {
-        maxInputTokens = 1000000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
-      }
-      // --- 阿里 Qwen ---
-      else if (/qwen3-coder/.test(lowerName)) {
-        maxInputTokens = 262000; maxOutputTokens = 65536;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = true;
-      } else if (/qwen3/.test(lowerName)) {
-        maxInputTokens = 262144; maxOutputTokens = 131072;
-        supportsToolCall = true; supportsImages = /vl|vision/.test(lowerName);
-        supportsReasoning = true;
-      }
-      // --- Kimi ---
-      else if (/kimi/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
-      }
-      // --- 豆包 Doubao ---
-      else if (/doubao.*vision/.test(lowerName)) {
-        maxInputTokens = 32768; maxOutputTokens = 4096;
-        supportsToolCall = true; supportsImages = true; supportsReasoning = false;
-      } else if (/doubao/.test(lowerName)) {
-        maxInputTokens = 128000; maxOutputTokens = 4096;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
-      }
-      // --- MiniMax ---
-      else if (/minimax/.test(lowerName)) {
-        maxInputTokens = 1000000; maxOutputTokens = 8192;
-        supportsToolCall = true; supportsImages = false; supportsReasoning = false;
-      }
-
+      const p = getModelParams(name);
       return {
         id: name,
         name: `ERKE ${name}`,
         provider: 'openai',
         url: `${baseUrl}/v1`,
         apiKey: tokenKey,
-        maxInputTokens,
-        maxOutputTokens,
-        supportsToolCall,
-        supportsImages,
-        supportsReasoning,
+        maxInputTokens: p.in,
+        maxOutputTokens: p.out,
+        supportsToolCall: p.tools,
+        supportsImages: p.vision,
+        supportsReasoning: p.reasoning,
       };
     });
     return JSON.stringify({ models }, null, 2);
