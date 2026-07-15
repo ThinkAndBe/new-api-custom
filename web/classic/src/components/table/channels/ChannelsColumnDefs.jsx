@@ -627,15 +627,29 @@ export const getChannelsColumns = ({
           let otherInfo = JSON.parse(record.other_info);
           let reason = otherInfo['status_reason'];
           let time = otherInfo['status_time'];
+          let recoveryAt = otherInfo['recovery_at'];
+          let tooltipContent = t('原因：') + (reason || t('未知')) + t('，时间：') + timestamp2string(time);
+          if (recoveryAt) {
+            let recoveryDate = new Date(recoveryAt * 1000);
+            let now = new Date();
+            if (recoveryDate > now) {
+              tooltipContent += t('，预计恢复：') + timestamp2string(recoveryAt);
+            } else {
+              tooltipContent += t('，已到恢复时间：') + timestamp2string(recoveryAt);
+            }
+          }
           return (
             <div>
               <Tooltip
-                content={
-                  t('原因：') + reason + t('，时间：') + timestamp2string(time)
-                }
+                content={tooltipContent}
               >
                 {renderStatus(text, record.channel_info, t)}
               </Tooltip>
+              {reason && (
+                <div style={{ fontSize: '12px', color: 'var(--semi-color-text-2)', marginTop: '2px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {reason}
+                </div>
+              )}
             </div>
           );
         } else {
