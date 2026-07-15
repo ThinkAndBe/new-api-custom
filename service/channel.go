@@ -191,6 +191,26 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 	}
 
 	lowerMessage := strings.ToLower(err.Error())
+
+	// 429 限流不自动禁用（额度还在，限流是临时的）
+	// 但额度耗尽的 429 仍需禁用（通过关键词匹配 "quota exceeded" 等）
+	if err.StatusCode == 429 {
+		// 只匹配真正的额度耗尽关键词，不匹配 "rate limit" / "too frequent" 等限流关键词
+		quotaKeywords := []string{
+			"exceeded your current quota",
+			"quota exceeded",
+			"insufficient_quota",
+			"exceeded your current balance",
+			"your credit balance is too low",
+		}
+		for _, kw := range quotaKeywords {
+			if strings.Contains(lowerMessage, kw) {
+				return true
+			}
+		}
+		return false
+	}
+
 	search, _ := AcSearch(lowerMessage, operation_setting.AutomaticDisableKeywords, true)
 	return search
 }

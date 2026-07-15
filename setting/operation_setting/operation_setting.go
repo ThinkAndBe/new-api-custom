@@ -55,7 +55,6 @@ var AutomaticDisableKeywords = []string{
 	"exceeded your current quota",
 	"quota exceeded",
 	"insufficient_quota",
-	"rate limit",
 	"Permission denied",
 	"The security token included in the request is invalid",
 	"Operation not allowed",
