@@ -202,6 +202,10 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 			"insufficient_quota",
 			"exceeded your current balance",
 			"your credit balance is too low",
+			"exceeded the",          // "exceeded the 5-hour usage quota" 等
+			"usage quota",           // "usage quota" 通用额度耗尽
+			"upgrade your plan",     // "recommend upgrading your plan"
+			"waiting for the reset", // "waiting for the reset"
 		}
 		for _, kw := range quotaKeywords {
 			if strings.Contains(lowerMessage, kw) {
