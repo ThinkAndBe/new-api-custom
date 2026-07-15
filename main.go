@@ -213,23 +213,83 @@ func main() {
 	InjectGoogleAnalytics()
 
 	// 设置路由
-	router.SetRouter(server, router.ThemeAssets{
+	themeAssets := router.ThemeAssets{
 		DefaultBuildFS:   buildFS,
 		DefaultIndexPage: indexPage,
 		ClassicBuildFS:   classicBuildFS,
 		ClassicIndexPage: classicIndexPage,
-	})
+	}
+
 	var port = os.Getenv("PORT")
 	if port == "" {
 		port = strconv.Itoa(*common.Port)
 	}
 
-	// Log startup success message
-	common.LogStartupSuccess(startTime, port)
+	webPort := os.Getenv("WEB_PORT")
 
-	err = server.Run(":" + port)
-	if err != nil {
-		common.FatalLog("failed to start HTTP server: " + err.Error())
+	if webPort != "" && webPort != port {
+		// ===== 双端口模式 =====
+		// API 端口 (PORT/3000): 只提供 relay/API 调用，不暴露 Web 管理界面
+		// Web 端口 (WEB_PORT): 完整功能，含 Web 界面 + 管理接口，仅内部访问
+
+		// API 服务器（精简路由，不含 Web 和管理接口）
+		apiServer := gin.New()
+		apiServer.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
+			common.SysLog(fmt.Sprintf("panic detected: %v", err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"message": fmt.Sprintf("Panic detected, error: %v.", err),
+					"type":    "new_api_panic",
+				},
+			})
+		}))
+		apiServer.Use(middleware.RequestId())
+		apiServer.Use(middleware.Version())
+		apiServer.Use(middleware.I18n())
+		middleware.SetUpLogger(apiServer)
+		apiServer.Use(sessions.Sessions("session", store))
+		router.SetApiOnlyRouter(apiServer)
+
+		// Web 服务器（完整路由）
+		webServer := gin.New()
+		webServer.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
+			common.SysLog(fmt.Sprintf("panic detected: %v", err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"message": fmt.Sprintf("Panic detected, error: %v.", err),
+					"type":    "new_api_panic",
+				},
+			})
+		}))
+		webServer.Use(middleware.RequestId())
+		webServer.Use(middleware.Version())
+		webServer.Use(middleware.I18n())
+		middleware.SetUpLogger(webServer)
+		webServer.Use(sessions.Sessions("session", store))
+		router.SetRouter(webServer, themeAssets)
+
+		common.SysLog(fmt.Sprintf("dual-port mode: API on :%s, Web on :%s", port, webPort))
+
+		// 启动两个 HTTP 服务器
+		go func() {
+			if err := http.ListenAndServe(":"+port, apiServer); err != nil {
+				common.FatalLog("API server failed: " + err.Error())
+			}
+		}()
+
+		common.LogStartupSuccess(startTime, port+" (API) + "+webPort+" (Web)")
+
+		if err := http.ListenAndServe(":"+webPort, webServer); err != nil {
+			common.FatalLog("Web server failed: " + err.Error())
+		}
+	} else {
+		// ===== 单端口模式（向后兼容）=====
+		router.SetRouter(server, themeAssets)
+		common.LogStartupSuccess(startTime, port)
+		err = server.Run(":" + port)
+		if err != nil {
+			common.FatalLog("failed to start HTTP server: " + err.Error())
+		}
 	}
 }
 

@@ -7,10 +7,24 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
 
 	"github.com/gin-gonic/gin"
 )
+
+// SetApiOnlyRouter 只挂载对外 API relay 路由，不挂载 Web 界面和管理接口。
+// 用于 API 端口与 Web 端口分离场景（WEB_PORT 环境变量设置时）。
+func SetApiOnlyRouter(router *gin.Engine) {
+	SetRelayRouter(router)
+	SetVideoRouter(router)
+	SetDashboardRouter(router)
+
+	// 对未知路由返回 JSON 404，不返回 Web 页面
+	router.NoRoute(func(c *gin.Context) {
+		controller.RelayNotFound(c)
+	})
+}
 
 func SetRouter(router *gin.Engine, assets ThemeAssets) {
 	SetApiRouter(router)
