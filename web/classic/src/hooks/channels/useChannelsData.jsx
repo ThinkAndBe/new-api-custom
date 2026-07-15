@@ -955,14 +955,16 @@ export const useChannelsData = () => {
     }
   };
 
-  // 测试失败时直接禁用渠道
+  // 测试失败时由后端自动判断是否禁用（ShouldDisableChannel），
+  // 前端不再手动设为 status=2，避免覆盖后端的自动禁用逻辑（status=3 + 原因 + 恢复时间）
   const handleTestFailure = (record, message) => {
+    // 仅刷新渠道列表，让后端的自动禁用状态正确显示
     if (
       message &&
       message !== '渠道已禁用' &&
       message !== '渠道已被停用'
     ) {
-      manageChannel(record.id, 'disable', record);
+      refresh();
     }
   };
 
