@@ -16,6 +16,8 @@ import (
 // SetApiOnlyRouter 只挂载对外 API relay 路由，不挂载 Web 界面和管理接口。
 // 用于 API 端口与 Web 端口分离场景（WEB_PORT 环境变量设置时）。
 func SetApiOnlyRouter(router *gin.Engine) {
+	// 全局限流，防止未认证请求洪泛
+	router.Use(middleware.GlobalAPIRateLimit())
 	SetRelayRouter(router)
 	SetVideoRouter(router)
 	SetDashboardRouter(router)
