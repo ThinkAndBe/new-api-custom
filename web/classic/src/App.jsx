@@ -55,6 +55,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const HeadroomDashboard = lazy(() => import('./pages/Headroom'));
 const About = lazy(() => import('./pages/About'));
 const UsageGuide = lazy(() => import('./pages/UsageGuide'));
+const ChatLog = lazy(() => import('./pages/ChatLog'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
@@ -304,6 +305,16 @@ function App() {
           element={
             <PrivateRoute>
               <Log />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/chat-log'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <ChatLog />
+              </Suspense>
             </PrivateRoute>
           }
         />

@@ -51,6 +51,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       headroom: true,
       token: true,
       log: true,
+      'chat-log': true,
       midjourney: true,
       task: true,
     },
@@ -230,6 +231,11 @@ export default function SettingsSidebarModulesAdmin(props) {
         { key: 'headroom', title: t('压缩看板'), description: t('Headroom 压缩节省报表') },
         { key: 'token', title: t('令牌管理'), description: t('API令牌管理') },
         { key: 'log', title: t('使用日志'), description: t('API使用记录') },
+        {
+          key: 'chat-log',
+          title: t('对话日志'),
+          description: t('用户对话内容记录'),
+        },
         {
           key: 'midjourney',
           title: t('绘图日志'),

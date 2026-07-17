@@ -75,6 +75,12 @@ func parseQuotaResetTime(reason string) int64 {
 		return t.Unix()
 	}
 
+	// 2b. 中文格式 "YYYY-MM-DD HH:MM:SS 后可继续使用"
+	timeStr2, _ := extractDateTimeWithTz(reason, `(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})`)
+	if t, ok := parseWithOptionalTz(timeStr2, ""); ok {
+		return t.Unix()
+	}
+
 	// 3. "Try again at YYYY-MM-DDTHH:MM:SSZ"（OpenAI ISO 8601）
 	if m := regexp.MustCompile(`Try again at (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)`).FindStringSubmatch(reason); len(m) >= 2 {
 		for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
@@ -204,8 +210,16 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 			"your credit balance is too low",
 			"exceeded the",          // "exceeded the 5-hour usage quota" 等
 			"usage quota",           // "usage quota" 通用额度耗尽
+			"usage limit",           // "usage limit" 额度上限
 			"upgrade your plan",     // "recommend upgrading your plan"
 			"waiting for the reset", // "waiting for the reset"
+			// 中文关键词
+			"使用上限",   // "已达到 5 小时使用上限"
+			"使用限制",
+			"额度用尽",
+			"额度耗尽",
+			"配额用尽",
+			"后可继续使用", // "2026-07-16 18:09:32 后可继续使用"
 		}
 		for _, kw := range quotaKeywords {
 			if strings.Contains(lowerMessage, kw) {

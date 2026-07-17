@@ -116,6 +116,12 @@ var MemoryCacheEnabled bool
 
 var LogConsumeEnabled = true
 
+// 对话日志（用户请求内容）相关配置
+var ChatLogEnabled = false      // 默认关闭，需管理员手动开启
+var ChatLogRetentionDays = 90   // 默认保留90天
+var ChatLogContentMaxLen = 5000 // 单条消息最大存储字符数，0表示不限制
+var ChatLogLogRoles = "user"    // 记录的角色范围，逗号分隔（可选 system/user/assistant）
+
 var TLSInsecureSkipVerify bool
 var InsecureTLSConfig = &tls.Config{InsecureSkipVerify: true}
 

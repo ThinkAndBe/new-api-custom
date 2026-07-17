@@ -40,6 +40,7 @@ const routerMap = {
   user: '/console/user',
   subscription: '/console/subscription',
   log: '/console/log',
+  'chat-log': '/console/chat-log',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
   about: '/about',
@@ -98,6 +99,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/log',
       },
       {
+        text: t('对话日志'),
+        itemKey: 'chat-log',
+        to: '/console/chat-log',
+        className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
         text: t('绘图日志'),
         itemKey: 'midjourney',
         to: '/midjourney',
@@ -128,6 +135,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     localStorage.getItem('enable_task'),
     t,
     isModuleVisible,
+    isRoot(),
   ]);
 
   const financeItems = useMemo(() => {

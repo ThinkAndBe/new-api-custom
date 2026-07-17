@@ -319,7 +319,17 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/token_summary", middleware.AdminAuth(), controller.GetLogsTokenSummary)
 		logRoute.GET("/self/token_summary", middleware.UserAuth(), controller.GetLogsSelfTokenSummary)
 
-dataRoute := apiRouter.Group("/data")
+		// 对话日志（仅超级管理员）
+		chatLogRoute := apiRouter.Group("/chat_log")
+		chatLogRoute.Use(middleware.RootAuth())
+		{
+			chatLogRoute.GET("/", controller.GetChatLogs)
+			chatLogRoute.GET("/export", controller.ExportChatLogs)
+			chatLogRoute.DELETE("/", controller.DeleteAllChatLogs)
+			chatLogRoute.DELETE("/expired", controller.DeleteExpiredChatLogs)
+		}
+
+	dataRoute := apiRouter.Group("/data")
 			dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
 			dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
 			dataRoute.GET("/channels", middleware.AdminAuth(), controller.GetQuotaDatesByChannel)

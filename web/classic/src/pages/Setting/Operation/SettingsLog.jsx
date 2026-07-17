@@ -27,6 +27,8 @@ import {
   DatePicker,
   Typography,
   Modal,
+  Checkbox,
+  InputNumber,
 } from '@douyinfe/semi-ui';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +48,10 @@ export default function SettingsLog(props) {
   const [loadingCleanHistoryLog, setLoadingCleanHistoryLog] = useState(false);
   const [inputs, setInputs] = useState({
     LogConsumeEnabled: false,
+    ChatLogEnabled: false,
+    ChatLogRetentionDays: 90,
+    ChatLogLogRoles: 'user',
+    ChatLogContentMaxLen: 5000,
     historyTimestamp: dayjs().subtract(1, 'month').toDate(),
   });
   const refForm = useRef();
@@ -179,6 +185,29 @@ export default function SettingsLog(props) {
     });
   }
 
+  // 对话日志角色勾选辅助：读取/写入 inputs.ChatLogLogRoles（逗号分隔字符串）
+  const isRoleChecked = (role) => {
+    const roles = (inputs.ChatLogLogRoles || '')
+      .split(',')
+      .map((r) => r.trim().toLowerCase())
+      .filter(Boolean);
+    return roles.includes(role);
+  };
+  const toggleRole = (role, checked) => {
+    const roles = (inputs.ChatLogLogRoles || '')
+      .split(',')
+      .map((r) => r.trim().toLowerCase())
+      .filter(Boolean);
+    let next;
+    if (checked) {
+      if (!roles.includes(role)) roles.push(role);
+      next = roles.join(',');
+    } else {
+      next = roles.filter((r) => r !== role).join(',');
+    }
+    setInputs({ ...inputs, ChatLogLogRoles: next });
+  };
+
   useEffect(() => {
     const currentInputs = {};
     for (let key in props.options) {
@@ -251,6 +280,109 @@ export default function SettingsLog(props) {
             <Row>
               <Button size='default' onClick={onSubmit}>
                 {t('保存日志设置')}
+              </Button>
+            </Row>
+          </Form.Section>
+
+          <Form.Section text={t('对话日志设置')}>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'ChatLogEnabled'}
+                  label={t('启用对话日志记录')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={(value) => {
+                    setInputs({ ...inputs, ChatLogEnabled: value });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t('记录用户请求的文本内容，仅供超级管理员审计查看')}
+                </Text>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'ChatLogRetentionDays'}
+                  label={t('保留天数')}
+                  min={0}
+                  innerButtons
+                  style={{ width: 200 }}
+                  onChange={(value) => {
+                    setInputs({ ...inputs, ChatLogRetentionDays: value });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t('0 表示永久保留，超过天数将自动清理')}
+                </Text>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'ChatLogContentMaxLen'}
+                  label={t('单条消息最大字符数')}
+                  min={0}
+                  innerButtons
+                  style={{ width: 200 }}
+                  onChange={(value) => {
+                    setInputs({ ...inputs, ChatLogContentMaxLen: value });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t('0 表示不限制，超出将截断存储')}
+                </Text>
+              </Col>
+            </Row>
+
+            <Row style={{ marginTop: 12 }}>
+              <Col span={24}>
+                <div style={{ marginBottom: 4 }}>
+                  <Text strong>{t('记录角色范围')}</Text>
+                </div>
+                <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+                  <Checkbox
+                    checked={isRoleChecked('system')}
+                    onChange={(e) => toggleRole('system', e.target.checked)}
+                  >
+                    {t('system（系统提示词）')}
+                  </Checkbox>
+                  <Checkbox
+                    checked={isRoleChecked('user')}
+                    onChange={(e) => toggleRole('user', e.target.checked)}
+                  >
+                    {t('user（用户提问）')}
+                  </Checkbox>
+                  <Checkbox
+                    checked={isRoleChecked('assistant')}
+                    onChange={(e) => toggleRole('assistant', e.target.checked)}
+                  >
+                    {t('assistant（历史回复）')}
+                  </Checkbox>
+                </div>
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t('建议只勾选 user 以减少存储。勾选的角色的消息才会被记录。')}
+                </Text>
+              </Col>
+            </Row>
+
+            <Row>
+              <Button size='default' onClick={onSubmit}>
+                {t('保存对话日志设置')}
               </Button>
             </Row>
           </Form.Section>

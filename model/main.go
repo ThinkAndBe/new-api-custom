@@ -213,6 +213,12 @@ func InitDB() (err error) {
 func InitLogDB() (err error) {
 	if os.Getenv("LOG_SQL_DSN") == "" {
 		LOG_DB = DB
+		// 共享主库时也要确保 chat_logs 表存在
+		if common.IsMasterNode {
+			if migrateErr := migrateLOGDB(); migrateErr != nil {
+				return migrateErr
+			}
+		}
 		return
 	}
 	db, err := chooseDB("LOG_SQL_DSN", true)
@@ -370,6 +376,9 @@ func migrateDBFast() error {
 func migrateLOGDB() error {
 	var err error
 	if err = LOG_DB.AutoMigrate(&Log{}); err != nil {
+		return err
+	}
+	if err = LOG_DB.AutoMigrate(&ChatLog{}); err != nil {
 		return err
 	}
 	return nil

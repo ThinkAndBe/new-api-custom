@@ -37,6 +37,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     headroom: true,
     token: true,
     log: true,
+    'chat-log': true,
     midjourney: true,
     task: true,
   },

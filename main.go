@@ -116,6 +116,9 @@ func main() {
 	// 渠道定时暂停任务（自动根据配置的时间窗口切换状态 1↔4）
 	service.StartChannelSchedulePauseTask()
 
+	// 对话日志定时清理任务（自动删除超过保留期的记录）
+	service.StartChatLogCleanupTask()
+
 	// 渠道健康监测任务（定时探活，连续失败自动熔断，恢复后自动启用）
 	controller.StartChannelHealthMonitorTask()
 
