@@ -63,16 +63,18 @@ func truncateText(text string) string {
 // stripInjectedContent 剥离系统/工具注入的提示词，只保留用户真实输入内容
 // 只返回最后一条用户输入（去掉所有历史对话和系统注入）
 func stripInjectedContent(text string) string {
-	// 移除 <system-reminder>...</system-reminder>
+	// 移除 XML 标签包裹的注入内容
 	text = removeXMLTag(text, "system-reminder")
-	// 移除 <environment>...</environment>
 	text = removeXMLTag(text, "environment")
-	// 移除 <tool_call>...</tool_call>
 	text = removeXMLTag(text, "tool_call")
-	// 移除 <function_results>...</function_results>
 	text = removeXMLTag(text, "function_results")
-	// 移除 <antThinking>...</antThinking>
 	text = removeXMLTag(text, "antThinking")
+
+	// 移除其他常见的 AI 工具注入标签
+	text = removeXMLTag(text, "user_query")
+	text = removeXMLTag(text, "thinking")
+	text = removeXMLTag(text, "instructions")
+	text = removeXMLTag(text, "context")
 
 	// 按行分割，去掉空行
 	lines := strings.Split(text, "\n")
@@ -87,23 +89,43 @@ func stripInjectedContent(text string) string {
 		return ""
 	}
 
-	// 取最后一个非空行
-	result := nonEmptyLines[len(nonEmptyLines)-1]
-
-	// 过滤掉媒体占位符等非用户输入内容
+	// 从后往前找第一条真正的用户输入
+	// 跳过媒体占位符、工具指令等
 	mediaMarkers := []string{
 		"[Media omitted from provider request",
 		"[Attached image/",
 		"[Attached file/",
+		"[Attached video/",
 	}
-	for _, marker := range mediaMarkers {
-		if strings.HasPrefix(result, marker) {
-			// 如果最后一条是媒体占位符，取倒数第二条
-			if len(nonEmptyLines) >= 2 {
-				result = nonEmptyLines[len(nonEmptyLines)-2]
-			} else {
-				return ""
+	// 指令类行特征（非用户真实输入）
+	instructionPrefixes := []string{
+		"Include verbatim",
+		"Continue the previous",
+		"Resume from",
+		"Pick up where",
+	}
+
+	result := ""
+	for i := len(nonEmptyLines) - 1; i >= 0; i-- {
+		line := nonEmptyLines[i]
+		skip := false
+		for _, marker := range mediaMarkers {
+			if strings.HasPrefix(line, marker) {
+				skip = true
+				break
 			}
+		}
+		if !skip {
+			for _, prefix := range instructionPrefixes {
+				if strings.HasPrefix(line, prefix) {
+					skip = true
+					break
+				}
+			}
+		}
+		if !skip {
+			result = line
+			break
 		}
 	}
 
