@@ -133,6 +133,36 @@ func stripInjectedContent(text string) string {
 		"SELECT ", "INSERT ", "UPDATE ", "DELETE ", "CREATE ",
 	}
 
+	// AI Agent 工具报告/指令类内容（非用户真实输入）
+	reportPatterns := []string{
+		"Report in",
+		"report in",
+		"Be thorough",
+		"be thorough",
+		"be concise",
+		"Be concise",
+		"Explore",
+		"explore",
+		"Analyze",
+		"analyze",
+		"Working directory:",
+		"Search the entire",
+		"Read the",
+		"Check the",
+		"Please do a",
+		"Please read",
+		"Based on",
+		"Summarize",
+		"summarize",
+		"structured summary",
+		"subagent",
+		"Subagent",
+		"Retrieve more:",
+		"compressed to",
+		"[items compressed",
+		"hash=",
+	}
+
 	result := ""
 	for i := len(nonEmptyLines) - 1; i >= 0; i-- {
 		line := nonEmptyLines[i]
@@ -149,6 +179,15 @@ func stripInjectedContent(text string) string {
 		if !skip {
 			for _, prefix := range codePrefixes {
 				if strings.HasPrefix(line, prefix) {
+					skip = true
+					break
+				}
+			}
+		}
+		// 检查 AI Agent 报告/指令
+		if !skip {
+			for _, pattern := range reportPatterns {
+				if strings.Contains(line, pattern) {
 					skip = true
 					break
 				}
