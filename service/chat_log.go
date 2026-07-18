@@ -90,39 +90,75 @@ func stripInjectedContent(text string) string {
 	}
 
 	// 从后往前找第一条真正的用户输入
-	// 跳过媒体占位符、工具指令等
-	mediaMarkers := []string{
+	// 跳过媒体占位符、工具指令、系统安全规则等
+	skipPrefixes := []string{
+		// 媒体占位符
 		"[Media omitted from provider request",
 		"[Attached image/",
 		"[Attached file/",
 		"[Attached video/",
-	}
-	// 指令类行特征（非用户真实输入）
-	instructionPrefixes := []string{
+		// 工具指令
 		"Include verbatim",
 		"Continue the previous",
 		"Resume from",
 		"Pick up where",
+		// 系统安全规则（常见的注入内容）
+		"- Never",
+		"- Always",
+		"- Do not",
+		"- You must",
+		"- You are",
+		"- If you",
+		"- The user",
+		"- This is",
+		"- Remember",
+		"- Please",
+		"- Use",
+		"Never produce",
+		"Always respond",
+		"You are",
+		"Remember:",
+		"IMPORTANT:",
+		"Note:",
+		"Warning:",
+	}
+
+	// 代码片段特征（以这些开头说明不是用户输入）
+	codePrefixes := []string{
+		"import ", "package ", "func ", "var ", "const ", "type ",
+		"public ", "private ", "class ", "def ", "return ",
+		"if ", "for ", "while ", "switch ", "case ",
+		"{", "}", "//", "/*", "*/", "#include",
+		"<div", "<span", "<html", "<script", "<css",
+		"SELECT ", "INSERT ", "UPDATE ", "DELETE ", "CREATE ",
 	}
 
 	result := ""
 	for i := len(nonEmptyLines) - 1; i >= 0; i-- {
 		line := nonEmptyLines[i]
 		skip := false
-		for _, marker := range mediaMarkers {
-			if strings.HasPrefix(line, marker) {
+
+		// 检查跳过的前缀
+		for _, prefix := range skipPrefixes {
+			if strings.HasPrefix(line, prefix) {
 				skip = true
 				break
 			}
 		}
+		// 检查代码片段
 		if !skip {
-			for _, prefix := range instructionPrefixes {
+			for _, prefix := range codePrefixes {
 				if strings.HasPrefix(line, prefix) {
 					skip = true
 					break
 				}
 			}
 		}
+		// 太短的行（可能是分隔符或标记）
+		if !skip && len(line) < 3 {
+			skip = true
+		}
+
 		if !skip {
 			result = line
 			break

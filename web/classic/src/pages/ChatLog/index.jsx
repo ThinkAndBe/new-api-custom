@@ -46,6 +46,7 @@ const ChatLog = () => {
       if (formData.username) params.set('username', formData.username);
       if (formData.model_name) params.set('model_name', formData.model_name);
       if (formData.token_name) params.set('token_name', formData.token_name);
+      if (formData.group) params.set('group', formData.group);
       if (formData.dateRange && formData.dateRange.length === 2) {
         params.set('start_timestamp', String(Math.floor(formData.dateRange[0].getTime() / 1000)));
         params.set('end_timestamp', String(Math.floor(formData.dateRange[1].getTime() / 1000)));
@@ -253,8 +254,8 @@ const ChatLog = () => {
           autoComplete='off'
           labelPosition='inset'
         >
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 mb-3'>
-            <div className='col-span-1 lg:col-span-2'>
+          <div className='flex flex-wrap items-center gap-2 mb-3'>
+            <div style={{ width: 360 }}>
               <Form.DatePicker
                 field='dateRange'
                 label={t('时间范围')}
@@ -268,23 +269,26 @@ const ChatLog = () => {
             <Form.Input
               field='username'
               label={t('用户')}
-              placeholder={t('输入用户名')}
+              placeholder={t('用户名')}
               showClear
               density='compact'
+              style={{ width: 150 }}
             />
             <Form.Input
               field='model_name'
               label={t('模型')}
-              placeholder={t('输入模型名称')}
+              placeholder={t('模型名称')}
               showClear
               density='compact'
+              style={{ width: 150 }}
             />
             <Form.Input
-              field='token_name'
-              label={t('令牌')}
-              placeholder={t('输入令牌名称')}
+              field='group'
+              label={t('分组')}
+              placeholder={t('分组')}
               showClear
               density='compact'
+              style={{ width: 150 }}
             />
           </div>
           <div className='flex gap-2 mb-3'>

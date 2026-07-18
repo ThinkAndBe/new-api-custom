@@ -30,6 +30,7 @@ type ChatLogFilter struct {
 	Username  string
 	ModelName string
 	TokenName string
+	Group     string
 	StartId   int
 	EndId     int
 	StartTime int64
@@ -50,11 +51,11 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 			return
 		}
 	}
-	// 去重2：同一用户 60 秒内相同内容只记录一次（防止重试产生不同 request_id 的重复）
+	// 去重2：同一用户 10 分钟内相同内容只记录一次（防止重试/多渠道产生不同 request_id 的重复）
 	if info.UserId > 0 && content != "" {
-		oneMinuteAgo := time.Now().Unix() - 60
+		tenMinutesAgo := time.Now().Unix() - 600
 		var count int64
-		LOG_DB.Model(&ChatLog{}).Where("user_id = ? AND request_content = ? AND created_at > ?", info.UserId, content, oneMinuteAgo).Count(&count)
+		LOG_DB.Model(&ChatLog{}).Where("user_id = ? AND request_content = ? AND created_at > ?", info.UserId, content, tenMinutesAgo).Count(&count)
 		if count > 0 {
 			return
 		}
@@ -106,6 +107,9 @@ func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, e
 	}
 	if filter.TokenName != "" {
 		tx = tx.Where("token_name = ?", filter.TokenName)
+	}
+	if filter.Group != "" {
+		tx = tx.Where("`group` = ?", filter.Group)
 	}
 	if filter.StartId != 0 {
 		tx = tx.Where("id >= ?", filter.StartId)
@@ -175,6 +179,9 @@ func StreamAllChatLogs(filter ChatLogFilter, callback func(*ChatLog) error) erro
 	}
 	if filter.TokenName != "" {
 		tx = tx.Where("token_name = ?", filter.TokenName)
+	}
+	if filter.Group != "" {
+		tx = tx.Where("`group` = ?", filter.Group)
 	}
 	if filter.StartId != 0 {
 		tx = tx.Where("id >= ?", filter.StartId)

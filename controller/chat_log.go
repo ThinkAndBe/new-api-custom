@@ -20,6 +20,7 @@ func GetChatLogs(c *gin.Context) {
 	username := c.Query("username")
 	modelName := c.Query("model_name")
 	tokenName := c.Query("token_name")
+	groupName := c.Query("group")
 	startId, _ := strconv.Atoi(c.Query("start_id"))
 	endId, _ := strconv.Atoi(c.Query("end_id"))
 	startTime, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
@@ -30,6 +31,7 @@ func GetChatLogs(c *gin.Context) {
 		Username:  username,
 		ModelName: modelName,
 		TokenName: tokenName,
+		Group:     groupName,
 		StartId:   startId,
 		EndId:     endId,
 		StartTime: startTime,
@@ -60,6 +62,7 @@ func ExportChatLogs(c *gin.Context) {
 	username := c.Query("username")
 	modelName := c.Query("model_name")
 	tokenName := c.Query("token_name")
+	groupName := c.Query("group")
 	startId, _ := strconv.Atoi(c.Query("start_id"))
 	endId, _ := strconv.Atoi(c.Query("end_id"))
 	startTime, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
@@ -70,6 +73,7 @@ func ExportChatLogs(c *gin.Context) {
 		Username:  username,
 		ModelName: modelName,
 		TokenName: tokenName,
+		Group:     groupName,
 		StartId:   startId,
 		EndId:     endId,
 		StartTime: startTime,
