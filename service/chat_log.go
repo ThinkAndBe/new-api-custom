@@ -75,15 +75,24 @@ func stripInjectedContent(text string) string {
 	text = removeXMLTag(text, "thinking")
 	text = removeXMLTag(text, "instructions")
 	text = removeXMLTag(text, "context")
+	text = removeXMLTag(text, "additional_data")
+	text = removeXMLTag(text, "additional_info")
+	text = removeXMLTag(text, "metadata")
+	text = removeXMLTag(text, "system")
 
-	// 按行分割，去掉空行
+	// 按行分割，去掉空行和残留的标签行（XML 标签未完整匹配时残留）
 	lines := strings.Split(text, "\n")
 	var nonEmptyLines []string
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed != "" {
-			nonEmptyLines = append(nonEmptyLines, trimmed)
+		if trimmed == "" {
+			continue
 		}
+		// 跳过残留的标签行（如 </additional_data>、<context> 等未匹配的标签）
+		if strings.HasPrefix(trimmed, "</") || (strings.HasPrefix(trimmed, "<") && strings.HasSuffix(trimmed, ">") && !strings.Contains(trimmed, " ")) {
+			continue
+		}
+		nonEmptyLines = append(nonEmptyLines, trimmed)
 	}
 	if len(nonEmptyLines) == 0 {
 		return ""
