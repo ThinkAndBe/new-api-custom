@@ -68,6 +68,10 @@ const OperationSetting = () => {
 
     /* 日志设置 */
     LogConsumeEnabled: false,
+    ChatLogEnabled: false,
+    ChatLogLogRoles: 'user',
+    ChatLogRetentionDays: 90,
+    ChatLogContentMaxLen: 5000,
 
     /* 监控设置 */
     ChannelDisableThreshold: 0,

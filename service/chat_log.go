@@ -20,8 +20,9 @@ func ExtractRequestContent(req dto.Request) string {
 	}
 
 	allowedRoles := parseAllowedRoles(common.ChatLogLogRoles)
+	// 未配置角色时默认只记录 user 角色（避免配置缺失导致完全不记录）
 	if len(allowedRoles) == 0 {
-		return ""
+		allowedRoles = map[string]bool{"user": true}
 	}
 
 	switch r := req.(type) {
