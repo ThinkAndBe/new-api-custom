@@ -98,119 +98,35 @@ func stripInjectedContent(text string) string {
 		return ""
 	}
 
-	// 从后往前找第一条真正的用户输入
-	// 跳过媒体占位符、工具指令、系统安全规则等
-	skipPrefixes := []string{
-		// 媒体占位符
+	// 保守模式：从后往前找第一条非空内容
+	// 只跳过明显的媒体占位符（非用户输入），其他一律保留以避免误伤用户真实输入
+	mediaPlaceholders := []string{
 		"[Media omitted from provider request",
 		"[Attached image/",
 		"[Attached file/",
 		"[Attached video/",
-		// 工具指令
-		"Include verbatim",
-		"Continue the previous",
-		"Resume from",
-		"Pick up where",
-		// 系统安全规则（常见的注入内容）
-		"- Never",
-		"- Always",
-		"- Do not",
-		"- You must",
-		"- You are",
-		"- If you",
-		"- The user",
-		"- This is",
-		"- Remember",
-		"- Please",
-		"- Use",
-		"Never produce",
-		"Always respond",
-		"You are",
-		"Remember:",
-		"IMPORTANT:",
-		"Note:",
-		"Warning:",
-	}
-
-	// 代码片段特征（以这些开头说明不是用户输入）
-	codePrefixes := []string{
-		"import ", "package ", "func ", "var ", "const ", "type ",
-		"public ", "private ", "class ", "def ", "return ",
-		"if ", "for ", "while ", "switch ", "case ",
-		"{", "}", "//", "/*", "*/", "#include",
-		"<div", "<span", "<html", "<script", "<css",
-		"SELECT ", "INSERT ", "UPDATE ", "DELETE ", "CREATE ",
-	}
-
-	// AI Agent 工具报告/指令类内容（非用户真实输入）
-	reportPatterns := []string{
-		"Report in",
-		"report in",
-		"Be thorough",
-		"be thorough",
-		"be concise",
-		"Be concise",
-		"Explore",
-		"explore",
-		"Analyze",
-		"analyze",
-		"Working directory:",
-		"Search the entire",
-		"Read the",
-		"Check the",
-		"Please do a",
-		"Please read",
-		"Based on",
-		"Summarize",
-		"summarize",
-		"structured summary",
-		"subagent",
-		"Subagent",
-		"Retrieve more:",
-		"compressed to",
-		"[items compressed",
-		"hash=",
 	}
 
 	result := ""
 	for i := len(nonEmptyLines) - 1; i >= 0; i-- {
 		line := nonEmptyLines[i]
 		skip := false
-
-		// 检查跳过的前缀
-		for _, prefix := range skipPrefixes {
+		// 只跳过明显的媒体占位符
+		for _, prefix := range mediaPlaceholders {
 			if strings.HasPrefix(line, prefix) {
 				skip = true
 				break
 			}
 		}
-		// 检查代码片段
-		if !skip {
-			for _, prefix := range codePrefixes {
-				if strings.HasPrefix(line, prefix) {
-					skip = true
-					break
-				}
-			}
-		}
-		// 检查 AI Agent 报告/指令
-		if !skip {
-			for _, pattern := range reportPatterns {
-				if strings.Contains(line, pattern) {
-					skip = true
-					break
-				}
-			}
-		}
-		// 太短的行（可能是分隔符或标记）
-		if !skip && len(line) < 3 {
-			skip = true
-		}
-
 		if !skip {
 			result = line
 			break
 		}
+	}
+
+	// 如果最后一条都是媒体占位符（比如纯图片请求），就保留原内容第一条
+	if result == "" {
+		result = nonEmptyLines[len(nonEmptyLines)-1]
 	}
 
 	return result
