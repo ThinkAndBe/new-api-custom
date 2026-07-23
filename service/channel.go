@@ -90,6 +90,25 @@ func parseQuotaResetTime(reason string) int64 {
 		return t.Unix()
 	}
 
+	// 2c. "reset at MM-DD HH:MM:SS UTC" 格式（阿里云 DashScope，无年份）
+	// 补充当前年份
+	mmddRe := regexp.MustCompile(`reset at (\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\s*(\w+)?`)
+	if mm := mmddRe.FindStringSubmatch(reason); len(mm) >= 6 {
+		year := now.Year()
+		timeStr := fmt.Sprintf("%d-%s-%s %s:%s:%s", year, mm[1], mm[2], mm[3], mm[4], mm[5])
+		tzStr := ""
+		if len(mm) >= 7 && mm[6] != "" {
+			tzStr = mm[6]
+		}
+		if t, ok := parseWithOptionalTz(timeStr, tzStr); ok {
+			// 如果解析出的时间已经过去超过 7 天，可能是去年（跨年）
+			if t.Before(now.AddDate(0, 0, -7)) {
+				t = t.AddDate(1, 0, 0)
+			}
+			return t.Unix()
+		}
+	}
+
 	// 3. "Try again at YYYY-MM-DDTHH:MM:SSZ"（OpenAI ISO 8601）
 	if m := regexp.MustCompile(`Try again at (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)`).FindStringSubmatch(reason); len(m) >= 2 {
 		for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
@@ -179,37 +198,73 @@ func isLikelyQuotaError(reason string) bool {
 	return false
 }
 
-// IsQuotaExhaustedError 判断错误是否为额度耗尽类 429（非限流）
-// 用于在重试循环结束后增强错误信息（返回可用模型和恢复时间）
-func IsQuotaExhaustedError(err *types.NewAPIError) bool {
-	if err == nil || err.StatusCode != 429 {
-		return false
-	}
-	lowerMessage := strings.ToLower(err.Error())
-	quotaKeywords := []string{
-		"exceeded your current quota",
-		"quota exceeded",
-		"insufficient_quota",
-		"exceeded your current balance",
-		"your credit balance is too low",
-		"exceeded the",
-		"usage quota",
-		"usage limit",
-		"upgrade your plan",
-		"waiting for the reset",
-		"使用上限",
-		"使用限制",
-		"额度用尽",
-		"额度耗尽",
-		"配额用尽",
-		"后可继续使用",
-	}
-	for _, kw := range quotaKeywords {
+// quotaExhaustedKeywords 额度耗尽的错误关键词（英文+中文）
+// 用于检测 429 状态码下是"额度耗尽"还是"临时限流"
+// 统一列表，ShouldDisableChannel 和 IsQuotaExhaustedError 共用
+var quotaExhaustedKeywords = []string{
+	// 英文 - OpenAI/通用
+	"exceeded your current quota",
+	"quota exceeded",
+	"insufficient_quota",
+	"exceeded your current balance",
+	"your credit balance is too low",
+	"exceeded the",
+	"usage quota",
+	"usage limit",
+	"upgrade your plan",
+	"waiting for the reset",
+	// 英文 - 阿里云 DashScope
+	"out of available credits",
+	"insufficient balance",
+	"account balance is not enough",
+	"balance is not enough",
+	"no enough balance",
+	// 英文 - Kimi / Moonshot
+	"does not have enough balance",
+	"not enough balance",
+	// 英文 - 通用余额/额度
+	"insufficient credit",
+	"out of credit",
+	"credit balance",
+	"billing limit",
+	"spending limit",
+	"billing_hard_limit_reached",
+	// 中文
+	"使用上限",
+	"使用限制",
+	"额度用尽",
+	"额度耗尽",
+	"额度不足",
+	"配额用尽",
+	"配额不足",
+	"余额不足",
+	"余额耗尽",
+	"余额用尽",
+	"后可继续使用",
+	"请充值",
+}
+
+// isQuotaExhaustedByKeywords 通过关键词判断是否为额度耗尽
+func isQuotaExhaustedByKeywords(lowerMessage string) bool {
+	for _, kw := range quotaExhaustedKeywords {
 		if strings.Contains(lowerMessage, kw) {
 			return true
 		}
 	}
 	return false
+}
+
+// IsQuotaExhaustedError 判断错误是否为额度耗尽类错误（非临时限流）
+// 用于在重试循环结束后增强错误信息（返回可用模型和恢复时间）
+// 覆盖 429（OpenAI/阿里云等）和 403（Kimi 等）两种常见状态码
+func IsQuotaExhaustedError(err *types.NewAPIError) bool {
+	if err == nil {
+		return false
+	}
+	if err.StatusCode != 429 && err.StatusCode != 403 {
+		return false
+	}
+	return isQuotaExhaustedByKeywords(strings.ToLower(err.Error()))
 }
 
 // isQuotaExhaustedReason 从错误原因字符串判断是否为额度耗尽
@@ -218,37 +273,7 @@ func isQuotaExhaustedReason(reason string) bool {
 	if reason == "" {
 		return false
 	}
-	// 检查是否含 429 状态码 + 额度关键词
-	if !strings.Contains(reason, "429") && !strings.Contains(reason, "quota") &&
-		!strings.Contains(reason, "额度") && !strings.Contains(reason, "配额") &&
-		!strings.Contains(reason, "使用上限") {
-		return false
-	}
-	lower := strings.ToLower(reason)
-	quotaKeywords := []string{
-		"exceeded your current quota",
-		"quota exceeded",
-		"insufficient_quota",
-		"exceeded your current balance",
-		"your credit balance is too low",
-		"exceeded the",
-		"usage quota",
-		"usage limit",
-		"upgrade your plan",
-		"waiting for the reset",
-		"使用上限",
-		"使用限制",
-		"额度用尽",
-		"额度耗尽",
-		"配额用尽",
-		"后可继续使用",
-	}
-	for _, kw := range quotaKeywords {
-		if strings.Contains(lower, kw) {
-			return true
-		}
-	}
-	return false
+	return isQuotaExhaustedByKeywords(strings.ToLower(reason))
 }
 
 func EnableChannel(channelId int, usingKey string, channelName string) {
@@ -279,35 +304,10 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 
 	lowerMessage := strings.ToLower(err.Error())
 
-	// 429 限流不自动禁用（额度还在，限流是临时的）
-	// 但额度耗尽的 429 仍需禁用（通过关键词匹配 "quota exceeded" 等）
-	if err.StatusCode == 429 {
-		// 只匹配真正的额度耗尽关键词，不匹配 "rate limit" / "too frequent" 等限流关键词
-		quotaKeywords := []string{
-			"exceeded your current quota",
-			"quota exceeded",
-			"insufficient_quota",
-			"exceeded your current balance",
-			"your credit balance is too low",
-			"exceeded the",          // "exceeded the 5-hour usage quota" 等
-			"usage quota",           // "usage quota" 通用额度耗尽
-			"usage limit",           // "usage limit" 额度上限
-			"upgrade your plan",     // "recommend upgrading your plan"
-			"waiting for the reset", // "waiting for the reset"
-			// 中文关键词
-			"使用上限",   // "已达到 5 小时使用上限"
-			"使用限制",
-			"额度用尽",
-			"额度耗尽",
-			"配额用尽",
-			"后可继续使用", // "2026-07-16 18:09:32 后可继续使用"
-		}
-		for _, kw := range quotaKeywords {
-			if strings.Contains(lowerMessage, kw) {
-				return true
-			}
-		}
-		return false
+	// 429/403 可能是额度耗尽也可能是临时限流/权限问题
+	// 通过关键词匹配区分：只有额度耗尽才禁用，临时限流不禁用
+	if err.StatusCode == 429 || err.StatusCode == 403 {
+		return isQuotaExhaustedByKeywords(lowerMessage)
 	}
 
 	search, _ := AcSearch(lowerMessage, operation_setting.AutomaticDisableKeywords, true)
