@@ -349,7 +349,10 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	if channel == nil {
 		// 区分"渠道临时禁用"和"模型未配置"，给出更准确的错误信息
 		if model.HasDisabledChannel(selectGroup, info.OriginModelName) {
-			return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的渠道当前临时不可用（可能已被自动禁用），请稍后重试", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+			unavailInfo := service.BuildChannelUnavailableInfo(c, selectGroup, info.OriginModelName)
+			msg := fmt.Sprintf("分组 %s 下模型 %s 的渠道当前临时不可用%s。您当前可用的模型：%s",
+				selectGroup, info.OriginModelName, unavailInfo.RecoveryTimeHint, unavailInfo.AvailableModelsHint)
+			return nil, types.NewError(errors.New(msg), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 		}
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}

@@ -274,6 +274,16 @@ func HasDisabledChannel(group, model string) bool {
 	return count > 0
 }
 
+// GetDisabledChannelIds 返回该 group+model 下所有被禁用(enabled=false)的渠道 ID
+func GetDisabledChannelIds(group, model string) []int {
+	var ids []int
+	DB.Model(&Ability{}).
+		Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, false).
+		Distinct("channel_id").
+		Pluck("channel_id", &ids)
+	return ids
+}
+
 func UpdateAbilityStatusByTag(tag string, status bool) error {
 	return DB.Model(&Ability{}).Where("tag = ?", tag).Select("enabled").Update("enabled", status).Error
 }

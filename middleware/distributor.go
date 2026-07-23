@@ -155,9 +155,24 @@ func Distribute() func(c *gin.Context) {
 					if channel == nil {
 						// 检查是否是渠道临时禁用（而非模型未配置），给出更准确的错误提示
 						if model.HasDisabledChannel(usingGroup, modelRequest.Model) {
-							abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
-								i18n.T(c, i18n.MsgDistributorChannelTempUnavailable, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}),
-								types.ErrorCodeGetChannelFailed)
+							// 获取可用模型列表 + 恢复时间，帮助用户切换到可用模型
+							unavailInfo := service.BuildChannelUnavailableInfo(c, usingGroup, modelRequest.Model)
+							message := i18n.T(c, i18n.MsgDistributorChannelTempUnavailable, map[string]any{
+								"Group":            usingGroup,
+								"Model":            modelRequest.Model,
+								"RecoveryTime":     unavailInfo.RecoveryTimeHint,
+								"AvailableModels":  unavailInfo.AvailableModelsHint,
+							})
+							extra := map[string]any{}
+							if len(unavailInfo.AvailableModels) > 0 {
+								extra["available_models"] = unavailInfo.AvailableModels
+							}
+							if unavailInfo.RecoveryAt > 0 {
+								extra["recovery_at"] = unavailInfo.RecoveryAt
+								extra["recovery_at_readable"] = unavailInfo.RecoveryAtReadable
+							}
+							abortWithOpenAiMessageExtra(c, http.StatusServiceUnavailable,
+								message, types.ErrorCodeGetChannelFailed, extra)
 						} else {
 							abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
 								i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}),

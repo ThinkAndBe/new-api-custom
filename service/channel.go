@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -8,10 +9,13 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
+
+	"github.com/gin-gonic/gin"
 )
 
 func formatNotifyType(channelId int, status int) string {
@@ -244,4 +248,100 @@ func ShouldEnableChannel(newAPIError *types.NewAPIError, status int) bool {
 		return false
 	}
 	return true
+}
+
+// ChannelUnavailableInfo 渠道不可用时的详细信息
+type ChannelUnavailableInfo struct {
+	AvailableModels     []string
+	RecoveryAt          int64
+	RecoveryAtReadable  string
+	RecoveryTimeHint    string // 用于嵌入错误消息的恢复时间提示（如 "，预计恢复时间：2026-07-23 18:00:00"）
+	AvailableModelsHint string // 用于嵌入错误消息的可用模型列表（如 "gpt-4o, claude-3.5-sonnet"）
+}
+
+// isChineseContext 通过 Accept-Language 头判断请求是否为中文环境
+func isChineseContext(c *gin.Context) bool {
+	lang := c.GetHeader("Accept-Language")
+	return strings.Contains(lang, "zh")
+}
+
+// BuildChannelUnavailableInfo 构建渠道不可用时的详细信息（可用模型 + 恢复时间）
+// 用于在返回"渠道临时不可用"错误时，同时告诉用户能用什么模型以及什么时候能恢复
+func BuildChannelUnavailableInfo(c *gin.Context, usingGroup, modelName string) ChannelUnavailableInfo {
+	info := ChannelUnavailableInfo{}
+
+	// 1. 获取用户可用模型列表
+	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	var groupsToCheck []string
+	if usingGroup == "auto" {
+		if userGroup == "" {
+			userGroup, _ = model.GetUserGroup(c.GetInt("id"), false)
+		}
+		groupsToCheck = GetUserAutoGroup(userGroup)
+		_ = tokenGroup // tokenGroup is not needed here
+	} else {
+		groupsToCheck = []string{usingGroup}
+	}
+
+	var availableModels []string
+	for _, g := range groupsToCheck {
+		groupModels := model.GetGroupEnabledModels(g)
+		for _, m := range groupModels {
+			if m == modelName {
+				continue // 排除当前请求的（不可用的）模型
+			}
+			if !common.StringsContains(availableModels, m) {
+				availableModels = append(availableModels, m)
+			}
+		}
+	}
+	// 限制最多 20 个，避免消息过长
+	if len(availableModels) > 20 {
+		availableModels = availableModels[:20]
+	}
+	info.AvailableModels = availableModels
+	info.AvailableModelsHint = strings.Join(availableModels, ", ")
+
+	// 2. 获取被禁用渠道的恢复时间（取最早的恢复时间）
+	var earliestRecovery int64
+	for _, g := range groupsToCheck {
+		disabledIds := model.GetDisabledChannelIds(g, modelName)
+		for _, cid := range disabledIds {
+			ch, err := model.GetChannelById(cid, true)
+			if err != nil || ch == nil {
+				continue
+			}
+			otherInfo := ch.GetOtherInfo()
+			if recoveryAt, ok := otherInfo["recovery_at"]; ok {
+				var ts int64
+				switch v := recoveryAt.(type) {
+				case float64:
+					ts = int64(v)
+				case int64:
+					ts = v
+				case json.Number:
+					ts, _ = v.Int64()
+				}
+				if ts > 0 {
+					if earliestRecovery == 0 || ts < earliestRecovery {
+						earliestRecovery = ts
+					}
+				}
+			}
+		}
+	}
+
+	if earliestRecovery > 0 {
+		info.RecoveryAt = earliestRecovery
+		info.RecoveryAtReadable = time.Unix(earliestRecovery, 0).Format("2006-01-02 15:04:05")
+		// 根据请求语言格式化恢复时间提示
+		if isChineseContext(c) {
+			info.RecoveryTimeHint = fmt.Sprintf("，预计恢复时间：%s", info.RecoveryAtReadable)
+		} else {
+			info.RecoveryTimeHint = fmt.Sprintf(", estimated recovery: %s", info.RecoveryAtReadable)
+		}
+	}
+
+	return info
 }
