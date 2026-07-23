@@ -259,6 +259,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
 
+		// 如果是额度耗尽类 429，同步从内存缓存中移除该渠道，避免重试时重复选到同一渠道
+		// processChannelError 的禁用是异步的（gopool.Go），来不及在下次重试前生效
+		if service.IsQuotaExhaustedError(newAPIError) && channel.GetAutoBan() {
+			model.CacheUpdateChannelStatus(channel.Id, common.ChannelStatusAutoDisabled)
+		}
+
 		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
 			break
 		}
