@@ -271,6 +271,23 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			relayInfo.OriginModelName, retryParam.GetRetry(), newAPIError.Error()))
 	}
 
+	// 重试循环结束后，如果最终错误是额度耗尽类 429，增强错误信息
+	// 告诉用户当前可用的模型和恢复时间
+	if newAPIError != nil && newAPIError.StatusCode == 429 &&
+		service.IsQuotaExhaustedError(newAPIError) {
+		unavailInfo := service.BuildChannelUnavailableInfo(c, relayInfo.UsingGroup, relayInfo.OriginModelName)
+		if len(unavailInfo.AvailableModels) > 0 || unavailInfo.RecoveryAt > 0 {
+			enhancedMsg := fmt.Sprintf("模型 %s 的所有渠道额度已耗尽%s。您当前可用的模型：%s",
+				relayInfo.OriginModelName, unavailInfo.RecoveryTimeHint, unavailInfo.AvailableModelsHint)
+			newAPIError = types.NewErrorWithStatusCode(
+				errors.New(enhancedMsg),
+				types.ErrorCodeGetChannelFailed,
+				http.StatusServiceUnavailable,
+				types.ErrOptionWithSkipRetry(),
+			)
+		}
+	}
+
 	useChannel := c.GetStringSlice("use_channel")
 	if len(useChannel) > 1 {
 		retryLogStr := fmt.Sprintf("重试：%s", strings.Trim(strings.Join(strings.Fields(fmt.Sprint(useChannel)), "->"), "[]"))

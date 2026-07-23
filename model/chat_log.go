@@ -70,6 +70,11 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 	if len(tokenDisplay) > 12 {
 		tokenDisplay = tokenDisplay[:8] + "..." + tokenDisplay[len(tokenDisplay)-4:]
 	}
+	// 优先使用 UsingGroup（本次请求实际使用的分组），其次 UserGroup
+	group := info.UsingGroup
+	if group == "" {
+		group = info.UserGroup
+	}
 	log := &ChatLog{
 		UserId:         info.UserId,
 		Username:       username,
@@ -78,7 +83,7 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 		ChannelId:      info.ChannelId,
 		RequestId:      info.RequestId,
 		ModelName:      info.OriginModelName,
-		Group:          info.UserGroup,
+		Group:          group,
 		RequestContent: content,
 		IsStream:       info.IsStream,
 		CreatedAt:      time.Now().Unix(),
@@ -109,7 +114,7 @@ func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, e
 		tx = tx.Where("token_name = ?", filter.TokenName)
 	}
 	if filter.Group != "" {
-		tx = tx.Where("`group` = ?", filter.Group)
+		tx = tx.Where(logGroupCol+" = ?", filter.Group)
 	}
 	if filter.StartId != 0 {
 		tx = tx.Where("id >= ?", filter.StartId)
@@ -181,7 +186,7 @@ func StreamAllChatLogs(filter ChatLogFilter, callback func(*ChatLog) error) erro
 		tx = tx.Where("token_name = ?", filter.TokenName)
 	}
 	if filter.Group != "" {
-		tx = tx.Where("`group` = ?", filter.Group)
+		tx = tx.Where(logGroupCol+" = ?", filter.Group)
 	}
 	if filter.StartId != 0 {
 		tx = tx.Where("id >= ?", filter.StartId)

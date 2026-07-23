@@ -174,6 +174,39 @@ func isLikelyQuotaError(reason string) bool {
 	return false
 }
 
+// IsQuotaExhaustedError 判断错误是否为额度耗尽类 429（非限流）
+// 用于在重试循环结束后增强错误信息（返回可用模型和恢复时间）
+func IsQuotaExhaustedError(err *types.NewAPIError) bool {
+	if err == nil || err.StatusCode != 429 {
+		return false
+	}
+	lowerMessage := strings.ToLower(err.Error())
+	quotaKeywords := []string{
+		"exceeded your current quota",
+		"quota exceeded",
+		"insufficient_quota",
+		"exceeded your current balance",
+		"your credit balance is too low",
+		"exceeded the",
+		"usage quota",
+		"usage limit",
+		"upgrade your plan",
+		"waiting for the reset",
+		"使用上限",
+		"使用限制",
+		"额度用尽",
+		"额度耗尽",
+		"配额用尽",
+		"后可继续使用",
+	}
+	for _, kw := range quotaKeywords {
+		if strings.Contains(lowerMessage, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 func EnableChannel(channelId int, usingKey string, channelName string) {
 	success := model.UpdateChannelStatus(channelId, usingKey, common.ChannelStatusEnabled, "")
 	if success {
