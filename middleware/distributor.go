@@ -153,7 +153,16 @@ func Distribute() func(c *gin.Context) {
 						return
 					}
 					if channel == nil {
-						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), types.ErrorCodeModelNotFound)
+						// 检查是否是渠道临时禁用（而非模型未配置），给出更准确的错误提示
+						if model.HasDisabledChannel(usingGroup, modelRequest.Model) {
+							abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
+								i18n.T(c, i18n.MsgDistributorChannelTempUnavailable, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}),
+								types.ErrorCodeGetChannelFailed)
+						} else {
+							abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
+								i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}),
+								types.ErrorCodeModelNotFound)
+						}
 						return
 					}
 				}
@@ -209,7 +218,7 @@ func Distribute() func(c *gin.Context) {
 					logger.LogError(c, fmt.Sprintf("all channels busy for model %s under group %s after %d fallback attempts",
 						modelRequest.Model, currentGroup, fallbackRetry))
 					abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
-						i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": currentGroup, "Model": modelRequest.Model}),
+						i18n.T(c, i18n.MsgDistributorChannelBusy, map[string]any{"Group": currentGroup, "Model": modelRequest.Model}),
 						types.ErrorCodeGetChannelFailed)
 					return
 				}

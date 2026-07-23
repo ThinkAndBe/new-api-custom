@@ -264,6 +264,16 @@ func UpdateAbilityStatus(channelId int, status bool) error {
 	return DB.Model(&Ability{}).Where("channel_id = ?", channelId).Select("enabled").Update("enabled", status).Error
 }
 
+// HasDisabledChannel 检查该 group+model 下是否存在被禁用(enabled=false)的渠道
+// 用于区分"模型未配置"和"渠道临时禁用"，给用户更准确的错误提示
+func HasDisabledChannel(group, model string) bool {
+	var count int64
+	DB.Model(&Ability{}).
+		Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, false).
+		Count(&count)
+	return count > 0
+}
+
 func UpdateAbilityStatusByTag(tag string, status bool) error {
 	return DB.Model(&Ability{}).Where("tag = ?", tag).Select("enabled").Update("enabled", status).Error
 }
