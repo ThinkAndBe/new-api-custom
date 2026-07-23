@@ -29,6 +29,13 @@ const ChatLog = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
+
+  const copyText = async (e, text) => {
+    e.stopPropagation();
+    if (await copy(text)) {
+      showSuccess('已复制：' + text);
+    }
+  };
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -132,12 +139,12 @@ const ChatLog = () => {
       width: 140,
       render: (val, record) => (
         <div>
-          <Text
-            copyable={{ onCopy: () => copy(val) }}
+          <span
             style={{ cursor: 'pointer' }}
+            onClick={(e) => copyText(e, val)}
           >
             {val || '-'}
-          </Text>
+          </span>
           <div style={{ fontSize: 11, color: 'var(--semi-color-text-2)' }}>
             ID: {record.user_id}
           </div>
@@ -149,9 +156,14 @@ const ChatLog = () => {
       dataIndex: 'model_name',
       width: 160,
       render: (val) => val ? (
-        <Text copyable={{ onCopy: () => copy(val) }} style={{ cursor: 'pointer' }}>
-          <Tag color='blue' size='small'>{val}</Tag>
-        </Text>
+        <Tag
+          color='blue'
+          size='small'
+          style={{ cursor: 'pointer' }}
+          onClick={(e) => copyText(e, val)}
+        >
+          {val}
+        </Tag>
       ) : '-',
     },
     {
@@ -175,9 +187,14 @@ const ChatLog = () => {
       dataIndex: 'group',
       width: 100,
       render: (val) => val ? (
-        <Text copyable={{ onCopy: () => copy(val) }} style={{ cursor: 'pointer' }}>
-          <Tag color='cyan' size='small'>{val}</Tag>
-        </Text>
+        <Tag
+          color='cyan'
+          size='small'
+          style={{ cursor: 'pointer' }}
+          onClick={(e) => copyText(e, val)}
+        >
+          {val}
+        </Tag>
       ) : '-',
     },
     {

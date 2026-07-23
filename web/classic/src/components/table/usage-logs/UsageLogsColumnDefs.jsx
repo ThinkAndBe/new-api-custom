@@ -602,12 +602,12 @@ export const getLogsColumns = ({
             >
               {typeof text === 'string' && text.slice(0, 1)}
             </Avatar>
-            <Typography.Text
-              copyable={{ onCopy: () => copy(text) }}
+            <span
               style={{ cursor: 'pointer' }}
+              onClick={(e) => copyText(e, text)}
             >
               {text}
-            </Typography.Text>
+            </span>
           </div>
         ) : (
           <></>
