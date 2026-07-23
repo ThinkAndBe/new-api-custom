@@ -261,7 +261,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		// 如果是额度耗尽类 429，同步从内存缓存中移除该渠道，避免重试时重复选到同一渠道
 		// processChannelError 的禁用是异步的（gopool.Go），来不及在下次重试前生效
-		if service.IsQuotaExhaustedError(newAPIError) && channel.GetAutoBan() {
+		// 额度耗尽无视 auto_ban 设置（额度耗尽是确定性故障）
+		if service.IsQuotaExhaustedError(newAPIError) {
 			model.CacheUpdateChannelStatus(channel.Id, common.ChannelStatusAutoDisabled)
 		}
 
@@ -423,7 +424,8 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.Error())))
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
-	if service.ShouldDisableChannel(err) && channelError.AutoBan {
+	// 额度耗尽类 429 错误强制禁用，无视 auto_ban 设置（额度耗尽是确定性故障，不影响 auto_ban 的原意）
+	if service.ShouldDisableChannel(err) && (channelError.AutoBan || service.IsQuotaExhaustedError(err)) {
 		gopool.Go(func() {
 			service.DisableChannel(channelError, err.ErrorWithStatusCode())
 		})

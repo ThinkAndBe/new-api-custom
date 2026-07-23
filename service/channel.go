@@ -27,9 +27,14 @@ func DisableChannel(channelError types.ChannelError, reason string) {
 	common.SysLog(fmt.Sprintf("通道「%s」（#%d）发生错误，准备禁用，原因：%s", channelError.ChannelName, channelError.ChannelId, common.LocalLogPreview(reason)))
 
 	// 检查是否启用自动禁用功能
+	// 额度耗尽类错误（quota exhausted）无视 auto_ban 设置，必须禁用
 	if !channelError.AutoBan {
-		common.SysLog(fmt.Sprintf("通道「%s」（#%d）未启用自动禁用功能，跳过禁用操作", channelError.ChannelName, channelError.ChannelId))
-		return
+		if isQuotaExhaustedReason(reason) {
+			common.SysLog(fmt.Sprintf("通道「%s」（#%d）未启用自动禁用，但检测到额度耗尽错误，强制禁用", channelError.ChannelName, channelError.ChannelId))
+		} else {
+			common.SysLog(fmt.Sprintf("通道「%s」（#%d）未启用自动禁用功能，跳过禁用操作", channelError.ChannelName, channelError.ChannelId))
+			return
+		}
 	}
 
 	// 解析 429 错误中的恢复时间（如 "It will reset at 2026-07-13 00:00:00 +0800 CST"）
@@ -201,6 +206,45 @@ func IsQuotaExhaustedError(err *types.NewAPIError) bool {
 	}
 	for _, kw := range quotaKeywords {
 		if strings.Contains(lowerMessage, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// isQuotaExhaustedReason 从错误原因字符串判断是否为额度耗尽
+// 用于 DisableChannel 中，决定是否无视 auto_ban 强制禁用
+func isQuotaExhaustedReason(reason string) bool {
+	if reason == "" {
+		return false
+	}
+	// 检查是否含 429 状态码 + 额度关键词
+	if !strings.Contains(reason, "429") && !strings.Contains(reason, "quota") &&
+		!strings.Contains(reason, "额度") && !strings.Contains(reason, "配额") &&
+		!strings.Contains(reason, "使用上限") {
+		return false
+	}
+	lower := strings.ToLower(reason)
+	quotaKeywords := []string{
+		"exceeded your current quota",
+		"quota exceeded",
+		"insufficient_quota",
+		"exceeded your current balance",
+		"your credit balance is too low",
+		"exceeded the",
+		"usage quota",
+		"usage limit",
+		"upgrade your plan",
+		"waiting for the reset",
+		"使用上限",
+		"使用限制",
+		"额度用尽",
+		"额度耗尽",
+		"配额用尽",
+		"后可继续使用",
+	}
+	for _, kw := range quotaKeywords {
+		if strings.Contains(lower, kw) {
 			return true
 		}
 	}
