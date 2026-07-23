@@ -256,12 +256,10 @@ func isQuotaExhaustedByKeywords(lowerMessage string) bool {
 
 // IsQuotaExhaustedError 判断错误是否为额度耗尽类错误（非临时限流）
 // 用于在重试循环结束后增强错误信息（返回可用模型和恢复时间）
-// 覆盖 429（OpenAI/阿里云等）和 403（Kimi 等）两种常见状态码
+// 不限制状态码：不同上游可能用 429/403/400 等不同状态码返回额度耗尽
+// 通过关键词精确匹配区分额度耗尽和临时限流
 func IsQuotaExhaustedError(err *types.NewAPIError) bool {
 	if err == nil {
-		return false
-	}
-	if err.StatusCode != 429 && err.StatusCode != 403 {
 		return false
 	}
 	return isQuotaExhaustedByKeywords(strings.ToLower(err.Error()))
@@ -304,10 +302,15 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 
 	lowerMessage := strings.ToLower(err.Error())
 
-	// 429/403 可能是额度耗尽也可能是临时限流/权限问题
-	// 通过关键词匹配区分：只有额度耗尽才禁用，临时限流不禁用
+	// 额度耗尽关键词匹配（不限状态码，不同上游可能用 429/403/400 等）
+	// 关键词本身是确定性的额度信号，不会出现在临时限流中
+	if isQuotaExhaustedByKeywords(lowerMessage) {
+		return true
+	}
+
+	// 429/403 的非额度类错误（如临时限流、权限问题）不自动禁用
 	if err.StatusCode == 429 || err.StatusCode == 403 {
-		return isQuotaExhaustedByKeywords(lowerMessage)
+		return false
 	}
 
 	search, _ := AcSearch(lowerMessage, operation_setting.AutomaticDisableKeywords, true)
