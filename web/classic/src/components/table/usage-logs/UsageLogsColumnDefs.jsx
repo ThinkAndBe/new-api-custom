@@ -34,6 +34,7 @@ import {
   renderModelTag,
   renderModelPriceSimple,
   renderTieredModelPriceSimple,
+  copy,
 } from '../../../helpers';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
 import { CircleAlert, Route, Sparkles } from 'lucide-react';
@@ -601,7 +602,12 @@ export const getLogsColumns = ({
             >
               {typeof text === 'string' && text.slice(0, 1)}
             </Avatar>
-            {text}
+            <Typography.Text
+              copyable={{ onCopy: () => copy(text) }}
+              style={{ cursor: 'pointer' }}
+            >
+              {text}
+            </Typography.Text>
           </div>
         ) : (
           <></>

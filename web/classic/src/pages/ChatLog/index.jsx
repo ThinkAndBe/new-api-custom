@@ -19,7 +19,7 @@ import {
   IconSearch,
 } from '@douyinfe/semi-icons';
 import CardTable from '../../components/common/ui/CardTable';
-import { API, showError, showSuccess, timestamp2string } from '../../helpers';
+import { API, showError, showSuccess, timestamp2string, copy } from '../../helpers';
 import { exportFromAPI, genExportFilename } from '../../helpers/csv';
 import { useTranslation } from 'react-i18next';
 
@@ -132,7 +132,12 @@ const ChatLog = () => {
       width: 140,
       render: (val, record) => (
         <div>
-          {val || '-'}
+          <Text
+            copyable={{ onCopy: () => copy(val) }}
+            style={{ cursor: 'pointer' }}
+          >
+            {val || '-'}
+          </Text>
           <div style={{ fontSize: 11, color: 'var(--semi-color-text-2)' }}>
             ID: {record.user_id}
           </div>
@@ -143,7 +148,11 @@ const ChatLog = () => {
       title: t('模型'),
       dataIndex: 'model_name',
       width: 160,
-      render: (val) => val ? <Tag color='blue' size='small'>{val}</Tag> : '-',
+      render: (val) => val ? (
+        <Text copyable={{ onCopy: () => copy(val) }} style={{ cursor: 'pointer' }}>
+          <Tag color='blue' size='small'>{val}</Tag>
+        </Text>
+      ) : '-',
     },
     {
       title: t('令牌'),
@@ -165,7 +174,11 @@ const ChatLog = () => {
       title: t('分组'),
       dataIndex: 'group',
       width: 100,
-      render: (val) => val ? <Tag color='cyan' size='small'>{val}</Tag> : '-',
+      render: (val) => val ? (
+        <Text copyable={{ onCopy: () => copy(val) }} style={{ cursor: 'pointer' }}>
+          <Tag color='cyan' size='small'>{val}</Tag>
+        </Text>
+      ) : '-',
     },
     {
       title: t('内容预览'),
