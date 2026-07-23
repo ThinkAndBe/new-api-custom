@@ -61,6 +61,58 @@ func truncateText(text string) string {
 	return text[:maxLen] + "...[truncated]"
 }
 
+// isMetaRequest 判断是否为客户端自动发送的元请求（非用户真实意图）
+// 这类请求由 ChatGPT-Next-Web / LobeChat / Open WebUI 等客户端自动触发，
+// 用于生成对话标题、摘要等，对用户行为审计无价值，应跳过不记录。
+// 采用精确匹配（区分大小写无关），避免误伤用户真实输入。
+func isMetaRequest(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+
+	// 自动生成标题类请求（整条消息就是固定的标题生成指令）
+	titlePatterns := []string{
+		"generate the title",
+		"generate a title",
+		"generate a short title",
+		"generate title",
+		"create a title",
+		"suggest a title",
+		"write a title",
+		"give me a title",
+		"生成标题",
+		"生成一个标题",
+		"生成简短标题",
+		"起一个标题",
+		"总结标题",
+		"为这段对话生成标题",
+		"为以下对话生成标题",
+	}
+	for _, p := range titlePatterns {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+
+	// 自动生成摘要类请求
+	summaryPatterns := []string{
+		"generate a summary of the conversation",
+		"summarize the conversation so far",
+		"generate conversation summary",
+		"总结以上对话",
+		"为以上对话生成摘要",
+	}
+	for _, p := range summaryPatterns {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // stripInjectedContent 剥离系统/工具注入的提示词，只保留用户真实输入内容
 // 只返回最后一条用户输入（去掉所有历史对话和系统注入）
 func stripInjectedContent(text string) string {
@@ -278,6 +330,11 @@ func RecordChatLog(info *relaycommon.RelayInfo) {
 	}
 	content := ExtractRequestContent(info.Request)
 	if content == "" {
+		return
+	}
+	// 去掉 "[user] " 前缀后判断是否为元请求（自动生成标题/摘要等）
+	plainContent := strings.TrimPrefix(content, "[user] ")
+	if isMetaRequest(plainContent) {
 		return
 	}
 	model.RecordChatLog(info, content)

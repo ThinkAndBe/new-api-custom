@@ -45,7 +45,6 @@ const ChatLog = () => {
       params.set('page_size', String(pageSize));
       if (formData.username) params.set('username', formData.username);
       if (formData.model_name) params.set('model_name', formData.model_name);
-      if (formData.token_name) params.set('token_name', formData.token_name);
       if (formData.group) params.set('group', formData.group);
       if (formData.dateRange && formData.dateRange.length === 2) {
         params.set('start_timestamp', String(Math.floor(formData.dateRange[0].getTime() / 1000)));
@@ -83,7 +82,7 @@ const ChatLog = () => {
       const params = new URLSearchParams();
       if (formData.username) params.set('username', formData.username);
       if (formData.model_name) params.set('model_name', formData.model_name);
-      if (formData.token_name) params.set('token_name', formData.token_name);
+      if (formData.group) params.set('group', formData.group);
       if (formData.dateRange && formData.dateRange.length === 2) {
         params.set('start_timestamp', String(Math.floor(formData.dateRange[0].getTime() / 1000)));
         params.set('end_timestamp', String(Math.floor(formData.dateRange[1].getTime() / 1000)));
