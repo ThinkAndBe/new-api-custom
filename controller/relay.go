@@ -368,6 +368,14 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
 
 	if err != nil {
+		// 当所有渠道被禁用时，getPriority 会返回"数据库一致性被破坏"错误
+		// 此时应该走友好提示（可用模型 + 恢复时间），而非暴露内部错误
+		if model.HasDisabledChannel(selectGroup, info.OriginModelName) {
+			unavailInfo := service.BuildChannelUnavailableInfo(c, selectGroup, info.OriginModelName)
+			msg := fmt.Sprintf("分组 %s 下模型 %s 的渠道当前临时不可用%s。您当前可用的模型：%s",
+				selectGroup, info.OriginModelName, unavailInfo.RecoveryTimeHint, unavailInfo.AvailableModelsHint)
+			return nil, types.NewError(errors.New(msg), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+		}
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
