@@ -162,6 +162,12 @@ const ChatLog = () => {
       render: (val) => val ? `#${val}` : '-',
     },
     {
+      title: t('分组'),
+      dataIndex: 'group',
+      width: 100,
+      render: (val) => val ? <Tag color='cyan' size='small'>{val}</Tag> : '-',
+    },
+    {
       title: t('内容预览'),
       dataIndex: 'request_content',
       render: (val) => {
