@@ -116,22 +116,21 @@ func isMetaRequest(text string) bool {
 // stripInjectedContent 剥离系统/工具注入的提示词，只保留用户真实输入内容
 // 只返回最后一条用户输入（去掉所有历史对话和系统注入）
 func stripInjectedContent(text string) string {
-	// 移除 XML 标签包裹的注入内容
+	// 移除纯注入标签（标签+内容全部删除，这些标签内都是系统注入不是用户输入）
 	text = removeXMLTag(text, "system-reminder")
 	text = removeXMLTag(text, "environment")
-	text = removeXMLTag(text, "tool_call")
-	text = removeXMLTag(text, "function_results")
 	text = removeXMLTag(text, "antThinking")
 
-	// 移除其他常见的 AI 工具注入标签
-	text = removeXMLTag(text, "user_query")
-	text = removeXMLTag(text, "thinking")
-	text = removeXMLTag(text, "instructions")
-	text = removeXMLTag(text, "context")
-	text = removeXMLTag(text, "additional_data")
-	text = removeXMLTag(text, "additional_info")
-	text = removeXMLTag(text, "metadata")
-	text = removeXMLTag(text, "system")
+	// 对于可能包含用户真实输入的标签，只剥掉标签壳保留内容
+	// 例如 workbuddy 会把用户输入包在 <user_query>用户输入</user_query> 里
+	text = unwrapXMLTag(text, "user_query")
+	text = unwrapXMLTag(text, "thinking")
+	text = unwrapXMLTag(text, "instructions")
+	text = unwrapXMLTag(text, "context")
+	text = unwrapXMLTag(text, "additional_data")
+	text = unwrapXMLTag(text, "additional_info")
+	text = unwrapXMLTag(text, "metadata")
+	text = unwrapXMLTag(text, "system")
 
 	// 按行分割，去掉空行和残留的标签行（XML 标签未完整匹配时残留）
 	lines := strings.Split(text, "\n")
@@ -186,6 +185,7 @@ func stripInjectedContent(text string) string {
 }
 
 // removeXMLTag 移除指定 XML 标签及其内容（不区分大小写）
+// 用于纯注入标签，如 <system-reminder>...</system-reminder>
 func removeXMLTag(text, tagName string) string {
 	lower := strings.ToLower(text)
 	result := text
@@ -207,6 +207,40 @@ func removeXMLTag(text, tagName string) string {
 		result = result[:startIdx] + result[endIdx:]
 	}
 	return strings.TrimSpace(result)
+}
+
+// unwrapXMLTag 只删除 XML 标签壳，保留标签内的内容（不区分大小写）
+// 用于可能包含用户真实输入的标签，如 <user_query>用户输入</user_query>
+// 只剥掉 <user_query> 和 </user_query>，保留 "用户输入"
+func unwrapXMLTag(text, tagName string) string {
+	result := text
+	// 先处理带属性的起始标签 <tag ...> 和结束标签 </tag>
+	for {
+		lower := strings.ToLower(result)
+		// 匹配 </tagName> 结束标签
+		endTag := "</" + tagName + ">"
+		endIdx := strings.Index(lower, endTag)
+		if endIdx < 0 {
+			break
+		}
+		result = result[:endIdx] + result[endIdx+len(endTag):]
+	}
+	for {
+		lower := strings.ToLower(result)
+		// 匹配 <tagName> 或 <tagName ...> 起始标签
+		startTagPrefix := "<" + tagName
+		startIdx := strings.Index(lower, startTagPrefix)
+		if startIdx < 0 {
+			break
+		}
+		// 找到 > 结束标签头
+		gtIdx := strings.Index(result[startIdx:], ">")
+		if gtIdx < 0 {
+			break
+		}
+		result = result[:startIdx] + result[startIdx+gtIdx+1:]
+	}
+	return result
 }
 
 // extractOpenAIContent 从 OpenAI 格式请求中提取文本
