@@ -199,7 +199,8 @@ func isLikelyQuotaError(reason string) bool {
 }
 
 // quotaExhaustedKeywords 额度耗尽的错误关键词（英文+中文）
-// 用于检测 429 状态码下是"额度耗尽"还是"临时限流"
+// 用于检测是否为"额度耗尽"（区别于临时限流）
+// 注意：只匹配 err.Error() 返回的 message 内容，不包含 JSON body 里的 type/code 字段
 // 统一列表，ShouldDisableChannel 和 IsQuotaExhaustedError 共用
 var quotaExhaustedKeywords = []string{
 	// 英文 - OpenAI/通用
@@ -213,7 +214,9 @@ var quotaExhaustedKeywords = []string{
 	"usage limit",
 	"upgrade your plan",
 	"waiting for the reset",
-	// 英文 - 阿里云 DashScope
+	// 英文 - 阿里云 DashScope / agent plan
+	"quota has been exhausted",
+	"quota is exhausted",
 	"out of available credits",
 	"insufficient balance",
 	"account balance is not enough",
