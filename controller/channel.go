@@ -920,8 +920,30 @@ func UpdateChannel(c *gin.Context) {
 	channel.ChannelInfo = originChannel.ChannelInfo
 
 	// 保留原有的 OtherSettings（定时暂停、健康检查等），避免前端未发送时丢失
+	// 当前端只传了部分 OtherSettings 字段时，将新字段合并到原有设置中，而非整体覆盖
 	if channel.OtherSettings == "" || channel.OtherSettings == "{}" {
 		channel.OtherSettings = originChannel.OtherSettings
+	} else {
+		// 合并：前端发送的设置覆盖原设置中的同名字段，保留前端未发送的字段
+		originSettings := originChannel.GetOtherSettings()
+		newSettings := channel.GetOtherSettings()
+		mergedJSON, mergeErr := common.Marshal(newSettings)
+		if mergeErr == nil {
+			var mergedMap map[string]interface{}
+			if common.Unmarshal(mergedJSON, &mergedMap) == nil {
+				originJSON, _ := common.Marshal(originSettings)
+				var originMap map[string]interface{}
+				if common.Unmarshal(originJSON, &originMap) == nil {
+					for k, v := range originMap {
+						if _, exists := mergedMap[k]; !exists {
+							mergedMap[k] = v
+						}
+					}
+					mergedBytes, _ := common.Marshal(mergedMap)
+					channel.OtherSettings = string(mergedBytes)
+				}
+			}
+		}
 	}
 
 	// If the request explicitly specifies a new MultiKeyMode, apply it on top of the original info.
