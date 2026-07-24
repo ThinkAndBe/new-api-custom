@@ -565,6 +565,33 @@ func (m *Message) IsStringContent() bool {
 	return false
 }
 
+// StripCacheControl 移除 message content 中的 cache_control 字段
+// 用于向不支持 prompt caching 的上游（如标准 OpenAI 兼容接口）转发时清理请求
+func (m *Message) StripCacheControl() {
+	// 只处理数组格式的 content（cache_control 只出现在数组元素中）
+	arrayContent, ok := m.Content.([]any)
+	if !ok {
+		// 尝试从 json.RawMessage 解析
+		rawBytes, err := common.Marshal(m.Content)
+		if err != nil {
+			return
+		}
+		if err := common.Unmarshal(rawBytes, &arrayContent); err != nil {
+			return // 字符串格式，没有 cache_control
+		}
+	}
+	for i, item := range arrayContent {
+		if itemMap, ok := item.(map[string]any); ok {
+			if _, has := itemMap["cache_control"]; has {
+				delete(itemMap, "cache_control")
+				arrayContent[i] = itemMap
+			}
+		}
+	}
+	m.Content = arrayContent
+	m.parsedContent = nil
+}
+
 func (m *Message) ParseContent() []MediaContent {
 	if m.Content == nil {
 		return nil

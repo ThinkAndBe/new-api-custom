@@ -234,6 +234,11 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if info.ChannelType != constant.ChannelTypeOpenAI && info.ChannelType != constant.ChannelTypeAzure {
 		request.StreamOptions = nil
 	}
+	// 非 OpenRouter 渠道清理 cache_control（Anthropic/OpenRouter 的 prompt caching 特性，
+	// 标准 OpenAI 兼容上游不支持，会导致 400 错误）
+	if info.ChannelType != constant.ChannelTypeOpenRouter {
+		stripCacheControl(request)
+	}
 	if info.ChannelType == constant.ChannelTypeOpenRouter {
 		if len(request.Usage) == 0 {
 			request.Usage = json.RawMessage(`{"include":true}`)
@@ -350,6 +355,18 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 
 	return request, nil
+}
+
+// stripCacheControl 清理 messages 中的 cache_control 字段
+// cache_control 是 Anthropic/OpenRouter 的 prompt caching 特性，
+// 非 OpenRouter 的 OpenAI 兼容上游不支持该字段，会导致 400 错误
+func stripCacheControl(request *dto.GeneralOpenAIRequest) {
+	if request == nil {
+		return
+	}
+	for i := range request.Messages {
+		request.Messages[i].StripCacheControl()
+	}
 }
 
 func (a *Adaptor) ConvertRerankRequest(c *gin.Context, relayMode int, request dto.RerankRequest) (any, error) {
