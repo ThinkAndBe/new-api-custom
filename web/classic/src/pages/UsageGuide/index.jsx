@@ -93,6 +93,15 @@ const UsageGuide = () => {
         }
         if (templateRes.data.success && templateRes.data.data) {
           setTemplate(templateRes.data.data);
+        // 管理员打开时，若模板是合法 JSON 则自动美化为缩进格式，和配置预览排版一致
+        if (templateRes.data.data && String(templateRes.data.data).trim()) {
+          try {
+            const parsed = JSON.parse(templateRes.data.data);
+            setTemplate(JSON.stringify(parsed, null, 2));
+          } catch (e) {
+            setTemplate(templateRes.data.data);
+          }
+        }
         }
         setTemplateLoaded(true);
       })
