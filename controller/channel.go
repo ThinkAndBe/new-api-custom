@@ -924,24 +924,23 @@ func UpdateChannel(c *gin.Context) {
 	if channel.OtherSettings == "" || channel.OtherSettings == "{}" {
 		channel.OtherSettings = originChannel.OtherSettings
 	} else {
-		// 合并：前端发送的设置覆盖原设置中的同名字段，保留前端未发送的字段
-		originSettings := originChannel.GetOtherSettings()
-		newSettings := channel.GetOtherSettings()
-		mergedJSON, mergeErr := common.Marshal(newSettings)
-		if mergeErr == nil {
-			var mergedMap map[string]interface{}
-			if common.Unmarshal(mergedJSON, &mergedMap) == nil {
-				originJSON, _ := common.Marshal(originSettings)
-				var originMap map[string]interface{}
-				if common.Unmarshal(originJSON, &originMap) == nil {
-					for k, v := range originMap {
-						if _, exists := mergedMap[k]; !exists {
-							mergedMap[k] = v
-						}
+		// 合并：前端发送的设置覆盖原设置中的同名字段，保留前端未发送的字段。
+		// 注意：必须基于前端原始 OtherSettings JSON 建 mergedMap，而不是 DTO 重序列化结果。
+		// 因为 ChannelOtherSettings 的字段带 omitempty，显式传的 false（如 schedule_pause_enabled:false）
+		// 会在重序列化时被丢弃，导致"关闭定时暂停"永远写不进库（每次都被旧值覆盖）。
+		var mergedMap map[string]interface{}
+		if common.UnmarshalJsonStr(channel.OtherSettings, &mergedMap) == nil {
+			originSettings := originChannel.GetOtherSettings()
+			originJSON, _ := common.Marshal(originSettings)
+			var originMap map[string]interface{}
+			if common.Unmarshal(originJSON, &originMap) == nil {
+				for k, v := range originMap {
+					if _, exists := mergedMap[k]; !exists {
+						mergedMap[k] = v
 					}
-					mergedBytes, _ := common.Marshal(mergedMap)
-					channel.OtherSettings = string(mergedBytes)
 				}
+				mergedBytes, _ := common.Marshal(mergedMap)
+				channel.OtherSettings = string(mergedBytes)
 			}
 		}
 	}

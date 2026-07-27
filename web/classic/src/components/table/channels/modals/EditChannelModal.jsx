@@ -982,10 +982,8 @@ const EditChannelModal = (props) => {
           data.upstream_model_update_last_detected_models = [];
           data.upstream_model_update_ignored_models = '';
           data.schedule_pause_enabled = false;
-          data.schedule_pause_rules = [
-            { days: [1, 2, 3, 4, 5], start: '09:00', end: '12:00', reason: '上午' },
-            { days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00', reason: '下午' },
-          ];
+          // 解析失败时保留为空数组，不要填充演示规则——否则保存时会用演示规则覆盖用户已保存的定时暂停配置。
+          data.schedule_pause_rules = [];
           data.health_check_enabled = false;
           data.health_check_interval_minutes = 5;
           data.health_check_failure_threshold = 3;

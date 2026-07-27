@@ -50,6 +50,7 @@ func processSchedulePause() {
 	weekdayStr := []string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}[int(now.Weekday())]
 	pausedCount := 0
 	resumedCount := 0
+	scannedCount := 0
 	for _, ch := range channels {
 		// 只处理状态为 1（启用）或 4（定时暂停中）的渠道
 		if ch.Status != common.ChannelStatusEnabled && ch.Status != common.ChannelStatusSchedulePaused {
@@ -65,6 +66,7 @@ func processSchedulePause() {
 			}
 			continue
 		}
+		scannedCount++
 
 		shouldPause, matchedRule := isInAnyPauseWindowWithRule(now, settings.SchedulePauseRules)
 
@@ -89,7 +91,7 @@ func processSchedulePause() {
 		}
 	}
 	if pausedCount > 0 || resumedCount > 0 {
-		common.SysLog(fmt.Sprintf("%s 扫描完成 %s %s: 暂停%d 恢复%d", schedulePauseLogPrefix, weekdayStr, now.Format("15:04"), pausedCount, resumedCount))
+		common.SysLog(fmt.Sprintf("%s 扫描完成 %s %s: 暂停%d 恢复%d（共扫描 %d 个开启定时暂停的渠道）", schedulePauseLogPrefix, weekdayStr, now.Format("15:04"), pausedCount, resumedCount, scannedCount))
 	}
 }
 
