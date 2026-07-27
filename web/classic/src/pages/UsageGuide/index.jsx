@@ -146,15 +146,45 @@ const UsageGuide = () => {
   }, [tokenKey, effectiveModels, baseUrl, effectiveParamsMap]);
 
   // 最终 models.json：优先使用管理员模板（替换占位符），否则自动生成
+  // 模板模式：管理员模板里的模型列表可能滞后（新模型/渠道禁用未同步），
+  // 这里用当前完整清单补齐缺失模型并移除已下线的模型，仅保留模板里的参数。
   const modelsJson = useCallback(() => {
     if (template.trim()) {
-      // 管理员模板模式：替换 {{apiKey}} 和 {{baseUrl}} 占位符
-      return template
+      const replaced = template
         .replace(/\{\{apiKey\}\}/g, tokenKey || 'YOUR_API_KEY')
         .replace(/\{\{baseUrl\}\}/g, baseUrl);
+      try {
+        const parsed = JSON.parse(replaced);
+        if (!Array.isArray(parsed.models)) return replaced;
+        // 模板中已有的模型：保留模板参数
+        const kept = parsed.models.filter((m) => effectiveModels.includes(m.id));
+        const keptIds = new Set(kept.map((m) => m.id));
+        // 模板里没有、但当前清单里有的模型（新上线/新分组）：自动补齐
+        const added = effectiveModels
+          .filter((name) => !keptIds.has(name))
+          .map((name) => {
+            const p = effectiveParamsMap[name] || DEFAULT_MODEL_PARAMS;
+            return {
+              id: name,
+              name: `ERKE ${name}`,
+              provider: 'openai',
+              url: `${baseUrl}/v1`,
+              apiKey: tokenKey || 'YOUR_API_KEY',
+              maxInputTokens: p.in,
+              maxOutputTokens: p.out,
+              supportsToolCall: p.tools,
+              supportsImages: p.vision,
+              supportsReasoning: p.reasoning,
+            };
+          });
+        return JSON.stringify({ ...parsed, models: [...kept, ...added] }, null, 2);
+      } catch (e) {
+        // 模板不是合法 JSON：原样返回，不做处理
+        return replaced;
+      }
     }
     return autoModelsJson();
-  }, [template, tokenKey, baseUrl, autoModelsJson]);
+  }, [template, tokenKey, baseUrl, autoModelsJson, effectiveModels, effectiveParamsMap]);
 
   const handleDownload = useCallback(() => {
     const json = modelsJson();
