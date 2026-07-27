@@ -801,6 +801,20 @@ func GetUserModelsMeta(c *gin.Context) {
 	return
 }
 
+// GetModelsJsonTemplate 返回管理员配置的 models.json 模板（用户侧）。
+// 模板中 {{apiKey}} 和 {{baseUrl}} 占位符由前端替换为用户实际值。
+// GET /api/user/models/template
+func GetModelsJsonTemplate(c *gin.Context) {
+	common.OptionMapRWMutex.RLock()
+	template := common.OptionMap["ModelsJsonTemplate"]
+	common.OptionMapRWMutex.RUnlock()
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    template,
+	})
+}
+
 func UpdateUser(c *gin.Context) {
 	var updatedUser model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&updatedUser)

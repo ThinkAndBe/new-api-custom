@@ -52,6 +52,7 @@ func InitOptionMap() {
 	common.OptionMap["ChatLogRetentionDays"] = strconv.Itoa(common.ChatLogRetentionDays)
 	common.OptionMap["ChatLogContentMaxLen"] = strconv.Itoa(common.ChatLogContentMaxLen)
 	common.OptionMap["ChatLogLogRoles"] = common.ChatLogLogRoles
+	common.OptionMap["ModelsJsonTemplate"] = "" // 管理员自定义 models.json 模板，{{apiKey}} {{baseUrl}} 为占位符
 	common.OptionMap["DisplayInCurrencyEnabled"] = strconv.FormatBool(common.DisplayInCurrencyEnabled)
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
 	common.OptionMap["DrawingEnabled"] = strconv.FormatBool(common.DrawingEnabled)

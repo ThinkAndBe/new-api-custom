@@ -4229,5 +4229,15 @@
   "将从 litellm 上游拉取最新的 max_input/output_tokens + 能力位，更新到本库未被锁定的模型。人工编辑过（已锁定）的模型不会被覆盖。是否继续？": "Sẽ lấy max_input/output_tokens + cờ năng lực mới nhất từ litellm và cập nhật các mô hình chưa khóa. Các mô hình đã chỉnh sửa thủ công (đã khóa) sẽ không bị ghi đè. Tiếp tục?",
   "确定刷新": "Xác nhận",
   "参数已更新：{{updated}}，跳过锁定：{{skipped}}，litellm 未覆盖：{{notFound}}": "Đã cập nhật tham số: {{updated}}, bỏ qua đã khóa: {{skipped}}, không có trong litellm: {{notFound}}",
-  "刷新失败": "Làm mới thất bại"
+  "刷新失败": "Làm mới thất bại",
+  "管理员：models.json 模板": "Quản trị: Mẫu models.json",
+  "仅管理员可见": "Chỉ quản trị viên",
+  "编辑此模板后保存，所有用户的使用教程将使用此模板生成配置。使用 {{apiKey}} 和 {{baseUrl}} 作为占位符，用户访问时自动替换为其实际值。留空则使用系统自动生成。": "Chỉnh sửa và lưu mẫu này. Hướng dẫn sử dụng của tất cả người dùng sẽ dùng mẫu này. Dùng {{apiKey}} và {{baseUrl}} làm placeholder. Để trống để tự động tạo.",
+  "保存模板": "Lưu mẫu",
+  "从当前自动生成填充": "Điền từ tự động tạo",
+  "清空模板": "Xóa mẫu",
+  "模板已保存，所有用户的使用教程将同步更新": "Đã lưu mẫu. Hướng dẫn của tất cả người dùng sẽ được cập nhật.",
+  "JSON 格式错误，请检查后重试": "Định dạng JSON không hợp lệ, vui lòng kiểm tra và thử lại",
+  "当前使用管理员自定义模板": "Đang dùng mẫu tùy chỉnh của quản trị viên",
+  "留空 = 使用系统自动生成。或粘贴完整 models.json 模板，用 {{apiKey}} 和 {{baseUrl}} 作为占位符。": "Trống = tự động tạo. Hoặc dán mẫu models.json đầy đủ với {{apiKey}} và {{baseUrl}}."
 }

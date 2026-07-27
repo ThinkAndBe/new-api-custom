@@ -3841,5 +3841,15 @@
   "将从 litellm 上游拉取最新的 max_input/output_tokens + 能力位，更新到本库未被锁定的模型。人工编辑过（已锁定）的模型不会被覆盖。是否继续？": "This will fetch the latest max_input/output_tokens + capability flags from litellm upstream and update unlocked models. Manually-edited (locked) models will not be overwritten. Continue?",
   "确定刷新": "Confirm Refresh",
   "参数已更新：{{updated}}，跳过锁定：{{skipped}}，litellm 未覆盖：{{notFound}}": "Params updated: {{updated}}, skipped locked: {{skipped}}, not in litellm: {{notFound}}",
-  "刷新失败": "Refresh failed"
+  "刷新失败": "Refresh failed",
+  "管理员：models.json 模板": "Admin: models.json Template",
+  "仅管理员可见": "Admin only",
+  "编辑此模板后保存，所有用户的使用教程将使用此模板生成配置。使用 {{apiKey}} 和 {{baseUrl}} 作为占位符，用户访问时自动替换为其实际值。留空则使用系统自动生成。": "Edit and save this template. All users' Usage Guide will use it to generate configs. Use {{apiKey}} and {{baseUrl}} as placeholders, auto-replaced with each user's actual values. Leave empty to use auto-generated config.",
+  "保存模板": "Save Template",
+  "从当前自动生成填充": "Fill from Auto-generated",
+  "清空模板": "Clear Template",
+  "模板已保存，所有用户的使用教程将同步更新": "Template saved. All users' Usage Guide will be updated.",
+  "JSON 格式错误，请检查后重试": "Invalid JSON format, please check and retry",
+  "当前使用管理员自定义模板": "Using admin custom template",
+  "留空 = 使用系统自动生成。或粘贴完整 models.json 模板，用 {{apiKey}} 和 {{baseUrl}} 作为占位符。": "Empty = auto-generated. Or paste a full models.json template with {{apiKey}} and {{baseUrl}} placeholders."
 }

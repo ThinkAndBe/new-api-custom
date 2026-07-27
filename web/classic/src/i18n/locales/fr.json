@@ -3695,5 +3695,15 @@
   "将从 litellm 上游拉取最新的 max_input/output_tokens + 能力位，更新到本库未被锁定的模型。人工编辑过（已锁定）的模型不会被覆盖。是否继续？": "Cela récupérera les derniers max_input/output_tokens + capacités depuis litellm et mettra à jour les modèles non verrouillés. Les modèles édités manuellement (verrouillés) ne seront pas écrasés. Continuer?",
   "确定刷新": "Confirmer",
   "参数已更新：{{updated}}，跳过锁定：{{skipped}}，litellm 未覆盖：{{notFound}}": "Paramètres mis à jour: {{updated}}, ignorés verrouillés: {{skipped}}, absent de litellm: {{notFound}}",
-  "刷新失败": "Échec du rafraîchissement"
+  "刷新失败": "Échec du rafraîchissement",
+  "管理员：models.json 模板": "Admin : modèle models.json",
+  "仅管理员可见": "Admin uniquement",
+  "编辑此模板后保存，所有用户的使用教程将使用此模板生成配置。使用 {{apiKey}} 和 {{baseUrl}} 作为占位符，用户访问时自动替换为其实际值。留空则使用系统自动生成。": "Modifiez et enregistrez ce modèle. Le guide d'utilisation de tous les utilisateurs l'utilisera. Utilisez {{apiKey}} et {{baseUrl}} comme espaces réservés. Laissez vide pour la génération automatique.",
+  "保存模板": "Enregistrer",
+  "从当前自动生成填充": "Remplir depuis l'auto-généré",
+  "清空模板": "Vider le modèle",
+  "模板已保存，所有用户的使用教程将同步更新": "Modèle enregistré. Le guide de tous les utilisateurs sera mis à jour.",
+  "JSON 格式错误，请检查后重试": "Format JSON invalide, vérifiez et réessayez",
+  "当前使用管理员自定义模板": "Utilisation du modèle personnalisé admin",
+  "留空 = 使用系统自动生成。或粘贴完整 models.json 模板，用 {{apiKey}} 和 {{baseUrl}} 作为占位符。": "Vide = auto-généré. Ou collez un modèle models.json complet avec {{apiKey}} et {{baseUrl}}."
 }
