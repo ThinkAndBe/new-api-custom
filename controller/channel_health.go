@@ -150,9 +150,10 @@ func checkSingleChannelHealth(ch *model.Channel, state *channelHealthState, test
 					time.Unix(recoveryAt, 0).Sub(time.Now()).Truncate(time.Second)))
 				return
 			}
-			// 没有恢复时间的额度用尽，跳过探测（需要手动恢复）
-			common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度用尽但无恢复时间，需手动恢复", healthMonitorLogPrefix, ch.Name, ch.Id))
-			return
+			// 没有恢复时间的额度用尽（如 Kimi 的 "next billing cycle" 无具体时间），
+			// 不跳过探活：走下面的真实探活逻辑，额度恢复后探活成功即可自动恢复
+			// 探活失败会进入冷却期（指数退避），不会频繁浪费请求
+			common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度用尽无恢复时间，尝试探活", healthMonitorLogPrefix, ch.Name, ch.Id))
 		}
 	}
 
