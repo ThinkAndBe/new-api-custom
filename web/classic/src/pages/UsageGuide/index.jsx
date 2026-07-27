@@ -156,9 +156,11 @@ const UsageGuide = () => {
       try {
         const parsed = JSON.parse(replaced);
         if (!Array.isArray(parsed.models)) return replaced;
+        // 模型标识兜底：有的对象用 id，有的用 name
+        const modelId = (m) => m.id || m.name || '';
         // 模板中已有的模型：保留模板参数
-        const kept = parsed.models.filter((m) => effectiveModels.includes(m.id));
-        const keptIds = new Set(kept.map((m) => m.id));
+        const kept = parsed.models.filter((m) => effectiveModels.includes(modelId(m)));
+        const keptIds = new Set(kept.map((m) => modelId(m)));
         // 模板里没有、但当前清单里有的模型（新上线/新分组）：自动补齐
         const added = effectiveModels
           .filter((name) => !keptIds.has(name))
