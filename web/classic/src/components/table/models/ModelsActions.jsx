@@ -39,6 +39,8 @@ const ModelsActions = ({
   syncUpstream,
   previewUpstreamDiff,
   applyUpstreamOverwrite,
+  syncModelParams,
+  syncingModelParams,
   compactMode,
   setCompactMode,
   t,
@@ -65,6 +67,18 @@ const ModelsActions = ({
     }
     // 无冲突，直接同步缺失
     await syncUpstream?.({ locale });
+  };
+
+  const handleSyncModelParams = async () => {
+    Modal.confirm({
+      title: t('刷新模型参数'),
+      content: t('将从 litellm 上游拉取最新的 max_input/output_tokens + 能力位，更新到本库未被锁定的模型。人工编辑过（已锁定）的模型不会被覆盖。是否继续？'),
+      okText: t('确定刷新'),
+      cancelText: t('取消'),
+      onOk: async () => {
+        await syncModelParams?.();
+      },
+    });
   };
 
   // Handle delete selected models with confirmation
@@ -160,6 +174,38 @@ const ModelsActions = ({
             }}
           >
             {t('同步')}
+          </Button>
+        </Popover>
+
+        <Popover
+          position='bottom'
+          trigger='hover'
+          content={
+            <div className='p-2 max-w-[360px]'>
+              <div className='text-[var(--semi-color-text-2)] text-sm'>
+                {t(
+                  '从 litellm 社区数据库拉取最新的 max_input/output_tokens 和能力位（工具调用/图像/推理），自动更新到本库未被锁定的模型。人工编辑过的模型不会被覆盖。',
+                )}
+              </div>
+              <a
+                href='https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json'
+                target='_blank'
+                rel='noreferrer'
+                className='text-blue-600 underline'
+              >
+                litellm/model_prices_and_context_window.json
+              </a>
+            </div>
+          }
+        >
+          <Button
+            type='secondary'
+            className='flex-1 md:flex-initial'
+            size='small'
+            loading={syncingModelParams}
+            onClick={handleSyncModelParams}
+          >
+            {t('刷新参数')}
           </Button>
         </Popover>
 

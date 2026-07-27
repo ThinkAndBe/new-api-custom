@@ -94,6 +94,11 @@ const extendedModelFormSchema = z.object({
   vendor_id: z.number().optional(),
   endpoints: z.string(),
   name_rule: z.number(),
+  max_input_tokens: z.number().default(0),
+  max_output_tokens: z.number().default(0),
+  supports_tool_call: z.boolean().default(false),
+  supports_images: z.boolean().default(false),
+  supports_reasoning: z.boolean().default(false),
   status: z.boolean(),
   sync_official: z.boolean(),
   price: z.string().optional(),
@@ -216,6 +221,11 @@ export function ModelMutateDrawer({
       vendor_id: undefined,
       endpoints: '',
       name_rule: 0,
+      max_input_tokens: 0,
+      max_output_tokens: 0,
+      supports_tool_call: false,
+      supports_images: false,
+      supports_reasoning: false,
       status: true,
       sync_official: true,
       price: '',
@@ -275,6 +285,11 @@ export function ModelMutateDrawer({
         vendor_id: model.vendor_id,
         endpoints: model.endpoints || '',
         name_rule: model.name_rule || 0,
+        max_input_tokens: model.max_input_tokens || 0,
+        max_output_tokens: model.max_output_tokens || 0,
+        supports_tool_call: !!model.supports_tool_call,
+        supports_images: !!model.supports_images,
+        supports_reasoning: !!model.supports_reasoning,
         status: model.status === 1,
         sync_official: model.sync_official === 1,
         price: '',
@@ -379,6 +394,11 @@ export function ModelMutateDrawer({
         vendor_id: undefined,
         endpoints: '',
         name_rule: 0,
+        max_input_tokens: 0,
+        max_output_tokens: 0,
+        supports_tool_call: false,
+        supports_images: false,
+        supports_reasoning: false,
         status: true,
         sync_official: true,
         price: '',
@@ -400,6 +420,18 @@ export function ModelMutateDrawer({
           ...values,
           id: isEditing ? currentRow!.id : undefined,
           tags: Array.isArray(values.tags) ? values.tags.join(',') : '',
+          max_input_tokens: Number(values.max_input_tokens) || 0,
+          max_output_tokens: Number(values.max_output_tokens) || 0,
+          supports_tool_call: !!values.supports_tool_call,
+          supports_images: !!values.supports_images,
+          supports_reasoning: !!values.supports_reasoning,
+          // 人工保存后锁定参数，litellm 刷新不再覆盖
+          params_locked:
+            (Number(values.max_input_tokens) || 0) > 0 ||
+            (Number(values.max_output_tokens) || 0) > 0 ||
+            !!values.supports_tool_call ||
+            !!values.supports_images ||
+            !!values.supports_reasoning,
           status: values.status ? 1 : 0,
           sync_official: values.sync_official ? 1 : 0,
         }
@@ -1228,6 +1260,126 @@ export function ModelMutateDrawer({
                   </Collapsible>
                 </>
               )}
+            </SideDrawerSection>
+
+            {/* Model Params (used for usage guide / client config export) */}
+            <SideDrawerSection>
+              <h3 className='text-sm font-semibold'>{t('Model Params')}</h3>
+              <FormDescription>
+                {t(
+                  'Used by the Usage Guide page to export client configs (models.json). Source: litellm refresh + admin. Once manually edited, params are locked and litellm refresh will not overwrite.',
+                )}
+              </FormDescription>
+
+              <FormField
+                control={form.control}
+                name='max_input_tokens'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Max Input Tokens')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        step={1000}
+                        value={field.value ?? 0}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === '' ? 0 : Number(e.target.value)
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('0 = unconfigured; client uses its own default')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='max_output_tokens'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Max Output Tokens')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        step={1000}
+                        value={field.value ?? 0}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === '' ? 0 : Number(e.target.value)
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('0 = unconfigured; client uses its own default')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='supports_tool_call'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex flex-col gap-0.5'>
+                      <FormLabel className='text-base'>
+                        {t('Supports Tool Call')}
+                      </FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='supports_images'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex flex-col gap-0.5'>
+                      <FormLabel className='text-base'>
+                        {t('Supports Images')}
+                      </FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='supports_reasoning'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex flex-col gap-0.5'>
+                      <FormLabel className='text-base'>
+                        {t('Supports Reasoning')}
+                      </FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
             </SideDrawerSection>
 
             {/* Status & Sync */}

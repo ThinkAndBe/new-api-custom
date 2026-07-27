@@ -41,6 +41,13 @@ export interface Model {
   tags?: string
   vendor_id?: number
   endpoints?: string
+  // 模型能力参数（用于客户端配置导出/使用教程）
+  max_input_tokens?: number
+  max_output_tokens?: number
+  supports_tool_call?: boolean
+  supports_images?: boolean
+  supports_reasoning?: boolean
+  params_locked?: boolean
   status: number
   sync_official: number
   created_time: number

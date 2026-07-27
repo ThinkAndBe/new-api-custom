@@ -124,6 +124,12 @@ const EditModelModal = (props) => {
     name_rule: props.editingModel?.model_name ? 0 : undefined, // 通过未配置模型过来的固定为精确匹配
     status: true,
     sync_official: true,
+    // 模型能力参数（用于客户端配置导出/使用教程）
+    max_input_tokens: 0,
+    max_output_tokens: 0,
+    supports_tool_call: false,
+    supports_images: false,
+    supports_reasoning: false,
   });
 
   const handleCancel = () => {
@@ -192,12 +198,22 @@ const EditModelModal = (props) => {
   const submit = async (values) => {
     setLoading(true);
     try {
+      // 检测管理员是否手动改过模型能力参数：只要任一参数非零值或非默认 false，即视为已编辑
+      const paramsEdited = values.max_input_tokens > 0 || values.max_output_tokens > 0
+        || values.supports_tool_call || values.supports_images || values.supports_reasoning;
       const submitData = {
         ...values,
         tags: Array.isArray(values.tags) ? values.tags.join(',') : values.tags,
         endpoints: values.endpoints || '',
         status: values.status ? 1 : 0,
         sync_official: values.sync_official ? 1 : 0,
+        max_input_tokens: Number(values.max_input_tokens) || 0,
+        max_output_tokens: Number(values.max_output_tokens) || 0,
+        // bool 字段发送 true/false（Go struct 是 bool 类型，绝不能塞 1/0，否则反序列化失败）
+        supports_tool_call: !!values.supports_tool_call,
+        supports_images: !!values.supports_images,
+        supports_reasoning: !!values.supports_reasoning,
+        params_locked: !!paramsEdited,
       };
 
       if (isEdit) {
@@ -540,6 +556,61 @@ const EditModelModal = (props) => {
                       label={t('状态')}
                       size='large'
                     />
+                  </Col>
+                </Row>
+              </Card>
+              {/* 模型参数（用于客户端配置导出/使用教程） */}
+              <Card className='!rounded-2xl shadow-sm border-0 mt-3'>
+                <div className='flex items-center mb-2'>
+                  <Avatar size='small' color='blue' className='mr-2 shadow-md'>
+                    <FileText size={16} />
+                  </Avatar>
+                  <div>
+                    <Text className='text-lg font-medium'>{t('模型参数')}</Text>
+                    <div className='text-xs text-gray-600'>
+                      {t('用于使用教程页面导出的客户端配置 (models.json)。来源：litellm 刷新 + 管理员维护。人工编辑后将锁定，litellm 刷新时不会覆盖。可用「刷新模型参数」按钮从 litellm 拉取上游最新值。')}
+                    </div>
+                  </div>
+                </div>
+                <Row gutter={12}>
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='max_input_tokens'
+                      label={t('最大输入 tokens')}
+                      min={0}
+                      step={1000}
+                      style={{ width: '100%' }}
+                      extraText={t('0 表示未配置，导出时客户端按默认处理')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='max_output_tokens'
+                      label={t('最大输出 tokens')}
+                      min={0}
+                      step={1000}
+                      style={{ width: '100%' }}
+                      extraText={t('0 表示未配置，导出时客户端按默认处理')}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <Space spacing={24} wrap>
+                      <Form.Switch
+                        field='supports_tool_call'
+                        label={t('支持工具调用')}
+                        size='large'
+                      />
+                      <Form.Switch
+                        field='supports_images'
+                        label={t('支持图像')}
+                        size='large'
+                      />
+                      <Form.Switch
+                        field='supports_reasoning'
+                        label={t('支持推理')}
+                        size='large'
+                      />
+                    </Space>
                   </Col>
                 </Row>
               </Card>

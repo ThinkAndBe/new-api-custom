@@ -3680,5 +3680,20 @@
   "彻底删除": "Supprimer définitivement",
   "彻底删除用户": "Supprimer définitivement l'utilisateur",
   "将永久删除用户「{{username}}」及其所有关联数据（令牌、OAuth 绑定等），此操作不可恢复！确定继续吗？": "Cela supprimera définitivement l'utilisateur « {{username}} » et toutes ses données associées (jetons, liaisons OAuth, etc.). Cette action est irréversible ! Continuer ?",
-  "用户已彻底删除": "Utilisateur supprimé définitivement"
+  "用户已彻底删除": "Utilisateur supprimé définitivement",
+  "模型参数": "Paramètres du modèle",
+  "用于使用教程页面导出的客户端配置 (models.json)。来源：litellm 刷新 + 管理员维护。人工编辑后将锁定，litellm 刷新时不会覆盖。可用「刷新模型参数」按钮从 litellm 拉取上游最新值。": "Utilisé par la page Guide d'utilisation pour exporter les configurations client (models.json). Source: litellm + admin. Une fois éditées manuellement, les valeurs sont verrouillées et le rafraîchissement litellm ne les écrasera pas.",
+  "最大输入 tokens": "Tokens d'entrée max",
+  "最大输出 tokens": "Tokens de sortie max",
+  "0 表示未配置，导出时客户端按默认处理": "0 = non configuré; le client utilise sa propre valeur par défaut",
+  "支持工具调用": "Prend en charge les appels d'outils",
+  "支持图像": "Prend en charge les images",
+  "支持推理": "Prend en charge le raisonnement",
+  "刷新参数": "Rafraîchir les paramètres",
+  "从 litellm 社区数据库拉取最新的 max_input/output_tokens 和能力位（工具调用/图像/推理），自动更新到本库未被锁定的模型。人工编辑过的模型不会被覆盖。": "Récupère les derniers max_input/output_tokens et capacités (outils/images/raisonnement) depuis litellm et met à jour les modèles non verrouillés. Les modèles édités manuellement sont ignorés.",
+  "刷新模型参数": "Rafraîchir les paramètres du modèle",
+  "将从 litellm 上游拉取最新的 max_input/output_tokens + 能力位，更新到本库未被锁定的模型。人工编辑过（已锁定）的模型不会被覆盖。是否继续？": "Cela récupérera les derniers max_input/output_tokens + capacités depuis litellm et mettra à jour les modèles non verrouillés. Les modèles édités manuellement (verrouillés) ne seront pas écrasés. Continuer?",
+  "确定刷新": "Confirmer",
+  "参数已更新：{{updated}}，跳过锁定：{{skipped}}，litellm 未覆盖：{{notFound}}": "Paramètres mis à jour: {{updated}}, ignorés verrouillés: {{skipped}}, absent de litellm: {{notFound}}",
+  "刷新失败": "Échec du rafraîchissement"
 }

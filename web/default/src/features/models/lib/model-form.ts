@@ -36,6 +36,11 @@ export const modelFormSchema = z.object({
   vendor_id: z.number().optional(),
   endpoints: z.string().default(''),
   name_rule: z.number().min(0).max(3).default(0),
+  max_input_tokens: z.number().min(0).default(0),
+  max_output_tokens: z.number().min(0).default(0),
+  supports_tool_call: z.boolean().default(false),
+  supports_images: z.boolean().default(false),
+  supports_reasoning: z.boolean().default(false),
   status: z.boolean().default(true),
   sync_official: z.boolean().default(true),
   enable_groups: z.array(z.string()).default([]),
@@ -78,6 +83,11 @@ export function transformModelToFormDefaults(model: Model): ModelFormValues {
     vendor_id: model.vendor_id,
     endpoints: model.endpoints || '',
     name_rule: model.name_rule || 0,
+    max_input_tokens: model.max_input_tokens || 0,
+    max_output_tokens: model.max_output_tokens || 0,
+    supports_tool_call: !!model.supports_tool_call,
+    supports_images: !!model.supports_images,
+    supports_reasoning: !!model.supports_reasoning,
     status: model.status === 1,
     sync_official: model.sync_official === 1,
     enable_groups: model.enable_groups || [],
@@ -91,6 +101,12 @@ export function transformModelToFormDefaults(model: Model): ModelFormValues {
 export function transformFormDataToModelPayload(
   formData: ModelFormValues
 ): Partial<Model> {
+  // 检测管理员是否手动配置了参数：任一参数非零值或非默认 false 即视为已编辑
+  const paramsEdited = formData.max_input_tokens > 0
+    || formData.max_output_tokens > 0
+    || formData.supports_tool_call
+    || formData.supports_images
+    || formData.supports_reasoning
   return {
     id: formData.id,
     model_name: formData.model_name,
@@ -100,6 +116,13 @@ export function transformFormDataToModelPayload(
     vendor_id: formData.vendor_id,
     endpoints: formData.endpoints || '',
     name_rule: formData.name_rule,
+    max_input_tokens: Number(formData.max_input_tokens) || 0,
+    max_output_tokens: Number(formData.max_output_tokens) || 0,
+    supports_tool_call: !!formData.supports_tool_call,
+    supports_images: !!formData.supports_images,
+    supports_reasoning: !!formData.supports_reasoning,
+    // 人工保存后锁定参数，litellm 刷新不再覆盖
+    params_locked: paramsEdited,
     status: formData.status ? 1 : 0,
     sync_official: formData.sync_official ? 1 : 0,
     enable_groups: formData.enable_groups,

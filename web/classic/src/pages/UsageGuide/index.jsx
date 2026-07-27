@@ -18,77 +18,9 @@ import { StatusContext } from '../../context/Status';
 
 const { Title, Text, Paragraph } = Typography;
 
-// 模型参数表
-// 数据来源: 七牛云 AI 模型广场 https://www.qiniu.com/ai/models (model_constraints + architecture)
-// 七牛聚合了 DeepSeek/智谱/Qwen/Kimi/MiniMax/豆包等原厂数据，比 OpenRouter 更准确
-const MODEL_PARAMS = {
-  // ========== 智谱 GLM ==========
-  'glm-5.2':         { in: 1000000, out: 128000, tools: true,  vision: false, reasoning: true  },
-  'glm-5.1':         { in: 200000,  out: 128000, tools: true,  vision: false, reasoning: false },
-  'glm-5':           { in: 200000,  out: 128000, tools: true,  vision: false, reasoning: true  },
-  'glm-4.7':         { in: 200000,  out: 200000, tools: true,  vision: false, reasoning: true  },
-  'glm-4.7-flash':   { in: 200000,  out: 200000, tools: true,  vision: false, reasoning: true  },
-  'glm-4.6':         { in: 200000,  out: 200000, tools: true,  vision: false, reasoning: true  },
-  'glm-4.5':         { in: 131072,  out: 98304,  tools: true,  vision: false, reasoning: false },
-  // ========== DeepSeek ==========
-  'deepseek-v4-pro':     { in: 1000000, out: 384000, tools: true, vision: false, reasoning: true  },
-  'deepseek-v4-flash':   { in: 1000000, out: 384000, tools: true, vision: false, reasoning: true  },
-  'deepseek-v3.2':       { in: 128000,  out: 32000,  tools: true, vision: false, reasoning: false },
-  'deepseek-v3.1':       { in: 128000,  out: 32000,  tools: true, vision: false, reasoning: false },
-  'deepseek-v3':         { in: 128000,  out: 16000,  tools: true, vision: false, reasoning: false },
-  'deepseek-r1':         { in: 128000,  out: 32000,  tools: true, vision: false, reasoning: true  },
-  // ========== 阿里 Qwen ==========
-  'qwen3.7-max':         { in: 1000000, out: 65536,  tools: true,  vision: false, reasoning: true  },
-  'qwen3.6-plus':        { in: 1000000, out: 65536,  tools: true,  vision: true,  reasoning: true  },
-  'qwen3.6-27b':         { in: 262100,  out: 262100, tools: true,  vision: true,  reasoning: true  },
-  'qwen3.5-plus':        { in: 1000000, out: 65536,  tools: true,  vision: true,  reasoning: true  },
-  'qwen3-max':           { in: 262144,  out: 65536,  tools: true,  vision: false, reasoning: true  },
-  'qwen3-coder-plus':    { in: 262000,  out: 65536,  tools: true,  vision: false, reasoning: true  },
-  'qwen3-coder':         { in: 262000,  out: 65536,  tools: true,  vision: false, reasoning: true  },
-  'qwen3-plus':          { in: 1000000, out: 65536,  tools: true,  vision: false, reasoning: true  },
-  'qwen-turbo':          { in: 1000000, out: 8192,   tools: true,  vision: false, reasoning: true  },
-  'qwen-plus':           { in: 1000000, out: 65536,  tools: true,  vision: false, reasoning: true  },
-  'qwen3-235b':          { in: 128000,  out: 32000,  tools: true,  vision: false, reasoning: true  },
-  'qwen3-32b':           { in: 131072,  out: 32768,  tools: true,  vision: false, reasoning: true  },
-  // ========== Kimi ==========
-  'kimi-k2.7-code':      { in: 262144,  out: 262144, tools: true, vision: true,  reasoning: true  },
-  'kimi-k2.6':           { in: 262000,  out: 262000, tools: true, vision: true,  reasoning: true  },
-  'kimi-k2.5':           { in: 256000,  out: 256000, tools: true, vision: true,  reasoning: true  },
-  'kimi-k2-thinking':    { in: 256000,  out: 100000, tools: true, vision: false, reasoning: true  },
-  'kimi-k2':             { in: 128000,  out: 128000, tools: true, vision: false, reasoning: false },
-  // ========== MiniMax ==========
-  'minimax-m3':          { in: 1000000, out: 128000, tools: true, vision: true,  reasoning: true  },
-  'minimax-m2.7':        { in: 204800,  out: 128000, tools: true, vision: false, reasoning: true  },
-  'minimax-m2.5':        { in: 204800,  out: 128000, tools: true, vision: false, reasoning: true  },
-  'minimax-m2.1':        { in: 204800,  out: 128000, tools: true, vision: false, reasoning: true  },
-  'minimax-m2':          { in: 200000,  out: 128000, tools: true, vision: false, reasoning: true  },
-  // ========== 豆包 Doubao ==========
-  'doubao-seed-2.0-pro': { in: 256000,  out: 128000, tools: true, vision: true,  reasoning: true  },
-  'doubao-seed-2.0-code':{ in: 256000,  out: 128000, tools: true, vision: true,  reasoning: true  },
-  'doubao-seed-2.0-mini':{ in: 256000,  out: 32000,  tools: true, vision: true,  reasoning: true  },
-  'doubao-seed-1.6':     { in: 256000,  out: 32000,  tools: true, vision: true,  reasoning: true  },
-  'doubao-1.5-vision':   { in: 128000,  out: 16000,  tools: false, vision: true, reasoning: false },
-  'doubao-1.5-thinking': { in: 128000,  out: 16000,  tools: true, vision: false, reasoning: true  },
-  // ========== 其他 ==========
-  'hy3-preview':         { in: 262144,  out: 262144, tools: true, vision: false, reasoning: true  },
-  'longcat-flash':       { in: 256000,  out: 320000, tools: true, vision: false, reasoning: true  },
-};
-
-// 根据七牛数据匹配模型参数
-function getModelParams(modelName) {
-  // 去掉厂商前缀（z-ai/, deepseek/, moonshotai/, minimax/, qwen/, bytedance/ 等）
-  const stripped = modelName.replace(/^[a-z]+\//i, '').toLowerCase();
-  // 精确匹配
-  if (MODEL_PARAMS[stripped]) return MODEL_PARAMS[stripped];
-  // 前缀匹配
-  for (const key of Object.keys(MODEL_PARAMS)) {
-    if (stripped.startsWith(key) || stripped.includes(key)) {
-      return MODEL_PARAMS[key];
-    }
-  }
-  // 兜底
-  return { in: 128000, out: 8192, tools: true, vision: false, reasoning: false };
-}
+// 当后端模型参数（max_in/out/tool/vision/reasoning）未配置时使用的兜底默认值。
+// 0 表示"未知"，客户端会按自身默认处理；不再使用之前误导性的 128000/8192 硬编码。
+const DEFAULT_MODEL_PARAMS = { in: 0, out: 0, tools: false, vision: false, reasoning: false };
 
 const UsageGuide = () => {
   const { t } = useTranslation();
@@ -98,6 +30,8 @@ const UsageGuide = () => {
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [loadingKey, setLoadingKey] = useState(false);
   const [userModels, setUserModels] = useState([]);
+  // modelParamsMap: { '模型名': { in, out, tools, vision, reasoning } }，从后端 /api/user/models/meta 拉取
+  const [modelParamsMap, setModelParamsMap] = useState({});
   const [statusState] = useContext(StatusContext);
   const serverAddress = statusState?.status?.server_address || '';
 
@@ -105,14 +39,15 @@ const UsageGuide = () => {
     ? serverAddress.replace(/\/$/, '')
     : window.location.origin;
 
-  // 加载令牌和模型
+  // 加载令牌、模型名列表和模型参数元数据
   useEffect(() => {
     setLoadingTokens(true);
     Promise.all([
       API.get('/api/token/?p=1&size=100'),
       API.get('/api/user/models'),
+      API.get('/api/user/models/meta'),
     ])
-      .then(([tokenRes, modelRes]) => {
+      .then(([tokenRes, modelRes, metaRes]) => {
         if (tokenRes.data.success) {
           const items = tokenRes.data.data?.items || [];
           const active = items.filter((tk) => tk.status === 1);
@@ -121,6 +56,21 @@ const UsageGuide = () => {
         }
         if (modelRes.data.success) {
           setUserModels(modelRes.data.data || []);
+        }
+        // 构造模型名 -> 参数的映射；后端未配置（max_input_tokens=0）的模型用安全兜底
+        if (metaRes.data.success) {
+          const metaList = metaRes.data.data || [];
+          const paramsMap = {};
+          for (const m of metaList) {
+            paramsMap[m.model_name] = {
+              in: m.max_input_tokens || 0,
+              out: m.max_output_tokens || 0,
+              tools: !!m.supports_tool_call,
+              vision: !!m.supports_images,
+              reasoning: !!m.supports_reasoning,
+            };
+          }
+          setModelParamsMap(paramsMap);
         }
       })
       .catch(() => showError(t('加载失败')))
@@ -145,10 +95,12 @@ const UsageGuide = () => {
   }, [selectedTokenId]);
 
   // 生成 models.json
+  // 模型参数来源：后端 /api/user/models/meta（管理员维护 + litellm 刷新）。
+  // 后端未配置的模型用安全兜底（0/全 false），客户端按自身默认处理，不再使用误导性的 128000/8192。
   const modelsJson = useCallback(() => {
     if (!tokenKey || userModels.length === 0) return '';
     const models = userModels.map((name) => {
-      const p = getModelParams(name);
+      const p = modelParamsMap[name] || DEFAULT_MODEL_PARAMS;
       return {
         id: name,
         name: `ERKE ${name}`,
@@ -163,7 +115,7 @@ const UsageGuide = () => {
       };
     });
     return JSON.stringify({ models }, null, 2);
-  }, [tokenKey, userModels, baseUrl]);
+  }, [tokenKey, userModels, baseUrl, modelParamsMap]);
 
   const handleDownload = useCallback(() => {
     const json = modelsJson();

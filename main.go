@@ -116,6 +116,14 @@ func main() {
 	// 渠道定时暂停任务（自动根据配置的时间窗口切换状态 1↔4）
 	service.StartChannelSchedulePauseTask()
 
+	// 一次性：给现有 models 表行补齐模型能力参数（max_in/out/tool/vision/reasoning）
+	// 只对 max_input_tokens=0 的行起效，幂等，跑过一次后不再命中
+	if common.IsMasterNode {
+		if seeded, err := model.SeedModelParams(); err == nil && seeded > 0 {
+			common.SysLog(fmt.Sprintf("已为 %d 个模型补齐初始能力参数（max_in/out/tool/vision/reasoning）", seeded))
+		}
+	}
+
 	// 对话日志定时清理任务（自动删除超过保留期的记录）
 	service.StartChatLogCleanupTask()
 

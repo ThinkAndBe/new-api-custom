@@ -173,6 +173,8 @@ const ModelsPage = () => {
               previewing={modelsData.previewing}
               previewUpstreamDiff={modelsData.previewUpstreamDiff}
               applyUpstreamOverwrite={modelsData.applyUpstreamOverwrite}
+              syncModelParams={modelsData.syncModelParams}
+              syncingModelParams={modelsData.syncingModelParams}
               compactMode={compactMode}
               setCompactMode={setCompactMode}
               t={t}

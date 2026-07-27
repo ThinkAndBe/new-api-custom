@@ -725,6 +725,82 @@ func GetUserModels(c *gin.Context) {
 	return
 }
 
+// userModelMeta 模型参数元数据（用户侧使用教程用）
+type userModelMeta struct {
+	ModelName         string `json:"model_name"`
+	MaxInputTokens    int    `json:"max_input_tokens"`
+	MaxOutputTokens   int    `json:"max_output_tokens"`
+	SupportsToolCall  bool   `json:"supports_tool_call"`
+	SupportsImages    bool   `json:"supports_images"`
+	SupportsReasoning bool   `json:"supports_reasoning"`
+}
+
+// GetUserModelsMeta 返回用户当前分组下所有可用模型的参数元数据（max_in/out/tool/vision/reasoning）。
+// 用于使用教程页面导出客户端配置（models.json），替代前端硬编码兜底。
+// GET /api/user/models/meta
+func GetUserModelsMeta(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		id = c.GetInt("id")
+	}
+	user, err := model.GetUserCache(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	groups := service.GetUserUsableGroups(user.Group)
+	// 收集所有可用模型名（去重）
+	modelSet := make(map[string]struct{})
+	for group := range groups {
+		for _, g := range model.GetGroupEnabledModels(group) {
+			modelSet[g] = struct{}{}
+		}
+	}
+	if len(modelSet) == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": []userModelMeta{}})
+		return
+	}
+	// 构造 IN 查询的模型名切片
+	names := make([]string, 0, len(modelSet))
+	for name := range modelSet {
+		names = append(names, name)
+	}
+	// 批量查 models 表，取能力参数（max_input_tokens=0 说明未填，仍返回让前端兜底）
+	var dbModels []model.Model
+	if err := model.DB.Unscoped().Select("model_name", "max_input_tokens", "max_output_tokens", "supports_tool_call", "supports_images", "supports_reasoning").
+		Where("model_name IN ?", names).Find(&dbModels).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// 用 NameRule 匹配：未精确命中的模型尝试前缀/包含匹配
+	metaMap := make(map[string]userModelMeta, len(dbModels))
+	for _, m := range dbModels {
+		metaMap[strings.ToLower(m.ModelName)] = userModelMeta{
+			ModelName:         m.ModelName,
+			MaxInputTokens:    m.MaxInputTokens,
+			MaxOutputTokens:   m.MaxOutputTokens,
+			SupportsToolCall:  m.SupportsToolCall,
+			SupportsImages:    m.SupportsImages,
+			SupportsReasoning: m.SupportsReasoning,
+		}
+	}
+	result := make([]userModelMeta, 0, len(names))
+	for _, name := range names {
+		if meta, ok := metaMap[strings.ToLower(name)]; ok {
+			result = append(result, meta)
+		} else {
+			// 数据库无此模型注册：返回零值，前端用兜底
+			result = append(result, userModelMeta{ModelName: name})
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    result,
+	})
+	return
+}
+
 func UpdateUser(c *gin.Context) {
 	var updatedUser model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&updatedUser)

@@ -4214,5 +4214,20 @@
   "彻底删除": "Xóa vĩnh viễn",
   "彻底删除用户": "Xóa vĩnh viễn ngườù dùng",
   "将永久删除用户「{{username}}」及其所有关联数据（令牌、OAuth 绑定等），此操作不可恢复！确定继续吗？": "Thao tác này sẽ xóa vĩnh viễn ngườù dùng \"{{username}}\" và toàn bộ dữ liệu liên quan (token, liên kết OAuth, v.v.). Không thể hoàn tác! Tiếp tục?",
-  "用户已彻底删除": "Đã xóa vĩnh viễn ngườù dùng"
+  "用户已彻底删除": "Đã xóa vĩnh viễn ngườù dùng",
+  "模型参数": "Tham số mô hình",
+  "用于使用教程页面导出的客户端配置 (models.json)。来源：litellm 刷新 + 管理员维护。人工编辑后将锁定，litellm 刷新时不会覆盖。可用「刷新模型参数」按钮从 litellm 拉取上游最新值。": "Sử dụng bởi trang Hướng dẫn sử dụng để xuất cấu hình client (models.json). Nguồn: làm mới litellm + admin. Sau khi chỉnh sửa thủ công sẽ bị khóa, làm mới litellm sẽ không ghi đè.",
+  "最大输入 tokens": "Token nhập tối đa",
+  "最大输出 tokens": "Token xuất tối đa",
+  "0 表示未配置，导出时客户端按默认处理": "0 = chưa cấu hình; client dùng mặc định khi xuất",
+  "支持工具调用": "Hỗ trợ gọi công cụ",
+  "支持图像": "Hỗ trợ ảnh",
+  "支持推理": "Hỗ trợ suy luận",
+  "刷新参数": "Làm mới tham số",
+  "从 litellm 社区数据库拉取最新的 max_input/output_tokens 和能力位（工具调用/图像/推理），自动更新到本库未被锁定的模型。人工编辑过的模型不会被覆盖。": "Lấy max_input/output_tokens và các cờ năng lực (gọi công cụ/ảnh/suy luận) mới nhất từ litellm và tự động cập nhật các mô hình chưa khóa. Các mô hình đã chỉnh sửa thủ công sẽ bị bỏ qua.",
+  "刷新模型参数": "Làm mới tham số mô hình",
+  "将从 litellm 上游拉取最新的 max_input/output_tokens + 能力位，更新到本库未被锁定的模型。人工编辑过（已锁定）的模型不会被覆盖。是否继续？": "Sẽ lấy max_input/output_tokens + cờ năng lực mới nhất từ litellm và cập nhật các mô hình chưa khóa. Các mô hình đã chỉnh sửa thủ công (đã khóa) sẽ không bị ghi đè. Tiếp tục?",
+  "确定刷新": "Xác nhận",
+  "参数已更新：{{updated}}，跳过锁定：{{skipped}}，litellm 未覆盖：{{notFound}}": "Đã cập nhật tham số: {{updated}}, bỏ qua đã khóa: {{skipped}}, không có trong litellm: {{notFound}}",
+  "刷新失败": "Làm mới thất bại"
 }

@@ -226,6 +226,46 @@ export async function applyUpstreamOverwrite(params: {
   return syncUpstream(params)
 }
 
+/**
+ * Refresh model params (max_in/out/tool/vision/reasoning) from litellm.
+ * Only updates models whose ParamsLocked is false (locked ones are skipped).
+ */
+export async function syncModelParams(): Promise<{
+  success: boolean
+  message?: string
+  data?: {
+    updated: number
+    skipped_locked: number
+    not_found: number
+    total: number
+    litellm_model_count?: number
+  }
+}> {
+  const res = await api.post('/api/models/sync_params')
+  return res.data
+}
+
+/**
+ * Preview diff from litellm params sync
+ */
+export async function previewModelParamsDiff(): Promise<{
+  success: boolean
+  data?: {
+    will_update: Array<Record<string, unknown>>
+    skipped_locked: Array<Record<string, unknown>>
+    not_found: Array<Record<string, unknown>>
+    summary: {
+      will_update_count: number
+      skipped_locked_count: number
+      not_found_count: number
+      total: number
+    }
+  }
+}> {
+  const res = await api.get('/api/models/sync_params/preview')
+  return res.data
+}
+
 // ============================================================================
 // Utility Operations
 // ============================================================================

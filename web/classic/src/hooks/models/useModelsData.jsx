@@ -97,6 +97,7 @@ export const useModelsData = () => {
   const [editingVendor, setEditingVendor] = useState({ id: undefined });
   const [syncing, setSyncing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [syncingModelParams, setSyncingModelParams] = useState(false);
 
   const vendorMap = useMemo(() => {
     const map = {};
@@ -247,6 +248,33 @@ export const useModelsData = () => {
       return false;
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // Refresh model params (max_in/out/tool/vision/reasoning) from litellm
+  // 仅更新 ParamsLocked=false 的模型，已锁定的会被跳过
+  const syncModelParams = async () => {
+    setSyncingModelParams(true);
+    try {
+      const res = await API.post('/api/models/sync_params');
+      const { success, message, data } = res.data || {};
+      if (success) {
+        const updated = data?.updated || 0;
+        const skipped = data?.skipped_locked || 0;
+        const notFound = data?.not_found || 0;
+        showSuccess(
+          t('参数已更新：{{updated}}，跳过锁定：{{skipped}}，litellm 未覆盖：{{notFound}}', {
+            updated, skipped, notFound,
+          }),
+        );
+        await refresh();
+      } else {
+        showError(message || t('刷新失败'));
+      }
+    } catch (e) {
+      showError(e?.response?.data?.message || t('刷新失败'));
+    } finally {
+      setSyncingModelParams(false);
     }
   };
 
@@ -493,5 +521,9 @@ export const useModelsData = () => {
     syncUpstream,
     previewUpstreamDiff,
     applyUpstreamOverwrite,
+
+    // Model params sync (litellm)
+    syncingModelParams,
+    syncModelParams,
   };
 };
