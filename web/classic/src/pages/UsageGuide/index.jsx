@@ -32,8 +32,6 @@ const UsageGuide = () => {
   // allUserModels: 完整清单（含临时被禁用渠道的模型），用于"稳定模式"
   const [allUserModels, setAllUserModels] = useState([]);
   const [allModelParamsMap, setAllModelParamsMap] = useState({});
-  // includeDisabled: true=完整清单（推荐，配置文件长期稳定，不受渠道临时禁用影响）
-  const [includeDisabled, setIncludeDisabled] = useState(true);
   const [modelParamsMap, setModelParamsMap] = useState({});
   const [statusState] = useContext(StatusContext);
   const [userState] = useContext(UserContext);
@@ -119,10 +117,10 @@ const UsageGuide = () => {
       .finally(() => setLoadingKey(false));
   }, [selectedTokenId]);
 
-  // 当前生效的模型清单和参数：根据用户选择"完整清单/当前可用"切换
-  const effectiveModels = includeDisabled ? allUserModels : userModels;
-  const effectiveParamsMap = includeDisabled ? allModelParamsMap : modelParamsMap;
-  // 暂不可用模型 = 完整清单 - 当前可用
+  // 模型清单：始终使用完整清单（含暂不可用模型），保证配置文件长期稳定
+  const effectiveModels = allUserModels;
+  const effectiveParamsMap = allModelParamsMap;
+  // 暂不可用模型 = 完整清单 - 当前可用（仅做展示，不参与导出）
   const userModelsSet = new Set(userModels);
   const disabledModels = allUserModels.filter((m) => !userModelsSet.has(m));
 
@@ -461,42 +459,12 @@ pause`;
                 lineHeight: 1.5,
                 overflow: 'auto',
                 maxHeight: 300,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
+                // 保持 JSON 原始缩进，长行横向滚动而不是中间断词，避免预览没法看
+                whiteSpace: 'pre',
+                wordBreak: 'normal',
               }}>
                 {modelsJson()}
               </pre>
-            </div>
-
-            {/* 模型清单模式切换 */}
-            <div style={{
-              marginBottom: 12,
-              padding: '10px 12px',
-              background: 'var(--semi-color-fill-0)',
-              borderRadius: 6,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <Text strong size='small'>{t('模型清单')}：</Text>
-                <Button
-                  size='small'
-                  type={includeDisabled ? 'primary' : 'tertiary'}
-                  onClick={() => setIncludeDisabled(true)}
-                >
-                  {t('完整清单（推荐）')}
-                </Button>
-                <Button
-                  size='small'
-                  type={!includeDisabled ? 'primary' : 'tertiary'}
-                  onClick={() => setIncludeDisabled(false)}
-                >
-                  {t('仅当前可用')}
-                </Button>
-              </div>
-              <Text type='tertiary' size='small' style={{ display: 'block', marginTop: 6 }}>
-                {includeDisabled
-                  ? t('配置里同时包含「可用」和「暂不可用」的模型。即使某些渠道临时禁用，配置里也保留，渠道恢复后立即可用，无需重新下载。')
-                  : t('配置里只包含当前可用的模型。如果渠道被临时禁用，模型会从配置中消失，恢复后需要重新下载。')}
-              </Text>
             </div>
 
             {/* 可用模型列表（始终只显示当前 enabled=true 的） */}
@@ -513,8 +481,8 @@ pause`;
               </div>
             </div>
 
-            {/* 暂不可用模型（仅在完整清单模式下显示，提示用户这些模型已在配置里） */}
-            {includeDisabled && disabledModels.length > 0 && (
+            {/* 暂不可用模型（提示用户这些模型已在配置里，渠道恢复后即可用） */}
+            {disabledModels.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 <Text type='tertiary' size='small'>
                   {t('暂不可用模型')}（{disabledModels.length}）：
