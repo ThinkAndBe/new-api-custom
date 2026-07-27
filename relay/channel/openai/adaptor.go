@@ -354,6 +354,11 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 		}
 	}
 
+	// temperature-locked 模型（如 k3 系列）只接受 temperature=1，清除客户端传入值避免上游 400
+	if dto.IsTemperatureLockedModel(info.UpstreamModelName) {
+		request.Temperature = nil
+	}
+
 	return request, nil
 }
 

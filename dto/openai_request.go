@@ -223,6 +223,12 @@ func IsOpenAIGPT5Model(modelName string) bool {
 	return strings.HasPrefix(modelName, "gpt-5")
 }
 
+// IsTemperatureLockedModel 判断模型是否只接受 temperature=1（上游会拒绝其他值）。
+// 这类模型需要在转发前清除 temperature 参数，避免 "invalid temperature: only 1 is allowed" 错误。
+func IsTemperatureLockedModel(modelName string) bool {
+	return strings.HasPrefix(modelName, "k3")
+}
+
 func (r *GeneralOpenAIRequest) GetSystemRoleName() string {
 	if IsOpenAIReasoningOModel(r.Model) {
 		if !strings.HasPrefix(r.Model, "o1-mini") && !strings.HasPrefix(r.Model, "o1-preview") {
