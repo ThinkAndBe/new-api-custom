@@ -45,6 +45,17 @@ func GetGroupEnabledModels(group string) []string {
 	return models
 }
 
+// GetGroupModels 返回该分组下"理论可用"的模型清单（不过滤 enabled）。
+// 用于使用教程页生成 models.json 等"用户应该看到哪些模型"的场景：
+//   - 渠道临时被禁用（手动/自动）时，模型依然出现在用户配置里，避免配置文件随
+//     渠道状态抖动而频繁变化
+//   - 调用时由 relay 层的渠道选择负责跳过禁用渠道
+func GetGroupModels(group string) []string {
+	var models []string
+	DB.Table("abilities").Where(commonGroupCol+" = ?", group).Distinct("model").Pluck("model", &models)
+	return models
+}
+
 func GetEnabledModels() []string {
 	var models []string
 	// Find distinct models

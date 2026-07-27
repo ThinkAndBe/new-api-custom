@@ -29,6 +29,11 @@ const UsageGuide = () => {
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [loadingKey, setLoadingKey] = useState(false);
   const [userModels, setUserModels] = useState([]);
+  // allUserModels: 完整清单（含临时被禁用渠道的模型），用于"稳定模式"
+  const [allUserModels, setAllUserModels] = useState([]);
+  const [allModelParamsMap, setAllModelParamsMap] = useState({});
+  // includeDisabled: true=完整清单（推荐，配置文件长期稳定，不受渠道临时禁用影响）
+  const [includeDisabled, setIncludeDisabled] = useState(true);
   const [modelParamsMap, setModelParamsMap] = useState({});
   const [statusState] = useContext(StatusContext);
   const [userState] = useContext(UserContext);
@@ -51,9 +56,12 @@ const UsageGuide = () => {
       API.get('/api/token/?p=1&size=100'),
       API.get('/api/user/models'),
       API.get('/api/user/models/meta'),
+      // 完整清单（含临时禁用渠道），用于"稳定模式"
+      API.get('/api/user/models?all=1'),
+      API.get('/api/user/models/meta?all=1'),
       API.get('/api/user/models/template'),
     ])
-      .then(([tokenRes, modelRes, metaRes, templateRes]) => {
+      .then(([tokenRes, modelRes, metaRes, allModelRes, allMetaRes, templateRes]) => {
         if (tokenRes.data.success) {
           const items = tokenRes.data.data?.items || [];
           const active = items.filter((tk) => tk.status === 1);
@@ -63,19 +71,27 @@ const UsageGuide = () => {
         if (modelRes.data.success) {
           setUserModels(modelRes.data.data || []);
         }
-        if (metaRes.data.success) {
-          const metaList = metaRes.data.data || [];
-          const paramsMap = {};
-          for (const m of metaList) {
-            paramsMap[m.model_name] = {
-              in: m.max_input_tokens || 0,
-              out: m.max_output_tokens || 0,
-              tools: !!m.supports_tool_call,
-              vision: !!m.supports_images,
-              reasoning: !!m.supports_reasoning,
+        const buildMap = (metaList) => {
+          const m = {};
+          for (const it of metaList || []) {
+            m[it.model_name] = {
+              in: it.max_input_tokens || 0,
+              out: it.max_output_tokens || 0,
+              tools: !!it.supports_tool_call,
+              vision: !!it.supports_images,
+              reasoning: !!it.supports_reasoning,
             };
           }
-          setModelParamsMap(paramsMap);
+          return m;
+        };
+        if (metaRes.data.success) {
+          setModelParamsMap(buildMap(metaRes.data.data));
+        }
+        if (allModelRes.data.success) {
+          setAllUserModels(allModelRes.data.data || []);
+        }
+        if (allMetaRes.data.success) {
+          setAllModelParamsMap(buildMap(allMetaRes.data.data));
         }
         if (templateRes.data.success && templateRes.data.data) {
           setTemplate(templateRes.data.data);
@@ -103,11 +119,18 @@ const UsageGuide = () => {
       .finally(() => setLoadingKey(false));
   }, [selectedTokenId]);
 
+  // 当前生效的模型清单和参数：根据用户选择"完整清单/当前可用"切换
+  const effectiveModels = includeDisabled ? allUserModels : userModels;
+  const effectiveParamsMap = includeDisabled ? allModelParamsMap : modelParamsMap;
+  // 暂不可用模型 = 完整清单 - 当前可用
+  const userModelsSet = new Set(userModels);
+  const disabledModels = allUserModels.filter((m) => !userModelsSet.has(m));
+
   // 自动生成 models.json（当管理员未设置模板时的兜底）
   const autoModelsJson = useCallback(() => {
-    if (!tokenKey || userModels.length === 0) return '';
-    const models = userModels.map((name) => {
-      const p = modelParamsMap[name] || DEFAULT_MODEL_PARAMS;
+    if (!tokenKey || effectiveModels.length === 0) return '';
+    const models = effectiveModels.map((name) => {
+      const p = effectiveParamsMap[name] || DEFAULT_MODEL_PARAMS;
       return {
         id: name,
         name: `ERKE ${name}`,
@@ -122,7 +145,7 @@ const UsageGuide = () => {
       };
     });
     return JSON.stringify({ models }, null, 2);
-  }, [tokenKey, userModels, baseUrl, modelParamsMap]);
+  }, [tokenKey, effectiveModels, baseUrl, effectiveParamsMap]);
 
   // 最终 models.json：优先使用管理员模板（替换占位符），否则自动生成
   const modelsJson = useCallback(() => {
@@ -169,7 +192,7 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText((Join-Path $dir 'models.json'), $json, $utf8NoBom)
 Write-Host ''
 Write-Host '✅ 配置已写入: ' (Join-Path $dir 'models.json') -ForegroundColor Green
-Write-Host '📊 共 ${userModels.length} 个模型'
+Write-Host '📊 共 ${effectiveModels.length} 个模型'
 Write-Host '🔗 API: ${baseUrl}/v1'
 Write-Host ''
 Write-Host '重启 ${productName} 即可生效'`;
@@ -185,7 +208,7 @@ Write-Host '重启 ${productName} 即可生效'`;
     return `@echo off
 powershell -ExecutionPolicy Bypass -EncodedCommand ${b64}
 pause`;
-  }, [modelsJson, userModels.length, baseUrl]);
+  }, [modelsJson, effectiveModels.length, baseUrl]);
 
   const handleDownloadScript = useCallback((type = 'workbuddy') => {
     const script = autoScript(type);
@@ -262,7 +285,7 @@ pause`;
     label: tk.name || `Token #${tk.id}`,
   }));
 
-  const ready = tokenKey && userModels.length > 0;
+  const ready = tokenKey && effectiveModels.length > 0;
 
   return (
     <div className='mt-[60px] px-4 pb-8' style={{ maxWidth: 720, margin: '60px auto 0' }}>
@@ -445,7 +468,38 @@ pause`;
               </pre>
             </div>
 
-            {/* 可用模型列表 */}
+            {/* 模型清单模式切换 */}
+            <div style={{
+              marginBottom: 12,
+              padding: '10px 12px',
+              background: 'var(--semi-color-fill-0)',
+              borderRadius: 6,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Text strong size='small'>{t('模型清单')}：</Text>
+                <Button
+                  size='small'
+                  type={includeDisabled ? 'primary' : 'tertiary'}
+                  onClick={() => setIncludeDisabled(true)}
+                >
+                  {t('完整清单（推荐）')}
+                </Button>
+                <Button
+                  size='small'
+                  type={!includeDisabled ? 'primary' : 'tertiary'}
+                  onClick={() => setIncludeDisabled(false)}
+                >
+                  {t('仅当前可用')}
+                </Button>
+              </div>
+              <Text type='tertiary' size='small' style={{ display: 'block', marginTop: 6 }}>
+                {includeDisabled
+                  ? t('配置里同时包含「可用」和「暂不可用」的模型。即使某些渠道临时禁用，配置里也保留，渠道恢复后立即可用，无需重新下载。')
+                  : t('配置里只包含当前可用的模型。如果渠道被临时禁用，模型会从配置中消失，恢复后需要重新下载。')}
+              </Text>
+            </div>
+
+            {/* 可用模型列表（始终只显示当前 enabled=true 的） */}
             <div style={{ marginTop: 12 }}>
               <Text type='tertiary' size='small'>
                 {t('可用模型')}（{userModels.length}）：
@@ -458,6 +512,25 @@ pause`;
                 ))}
               </div>
             </div>
+
+            {/* 暂不可用模型（仅在完整清单模式下显示，提示用户这些模型已在配置里） */}
+            {includeDisabled && disabledModels.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <Text type='tertiary' size='small'>
+                  {t('暂不可用模型')}（{disabledModels.length}）：
+                </Text>
+                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {disabledModels.map((m) => (
+                    <Tag key={m} size='small' color='grey' shape='circle' type='ghost'>
+                      {m}
+                    </Tag>
+                  ))}
+                </div>
+                <Text type='tertiary' size='small' style={{ display: 'block', marginTop: 6 }}>
+                  {t('这些模型已包含在配置中，渠道恢复后立即可用，无需重新下载。')}
+                </Text>
+              </div>
+            )}
           </div>
         )}
       </Card>

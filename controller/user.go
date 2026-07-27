@@ -708,10 +708,20 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// all=1 返回"理论可用"的完整模型清单（含临时被禁用的渠道），
+	// 用于使用教程页生成稳定的 models.json，避免渠道禁用/恢复导致用户配置抖动。
+	// 默认行为保持原有：仅返回当前 enabled=true 的模型。
+	includeDisabled := c.Query("all") == "1" || c.Query("all") == "true"
 	groups := service.GetUserUsableGroups(user.Group)
 	var models []string
 	for group := range groups {
-		for _, g := range model.GetGroupEnabledModels(group) {
+		var groupModels []string
+		if includeDisabled {
+			groupModels = model.GetGroupModels(group)
+		} else {
+			groupModels = model.GetGroupEnabledModels(group)
+		}
+		for _, g := range groupModels {
 			if !common.StringsContains(models, g) {
 				models = append(models, g)
 			}
@@ -738,6 +748,7 @@ type userModelMeta struct {
 // GetUserModelsMeta 返回用户当前分组下所有可用模型的参数元数据（max_in/out/tool/vision/reasoning）。
 // 用于使用教程页面导出客户端配置（models.json），替代前端硬编码兜底。
 // GET /api/user/models/meta
+// 查询参数 all=1：返回"理论可用"的完整清单（含临时禁用渠道），用于生成稳定的 models.json。
 func GetUserModelsMeta(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -748,11 +759,18 @@ func GetUserModelsMeta(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	includeDisabled := c.Query("all") == "1" || c.Query("all") == "true"
 	groups := service.GetUserUsableGroups(user.Group)
 	// 收集所有可用模型名（去重）
 	modelSet := make(map[string]struct{})
 	for group := range groups {
-		for _, g := range model.GetGroupEnabledModels(group) {
+		var groupModels []string
+		if includeDisabled {
+			groupModels = model.GetGroupModels(group)
+		} else {
+			groupModels = model.GetGroupEnabledModels(group)
+		}
+		for _, g := range groupModels {
 			modelSet[g] = struct{}{}
 		}
 	}
