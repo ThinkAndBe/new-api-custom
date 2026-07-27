@@ -52,8 +52,10 @@ func processSchedulePause() {
 	resumedCount := 0
 	scannedCount := 0
 	for _, ch := range channels {
-		// 只处理状态为 1（启用）或 4（定时暂停中）的渠道
-		if ch.Status != common.ChannelStatusEnabled && ch.Status != common.ChannelStatusSchedulePaused {
+		// 只处理状态为 1（启用）、4（定时暂停中）或 3（自动禁用）的渠道。
+		// 3 也要管：定时暂停期间渠道可能因其它原因被自动禁用(3)，若不在此处理，
+		// 暂停窗口结束后就没人把它恢复回来（表现为"到点不恢复"）。
+		if ch.Status != common.ChannelStatusEnabled && ch.Status != common.ChannelStatusSchedulePaused && ch.Status != common.ChannelStatusAutoDisabled {
 			continue
 		}
 		settings := ch.GetOtherSettings()
@@ -82,8 +84,13 @@ func processSchedulePause() {
 					schedulePauseLogPrefix, ch.Name, ch.Id, weekdayStr, reason, matchedRule.Start, matchedRule.End))
 				pausedCount++
 			}
-		case !shouldPause && ch.Status == common.ChannelStatusSchedulePaused:
-			// 恢复
+		case shouldPause && ch.Status == common.ChannelStatusAutoDisabled:
+			// 自动禁用但当前处于暂停窗口：纠正回定时暂停，避免被卡在 3 导致窗口结束不恢复
+			if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusSchedulePaused, "定时暂停") {
+				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 从自动禁用纠正为定时暂停 (%s)", schedulePauseLogPrefix, ch.Name, ch.Id, weekdayStr))
+			}
+		case !shouldPause && (ch.Status == common.ChannelStatusSchedulePaused || ch.Status == common.ChannelStatusAutoDisabled):
+			// 恢复：无论是定时暂停(4)还是暂停期间被自动禁用(3)，窗口结束都拉回启用
 			if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusEnabled, "定时暂停结束，自动恢复") {
 				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 已恢复 (%s 暂停窗口已结束)", schedulePauseLogPrefix, ch.Name, ch.Id, weekdayStr))
 				resumedCount++
