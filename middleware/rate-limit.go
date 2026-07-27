@@ -108,6 +108,19 @@ func CriticalRateLimit() func(c *gin.Context) {
 	return defNext
 }
 
+// UserCriticalRateLimit 按已登录用户 ID 限流（而非客户端 IP）。
+// 用于敏感但用户可能高频使用的接口（如令牌页"查看密钥"、使用教程页"获取密钥"）。
+// 必须在 UserAuth() 之后调用。
+// 与 CriticalRateLimit 的区别：
+//   - CriticalRateLimit 按 IP 限流，多用户共享同一出口 IP（公司内网/4G）时会互相挤占配额
+//   - UserCriticalRateLimit 按 user_id 限流，每个用户有独立配额，且不受 IP 变化影响
+func UserCriticalRateLimit() func(c *gin.Context) {
+	if common.CriticalRateLimitEnable {
+		return userRateLimitFactory(common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "UCT")
+	}
+	return defNext
+}
+
 func DownloadRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(common.DownloadRateLimitNum, common.DownloadRateLimitDuration, "DW")
 }
