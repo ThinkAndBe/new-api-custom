@@ -3822,5 +3822,9 @@
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
     "、": ", "
-  }
+  },
+  "彻底删除": "Delete Permanently",
+  "彻底删除用户": "Delete User Permanently",
+  "将永久删除用户「{{username}}」及其所有关联数据（令牌、OAuth 绑定等），此操作不可恢复！确定继续吗？": "This will permanently delete user \"{{username}}\" and all associated data (tokens, OAuth bindings, etc.). This cannot be undone! Continue?",
+  "用户已彻底删除": "User permanently deleted"
 }

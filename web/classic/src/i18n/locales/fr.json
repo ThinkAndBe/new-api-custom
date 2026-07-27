@@ -3676,5 +3676,9 @@
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
     "、": ", "
-  }
+  },
+  "彻底删除": "Supprimer définitivement",
+  "彻底删除用户": "Supprimer définitivement l'utilisateur",
+  "将永久删除用户「{{username}}」及其所有关联数据（令牌、OAuth 绑定等），此操作不可恢复！确定继续吗？": "Cela supprimera définitivement l'utilisateur « {{username}} » et toutes ses données associées (jetons, liaisons OAuth, etc.). Cette action est irréversible ! Continuer ?",
+  "用户已彻底删除": "Utilisateur supprimé définitivement"
 }

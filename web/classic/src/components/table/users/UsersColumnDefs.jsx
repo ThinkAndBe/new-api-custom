@@ -220,10 +220,11 @@ const renderOperations = (
     showResetTwoFAModal,
     showUserSubscriptionsModal,
     handleReactivate,
+    handleHardDelete,
     t,
   },
 ) => {
-  // 已注销用户（status=3 或软删除 DeletedAt 有值）：只显示恢复按钮
+  // 已注销用户（status=3 或软删除 DeletedAt 有值）：显示恢复 + 彻底删除按钮
   if (record.status === 3 || (record.DeletedAt !== null && record.DeletedAt !== undefined)) {
     return (
       <Space>
@@ -233,6 +234,13 @@ const renderOperations = (
           onClick={() => handleReactivate(record)}
         >
           {t('恢复')}
+        </Button>
+        <Button
+          type='danger'
+          size='small'
+          onClick={() => handleHardDelete(record)}
+        >
+          {t('彻底删除')}
         </Button>
       </Space>
     );
@@ -340,6 +348,7 @@ export const getUsersColumns = ({
   showResetTwoFAModal,
   showUserSubscriptionsModal,
   handleReactivate,
+  handleHardDelete,
 }) => {
   return [
     {
@@ -408,6 +417,7 @@ export const getUsersColumns = ({
           showResetTwoFAModal,
           showUserSubscriptionsModal,
           handleReactivate,
+          handleHardDelete,
           t,
         }),
     },

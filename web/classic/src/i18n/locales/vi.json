@@ -4210,5 +4210,9 @@
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
     "、": ", "
-  }
+  },
+  "彻底删除": "Xóa vĩnh viễn",
+  "彻底删除用户": "Xóa vĩnh viễn ngườù dùng",
+  "将永久删除用户「{{username}}」及其所有关联数据（令牌、OAuth 绑定等），此操作不可恢复！确定继续吗？": "Thao tác này sẽ xóa vĩnh viễn ngườù dùng \"{{username}}\" và toàn bộ dữ liệu liên quan (token, liên kết OAuth, v.v.). Không thể hoàn tác! Tiếp tục?",
+  "用户已彻底删除": "Đã xóa vĩnh viễn ngườù dùng"
 }

@@ -454,13 +454,46 @@ func ReactivateUser(id int) error {
 }
 
 // CleanDeactivatedUsers 删除超过指定天数的已注销用户
+// 覆盖两种注销路径：
+//  1. 用户自助注销（DeleteSelf）：status=3 + deactivated_at 有值
+//  2. 管理员在用户管理里点"注销"（软删除）：DeletedAt 有值（这种场景 deactivated_at 从未写入，
+//     若只按条件1判断会永远不删，导致"注销一段时间删除"不生效）
 func CleanDeactivatedUsers(retentionDays int) (int64, error) {
 	if retentionDays <= 0 {
 		retentionDays = 7
 	}
 	cutoff := time.Now().Unix() - int64(retentionDays)*86400
-	result := DB.Unscoped().Where("status = ? AND deactivated_at > 0 AND deactivated_at < ?", common.UserStatusDeactivated, cutoff).Delete(&User{})
-	return result.RowsAffected, result.Error
+	cutoffTime := time.Unix(cutoff, 0)
+	var total int64
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// 路径1：自助注销（status=3 且注销时间超过保留期）
+		var ids1 []int
+		if err := tx.Unscoped().Model(&User{}).
+			Where("status = ? AND deactivated_at > 0 AND deactivated_at < ?", common.UserStatusDeactivated, cutoff).
+			Pluck("id", &ids1).Error; err != nil {
+			return err
+		}
+		// 路径2：管理员软删除（deleted_at 超过保留期）
+		var ids2 []int
+		if err := tx.Unscoped().Model(&User{}).
+			Where("deleted_at IS NOT NULL AND deleted_at < ?", cutoffTime).
+			Pluck("id", &ids2).Error; err != nil {
+			return err
+		}
+		ids := append(ids1, ids2...)
+		if len(ids) == 0 {
+			return nil
+		}
+		for _, id := range ids {
+			if err := deleteUserOAuthBindingsByUserId(tx, id); err != nil {
+				return err
+			}
+		}
+		result := tx.Unscoped().Where("id IN ?", ids).Delete(&User{})
+		total = result.RowsAffected
+		return result.Error
+	})
+	return total, err
 }
 
 func inviteUser(inviterId int) (err error) {

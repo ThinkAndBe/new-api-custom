@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useMemo, useState } from 'react';
-import { Empty } from '@douyinfe/semi-ui';
+import { Empty, Modal } from '@douyinfe/semi-ui';
 import CardTable from '../../common/ui/CardTable';
 import {
   IllustrationNoResult,
@@ -97,6 +97,35 @@ const UsersTable = (usersData) => {
     }
   };
 
+  const handleHardDeleteUser = (user) => {
+    Modal.confirm({
+      title: t('彻底删除用户'),
+      content: t(
+        '将永久删除用户「{{username}}」及其所有关联数据（令牌、OAuth 绑定等），此操作不可恢复！确定继续吗？',
+        { username: user.username },
+      ),
+      okText: t('彻底删除'),
+      cancelText: t('取消'),
+      okButtonProps: {
+        type: 'danger',
+      },
+      onOk: async () => {
+        try {
+          const res = await API.delete(`/api/user/${user.id}`);
+          const { success, message } = res.data;
+          if (success) {
+            showSuccess(t('用户已彻底删除'));
+            await refresh();
+          } else {
+            showError(message);
+          }
+        } catch (e) {
+          showError(e?.response?.data?.message || t('操作失败'));
+        }
+      },
+    });
+  };
+
   const showDeleteUserModal = (user) => {
     setModalUser(user);
     setShowDeleteModal(true);
@@ -157,6 +186,7 @@ const UsersTable = (usersData) => {
       showResetTwoFAModal: showResetTwoFAUserModal,
       showUserSubscriptionsModal: showUserSubscriptionsUserModal,
       handleReactivate: handleReactivateUser,
+      handleHardDelete: handleHardDeleteUser,
     });
   }, [
     t,
@@ -170,6 +200,7 @@ const UsersTable = (usersData) => {
     showResetTwoFAUserModal,
     showUserSubscriptionsUserModal,
     handleReactivateUser,
+    handleHardDeleteUser,
   ]);
 
   // Handle compact mode by removing fixed positioning
