@@ -3844,7 +3844,10 @@
     "复制渠道连接信息": "Copy channel connection info",
     "连接信息已复制到剪贴板": "Connection info copied to clipboard",
     "请先填写密钥": "Please enter the key first",
-    "请先填写 Base URL": "Please enter the Base URL first"
+    "请先填写 Base URL": "Please enter the Base URL first",
+    "渠道「${name}」预计恢复时间：${time}": "Channel \"${name}\" estimated recovery: ${time}",
+    "暂无预计恢复时间": "No estimated recovery time",
+    "预计": "est."
   },
   "彻底删除": "Delete Permanently",
   "彻底删除用户": "Delete User Permanently",

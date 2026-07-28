@@ -10,10 +10,11 @@ import {
   Select,
   Tabs,
   TextArea,
+  Tooltip,
 } from '@douyinfe/semi-ui';
 import { Download, Terminal, Check, Copy, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { API, showError, showInfo, showSuccess } from '../../helpers';
+import { API, showError, showInfo, showSuccess, timestamp2string } from '../../helpers';
 import { StatusContext } from '../../context/Status';
 import { UserContext } from '../../context/User';
 
@@ -46,6 +47,9 @@ const UsageGuide = () => {
   const [templateLoaded, setTemplateLoaded] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
 
+  // 暂不可用模型的渠道预计恢复时间（model_name -> {recovery_at, channel_name}）
+  const [modelRecoveryMap, setModelRecoveryMap] = useState({});
+
   // MCP 服务（仅展示当前用户分组可用的 MCP 渠道，不暴露渠道密钥）
   const [mcpServers, setMcpServers] = useState([]);
   const [copiedMcpKey, setCopiedMcpKey] = useState('');
@@ -66,10 +70,22 @@ const UsageGuide = () => {
       API.get('/api/user/models?all=1'),
       API.get('/api/user/models/meta?all=1'),
       API.get('/api/user/models/template'),
+      // 暂不可用模型的渠道预计恢复时间（失败不阻断页面）
+      API.get('/api/user/models/recovery').catch(() => null),
       // 用户分组可用的 MCP 服务（未登录/无权限时忽略失败，不阻断页面）
       API.get('/api/user/mcp_servers').catch(() => null),
     ])
-      .then(([tokenRes, modelRes, metaRes, allModelRes, allMetaRes, templateRes, mcpServersRes]) => {
+      .then(([tokenRes, modelRes, metaRes, allModelRes, allMetaRes, templateRes, recoveryRes, mcpServersRes]) => {
+        if (recoveryRes?.data?.success) {
+          const rm = {};
+          for (const it of recoveryRes.data.data || []) {
+            rm[it.model_name] = {
+              recovery_at: it.recovery_at || 0,
+              channel_name: it.channel_name || '',
+            };
+          }
+          setModelRecoveryMap(rm);
+        }
         if (mcpServersRes?.data?.success) {
           setMcpServers(mcpServersRes.data.data || []);
         }
@@ -598,11 +614,23 @@ pause`;
                   {t('暂不可用模型')}（{disabledModels.length}）：
                 </Text>
                 <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {disabledModels.map((m) => (
-                    <Tag key={m} size='small' color='grey' shape='circle' type='ghost'>
-                      {m}
-                    </Tag>
-                  ))}
+                  {disabledModels.map((m) => {
+                    const rec = modelRecoveryMap[m];
+                    const hasRecoveryTime = rec && rec.recovery_at > 0;
+                    const tooltip = hasRecoveryTime
+                      ? t('渠道「${name}」预计恢复时间：${time}')
+                          .replace('${name}', rec.channel_name || '-')
+                          .replace('${time}', timestamp2string(rec.recovery_at))
+                      : t('暂无预计恢复时间');
+                    return (
+                      <Tooltip key={m} content={tooltip}>
+                        <Tag size='small' color='grey' shape='circle' type='ghost'>
+                          {m}
+                          {hasRecoveryTime && ` (${t('预计')} ${timestamp2string(rec.recovery_at)})`}
+                        </Tag>
+                      </Tooltip>
+                    );
+                  })}
                 </div>
                 <Text type='tertiary' size='small' style={{ display: 'block', marginTop: 6 }}>
                   {t('这些模型已包含在配置中，渠道恢复后立即可用，无需重新下载。')}

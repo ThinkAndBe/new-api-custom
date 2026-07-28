@@ -3698,7 +3698,10 @@
     "复制渠道连接信息": "Copier les informations de connexion du canal",
     "连接信息已复制到剪贴板": "Informations de connexion copiées dans le presse-papiers",
     "请先填写密钥": "Veuillez d'abord saisir la clé",
-    "请先填写 Base URL": "Veuillez d'abord saisir l'URL de base"
+    "请先填写 Base URL": "Veuillez d'abord saisir l'URL de base",
+    "渠道「${name}」预计恢复时间：${time}": "Canal « ${name} » récupération estimée : ${time}",
+    "暂无预计恢复时间": "Aucun délai de récupération estimé",
+    "预计": "est."
   },
   "彻底删除": "Supprimer définitivement",
   "彻底删除用户": "Supprimer définitivement l'utilisateur",

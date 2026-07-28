@@ -85,6 +85,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/self", controller.GetSelf)
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.GET("/models/meta", controller.GetUserModelsMeta)
+				selfRoute.GET("/models/recovery", controller.GetUserModelsRecovery)
 				selfRoute.GET("/models/template", controller.GetModelsJsonTemplate)
 				selfRoute.GET("/mcp_servers", controller.GetUserMcpServers)
 				selfRoute.PUT("/self", controller.UpdateSelf)

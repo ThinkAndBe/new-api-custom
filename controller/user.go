@@ -831,6 +831,118 @@ func GetUserModelsMeta(c *gin.Context) {
 	return
 }
 
+// modelRecoveryInfo 暂不可用模型的渠道恢复信息（用户侧使用教程用）
+type modelRecoveryInfo struct {
+	ModelName   string `json:"model_name"`
+	RecoveryAt  int64  `json:"recovery_at"`  // 最早预计恢复时间戳（秒），0 表示无预计时间
+	ChannelName string `json:"channel_name"` // 提供该恢复时间的渠道名
+}
+
+// GetUserModelsRecovery 返回当前用户分组下"暂不可用"模型（完整清单 - 当前可用）
+// 对应的渠道预计恢复时间。用于使用教程页在暂不可用模型旁展示恢复时间。
+// 同一模型可能由多个禁用渠道提供，取最早的 recovery_at 展示。
+// GET /api/user/models/recovery
+func GetUserModelsRecovery(c *gin.Context) {
+	id := c.GetInt("id")
+	user, err := model.GetUserCache(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// 与 GetUserModels 保持一致：普通用户只看自身分组，管理员看全部可选分组
+	var groups map[string]string
+	if model.IsAdmin(id) {
+		groups = service.GetUserUsableGroups(user.Group)
+	} else {
+		groups = service.GetUserOwnedGroups(user.Group)
+	}
+	groupNames := make([]string, 0, len(groups))
+	for g := range groups {
+		groupNames = append(groupNames, g)
+	}
+	if len(groupNames) == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": []modelRecoveryInfo{}})
+		return
+	}
+	// 暂不可用模型 = 分组理论清单（含禁用渠道）- 当前可用（仅 enabled）
+	disabledSet := make(map[string]struct{})
+	for _, g := range groupNames {
+		enabledSet := make(map[string]struct{})
+		for _, m := range model.GetGroupEnabledModels(g) {
+			enabledSet[m] = struct{}{}
+		}
+		for _, m := range model.GetGroupModels(g) {
+			if _, ok := enabledSet[m]; !ok {
+				disabledSet[m] = struct{}{}
+			}
+		}
+	}
+	if len(disabledSet) == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": []modelRecoveryInfo{}})
+		return
+	}
+	disabledNames := make([]string, 0, len(disabledSet))
+	for m := range disabledSet {
+		disabledNames = append(disabledNames, m)
+	}
+	// 查这些模型在用户分组下的禁用渠道（未启用 + 未删除），取其 other_info 里的 recovery_at
+	var channels []model.Channel
+	if err := model.DB.Select("id", "name", "models", "`group`", "other_info").
+		Where("status <> ?", common.ChannelStatusEnabled).
+		Where("`group` IN ?", groupNames).
+		Find(&channels).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recoveryMap := make(map[string]*modelRecoveryInfo)
+	for i := range channels {
+		ch := &channels[i]
+		info := ch.GetOtherInfo()
+		var recoveryAt int64
+		switch v := info["recovery_at"].(type) {
+		case float64:
+			recoveryAt = int64(v)
+		case int64:
+			recoveryAt = v
+		case int:
+			recoveryAt = int64(v)
+		}
+		for _, m := range strings.Split(ch.Models, ",") {
+			m = strings.TrimSpace(m)
+			if _, ok := disabledSet[m]; !ok {
+				continue
+			}
+			if existing, ok := recoveryMap[m]; ok {
+				// 已有记录：保留恢复时间更早的；都无时间则保持原样
+				if recoveryAt > 0 && (existing.RecoveryAt == 0 || recoveryAt < existing.RecoveryAt) {
+					existing.RecoveryAt = recoveryAt
+					existing.ChannelName = ch.Name
+				}
+			} else {
+				recoveryMap[m] = &modelRecoveryInfo{
+					ModelName:   m,
+					RecoveryAt:  recoveryAt,
+					ChannelName: ch.Name,
+				}
+			}
+		}
+	}
+	result := make([]modelRecoveryInfo, 0, len(recoveryMap))
+	for _, m := range disabledNames {
+		if info, ok := recoveryMap[m]; ok {
+			result = append(result, *info)
+		} else {
+			result = append(result, modelRecoveryInfo{ModelName: m})
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    result,
+	})
+	return
+}
+
 // GetModelsJsonTemplate 返回管理员配置的 models.json 模板（用户侧）。
 // 模板中 {{apiKey}} 和 {{baseUrl}} 占位符由前端替换为用户实际值。
 // GET /api/user/models/template

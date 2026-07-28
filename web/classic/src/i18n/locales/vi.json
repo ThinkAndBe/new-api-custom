@@ -4232,7 +4232,10 @@
     "复制渠道连接信息": "Sao chép thông tin kết nối kênh",
     "连接信息已复制到剪贴板": "Đã sao chép thông tin kết nối vào khay nhớ tạm",
     "请先填写密钥": "Vui lòng nhập khóa trước",
-    "请先填写 Base URL": "Vui lòng nhập Base URL trước"
+    "请先填写 Base URL": "Vui lòng nhập Base URL trước",
+    "渠道「${name}」预计恢复时间：${time}": "Kênh \"${name}\" dự kiến khôi phục: ${time}",
+    "暂无预计恢复时间": "Chưa có thời gian khôi phục dự kiến",
+    "预计": "dự kiến"
   },
   "彻底删除": "Xóa vĩnh viễn",
   "彻底删除用户": "Xóa vĩnh viễn ngườù dùng",
