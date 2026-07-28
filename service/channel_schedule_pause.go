@@ -90,7 +90,13 @@ func processSchedulePause() {
 				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 从自动禁用纠正为定时暂停 (%s)", schedulePauseLogPrefix, ch.Name, ch.Id, weekdayStr))
 			}
 		case !shouldPause && (ch.Status == common.ChannelStatusSchedulePaused || ch.Status == common.ChannelStatusAutoDisabled):
-			// 恢复：无论是定时暂停(4)还是暂停期间被自动禁用(3)，窗口结束都拉回启用
+			// 状态3且带未到期的 recovery_at（如 429 额度耗尽解析出的重置时间），说明是配额故障，
+			// 不是"暂停期间被误禁用"——不能由定时暂停模块恢复，否则会抹掉 recovery_at
+			// 并立刻把流量打回已耗尽渠道，形成 禁用→复活→429 的死循环
+			if ch.Status == common.ChannelStatusAutoDisabled && hasPendingRecovery(ch) {
+				continue
+			}
+			// 恢复：定时暂停(4)、或暂停期间被自动禁用(3)且没有待生效的配额恢复时间，窗口结束拉回启用
 			if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusEnabled, "定时暂停结束，自动恢复") {
 				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 已恢复 (%s 暂停窗口已结束)", schedulePauseLogPrefix, ch.Name, ch.Id, weekdayStr))
 				resumedCount++
@@ -161,4 +167,26 @@ func parseTimeToMinutes(t string) int {
 		return -1
 	}
 	return h*60 + m
+}
+// hasPendingRecovery 判断自动禁用的渠道是否带有未到期的配额恢复时间（recovery_at）。
+// 有则说明禁用原因是额度耗尽（如 429「已达到使用上限」），应等待 recovery_at 到期后
+// 由配额恢复逻辑处理，而不是被定时暂停模块提前拉回启用。
+func hasPendingRecovery(ch *model.Channel) bool {
+	info := ch.GetOtherInfo()
+	raw, ok := info["recovery_at"]
+	if !ok {
+		return false
+	}
+	var recoveryAt int64
+	switch v := raw.(type) {
+	case float64: // JSON 反序列化后的数字
+		recoveryAt = int64(v)
+	case int64:
+		recoveryAt = v
+	case int:
+		recoveryAt = int64(v)
+	default:
+		return false
+	}
+	return recoveryAt > time.Now().Unix()
 }
