@@ -370,16 +370,17 @@ func migrateDBFast() error {
 		}
 	}
 	common.SysLog("database migrated")
-	// 一次性迁移：把旧的 Custom(8)+models含mcp 的"假 MCP"渠道归正为 MCP(58) 类型。
-	// models 字段是逗号分隔串，用前后补逗号的方式做精确匹配，三库通用。
+	// 一次性迁移：把旧的"假 MCP"渠道（models 里塞了 mcp 模型的任意类型渠道）归正为 MCP(58) 类型。
+	// models 字段是逗号分隔串，用前后补逗号的方式做精确匹配，REPLACE 去掉空格容忍 "mcp, xxx" 写法；
+	// || 拼接 ANSI 标准，MySQL/SQLite/PG 三库通用。
 	migrateResult := DB.Exec(
-		"UPDATE channels SET type = ? WHERE type = ? AND (',' || models || ',') LIKE ?",
-		constant.ChannelTypeMCP, constant.ChannelTypeCustom, "%,mcp,%",
+		"UPDATE channels SET type = ? WHERE type <> ? AND (',' || REPLACE(models, ' ', '') || ',') LIKE ?",
+		constant.ChannelTypeMCP, constant.ChannelTypeMCP, "%,mcp,%",
 	)
 	if migrateResult.Error != nil {
 		common.SysError("failed to migrate MCP channels: " + migrateResult.Error.Error())
 	} else if migrateResult.RowsAffected > 0 {
-		common.SysLog(fmt.Sprintf("migrated %d custom channels to MCP type", migrateResult.RowsAffected))
+		common.SysLog(fmt.Sprintf("migrated %d channels to MCP type", migrateResult.RowsAffected))
 	}
 	return nil
 }
