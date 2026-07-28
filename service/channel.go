@@ -126,16 +126,6 @@ func parseQuotaResetTime(reason string) int64 {
 		}
 	}
 
-	// 5. MiniMax Token Plan 额度耗尽：不返回恢复时间，默认按次日 0 点恢复（东八区）
-	// 例如 "已达到 Token Plan 用量上限：请升级 Token Plan 套餐或购买积分补充用量。"
-	lowerReason := strings.ToLower(reason)
-	if strings.Contains(lowerReason, "token plan") && strings.Contains(lowerReason, "用量上限") {
-		loc, _ := time.LoadLocation("Asia/Shanghai")
-		nowInShanghai := now.In(loc)
-		midnight := time.Date(nowInShanghai.Year(), nowInShanghai.Month(), nowInShanghai.Day()+1, 0, 0, 0, 0, loc)
-		return midnight.Unix()
-	}
-
 	return 0
 }
 
@@ -255,8 +245,6 @@ var quotaExhaustedKeywords = []string{
 	"余额用尽",
 	"后可继续使用",
 	"请充值",
-	"用量上限",
-	"token plan",
 }
 
 // isQuotaExhaustedByKeywords 通过关键词判断是否为额度耗尽
