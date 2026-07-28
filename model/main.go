@@ -25,6 +25,16 @@ var commonFalseVal string
 var logKeyCol string
 var logGroupCol string
 
+// CommonGroupCol 返回当前数据库的 group 列名（PostgreSQL 用 "group"，其他用 `group`）
+func CommonGroupCol() string {
+	return commonGroupCol
+}
+
+// CommonKeyCol 返回当前数据库的 key 列名
+func CommonKeyCol() string {
+	return commonKeyCol
+}
+
 func initCol() {
 	// init common column names
 	if common.UsingPostgreSQL {
