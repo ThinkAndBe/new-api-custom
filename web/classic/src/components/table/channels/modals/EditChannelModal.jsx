@@ -68,7 +68,7 @@ import StatusCodeRiskGuardModal from './StatusCodeRiskGuardModal';
 import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
 import { useSecureVerification } from '../../../../hooks/common/useSecureVerification';
 import { parseChannelConnectionString, encodeChannelConnectionString } from '../../../../helpers/token';
-import { createApiCalls } from '../../../../services/secureVerification';
+import { createApiCalls, SecureVerificationService } from '../../../../services/secureVerification';
 import {
   collectInvalidStatusCodeEntries,
   collectNewDisallowedStatusCodeRedirects,
@@ -610,12 +610,47 @@ const EditChannelModal = (props) => {
   };
 
   // 复制配置到剪贴板（与「从剪贴板粘贴配置」互逆）。
-  // 编辑已有渠道时密钥不明文存储在表单里，先走安全验证拉取真实密钥；
   // 新建渠道时表单里的 key 就是用户刚填的，直接复制。
+  // 编辑渠道时密钥不明文存储在表单里：先探测账号是否启用两步验证/Passkey，
+  // 有则走 withVerification 安全验证拉取真实密钥；未启用则直接调用密钥接口
+  // （接口本身有 RootAuth + 严格限流保护），保证未开 2FA 的账号也能复制。
   const copyConfigToClipboard = async () => {
     let key = inputs.key || '';
     const url = inputs.base_url || '';
-    if (isEdit) {
+
+    const writeToClipboard = async (k) => {
+      if (!k) {
+        showInfo(t('请先填写密钥'));
+        return;
+      }
+      if (!url) {
+        showInfo(t('请先填写 Base URL'));
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(encodeChannelConnectionString(k, url));
+        showSuccess(t('连接信息已复制到剪贴板'));
+      } catch {
+        showError(t('复制失败'));
+      }
+    };
+
+    if (!isEdit) {
+      await writeToClipboard(key);
+      return;
+    }
+
+    // 编辑模式：探测可用的验证方式
+    let hasVerification = false;
+    try {
+      const methods =
+        await SecureVerificationService.checkAvailableVerificationMethods();
+      hasVerification = !!(methods?.has2FA || methods?.hasPasskey);
+    } catch {
+      hasVerification = false;
+    }
+
+    if (hasVerification) {
       try {
         const result = await withVerification(
           createApiCalls.viewChannelKey(channelId),
@@ -639,20 +674,21 @@ const EditChannelModal = (props) => {
         showError(error.message || t('获取密钥失败'));
         return;
       }
-    }
-    if (!key) {
-      showInfo(t('请先填写密钥'));
+      await writeToClipboard(key);
       return;
     }
-    if (!url) {
-      showInfo(t('请先填写 Base URL'));
-      return;
-    }
+
+    // 未启用任何验证方式：直接拉取（接口有 RootAuth + CriticalRateLimit 保护）
     try {
-      await navigator.clipboard.writeText(encodeChannelConnectionString(key, url));
-      showSuccess(t('连接信息已复制到剪贴板'));
-    } catch {
-      showError(t('复制失败'));
+      const res = await API.post(`/api/channel/${channelId}/key`, {});
+      const fetched = res?.data?.data?.key ?? res?.data?.key;
+      if (res?.data?.success && fetched) {
+        await writeToClipboard(fetched);
+      } else {
+        showError(res?.data?.message || t('获取密钥失败'));
+      }
+    } catch (error) {
+      showError(error.message || t('获取密钥失败'));
     }
   };
 
