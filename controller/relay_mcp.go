@@ -183,10 +183,16 @@ func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 		}
 	}
 
-	// 自动选择：令牌分组下提供 "mcp" 模型的启用渠道
+	// 自动选择：提供 "mcp" 模型的启用渠道。
+	// 令牌分组为空时用用户的实际分组（UsingGroup，auth 中间件已把空令牌分组回落为用户分组），
+	// 否则空分组令牌会查到不存在的 "" 分组，报"当前分组下没有可用的 MCP 渠道"
+	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	if tokenGroup == "" {
+		tokenGroup = common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	}
 	channel, _, selectErr := service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
 		Ctx:        c,
-		TokenGroup: common.GetContextKeyString(c, constant.ContextKeyTokenGroup),
+		TokenGroup: tokenGroup,
 		ModelName:  "mcp",
 	})
 	if selectErr != nil {
