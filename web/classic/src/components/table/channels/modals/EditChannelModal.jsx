@@ -678,7 +678,8 @@ const EditChannelModal = (props) => {
       return;
     }
 
-    // 未启用任何验证方式：直接拉取（接口有 RootAuth + CriticalRateLimit 保护）
+    // 未启用任何验证方式：后端中间件对这类账号放行（无法验证却一律拒绝会导致
+    // 功能不可用），直接调用密钥接口拉取（接口仍有 RootAuth + 严格限流 + 审计）
     try {
       const res = await API.post(`/api/channel/${channelId}/key`, {});
       const fetched = res?.data?.data?.key ?? res?.data?.key;

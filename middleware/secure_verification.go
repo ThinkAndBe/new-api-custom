@@ -6,6 +6,8 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+
+	"github.com/QuantumNous/new-api/model"
 )
 
 const (
@@ -32,19 +34,26 @@ func SecureVerificationRequired() gin.HandlerFunc {
 			return
 		}
 
-		// 检查 session 中的验证时间戳
-		session := sessions.Default(c)
-		verifiedAtRaw := session.Get(SecureVerificationSessionKey)
+	// 检查 session 中的验证时间戳
+	session := sessions.Default(c)
+	verifiedAtRaw := session.Get(SecureVerificationSessionKey)
 
-		if verifiedAtRaw == nil {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"message": "需要安全验证",
-				"code":    "VERIFICATION_REQUIRED",
-			})
-			c.Abort()
+	if verifiedAtRaw == nil {
+		// 用户未启用任何验证方式（2FA/Passkey）时无法完成验证，
+		// 若一律拒绝会导致这类账号永远无法使用受保护的功能。
+		// 此时放行：路由上的 RootAuth + CriticalRateLimit + 审计日志仍在保护。
+		if !userHasAnyVerificationMethod(userId) {
+			c.Next()
 			return
 		}
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "需要安全验证",
+			"code":    "VERIFICATION_REQUIRED",
+		})
+		c.Abort()
+		return
+	}
 
 		verifiedAt, ok := verifiedAtRaw.(int64)
 		if !ok {
@@ -130,4 +139,13 @@ func OptionalSecureVerification() gin.HandlerFunc {
 func ClearSecureVerification(c *gin.Context) {
 	session := sessions.Default(c)
 	clearSecureVerificationSession(session)
+}
+
+// userHasAnyVerificationMethod 检查用户是否启用了任一安全验证方式（2FA 或 Passkey）
+func userHasAnyVerificationMethod(userId int) bool {
+	if model.IsTwoFAEnabled(userId) {
+		return true
+	}
+	credential, err := model.GetPasskeyByUserID(userId)
+	return err == nil && credential != nil
 }
