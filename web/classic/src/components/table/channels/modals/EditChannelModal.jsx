@@ -1595,6 +1595,12 @@ data.upstream_model_update_last_detected_models = [];
     const formValues = formApiRef.current ? formApiRef.current.getValues() : {};
     let localInputs = { ...formValues };
     localInputs.param_override = inputs.param_override;
+    // 定时暂停开关/规则由自定义组件维护在 inputs 里，不一定注册为 Semi Form 字段，
+    // 必须从 inputs 同步过来，否则 formValues 里没有这两个值，会被兜底成 false/[] 覆盖已保存配置。
+    localInputs.schedule_pause_enabled = inputs.schedule_pause_enabled === true;
+    localInputs.schedule_pause_rules = Array.isArray(inputs.schedule_pause_rules)
+      ? inputs.schedule_pause_rules
+      : [];
 
     if (localInputs.type === 57) {
       if (batch) {
