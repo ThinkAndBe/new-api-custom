@@ -42,8 +42,11 @@ func GetPricing(c *gin.Context) {
 		groupRatio[s] = f
 	}
 	var group string
+	isAdmin := false
 	if exists {
-		user, err := model.GetUserCache(userId.(int))
+		uid := userId.(int)
+		isAdmin = model.IsAdmin(uid)
+		user, err := model.GetUserCache(uid)
 		if err == nil {
 			group = user.Group
 			for g := range groupRatio {
@@ -55,7 +58,17 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
-	usableGroup = service.GetUserUsableGroups(group)
+	// 模型可见性按权限区分：
+	// - 管理员：保持现状，看到所有"用户可选分组"的模型（便于排查）
+	// - 普通登录用户：只看自身分组实际可用的模型，避免泄露 svip 等其它分组的模型
+	// - 匿名访客：只回落到 default 分组
+	if isAdmin {
+		usableGroup = service.GetUserUsableGroups(group)
+	} else if exists {
+		usableGroup = service.GetUserOwnedGroups(group)
+	} else {
+		usableGroup = service.GetUserOwnedGroups("")
+	}
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
 	// check groupRatio contains usableGroup
 	for group := range ratio_setting.GetGroupRatioCopy() {

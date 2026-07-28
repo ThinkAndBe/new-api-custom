@@ -712,7 +712,13 @@ func GetUserModels(c *gin.Context) {
 	// 用于使用教程页生成稳定的 models.json，避免渠道禁用/恢复导致用户配置抖动。
 	// 默认行为保持原有：仅返回当前 enabled=true 的模型。
 	includeDisabled := c.Query("all") == "1" || c.Query("all") == "true"
-	groups := service.GetUserUsableGroups(user.Group)
+	// 普通用户只展示自身分组的模型；管理员可以看到所有用户可选分组的模型（便于排查）
+	var groups map[string]string
+	if model.IsAdmin(id) {
+		groups = service.GetUserUsableGroups(user.Group)
+	} else {
+		groups = service.GetUserOwnedGroups(user.Group)
+	}
 	var models []string
 	for group := range groups {
 		var groupModels []string
@@ -760,7 +766,13 @@ func GetUserModelsMeta(c *gin.Context) {
 		return
 	}
 	includeDisabled := c.Query("all") == "1" || c.Query("all") == "true"
-	groups := service.GetUserUsableGroups(user.Group)
+	// 与 GetUserModels 保持一致：普通用户只看自身分组，管理员看全部可选分组
+	var groups map[string]string
+	if model.IsAdmin(id) {
+		groups = service.GetUserUsableGroups(user.Group)
+	} else {
+		groups = service.GetUserOwnedGroups(user.Group)
+	}
 	// 收集所有可用模型名（去重）
 	modelSet := make(map[string]struct{})
 	for group := range groups {
