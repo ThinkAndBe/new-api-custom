@@ -948,9 +948,11 @@ const EditChannelModal = (props) => {
             : '';
           data.schedule_pause_enabled =
             parsedSettings.schedule_pause_enabled === true;
+          // 回填已保存的规则（含空数组=用户清空过），只有完全没有这个字段时才给演示默认值，
+          // 避免把用户已保存的规则在打开弹窗时静默换成演示规则、保存后丢失。
           data.schedule_pause_rules = Array.isArray(
             parsedSettings.schedule_pause_rules,
-          ) && parsedSettings.schedule_pause_rules.length > 0
+          )
             ? parsedSettings.schedule_pause_rules
             : [
                 { days: [1, 2, 3, 4, 5], start: '09:00', end: '12:00', reason: '上午' },
