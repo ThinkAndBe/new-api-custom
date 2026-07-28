@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -126,6 +127,28 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	}
 	if info.RelayMode == constant.RelayModeImagesGenerations {
 		return miniMaxImageHandler(c, resp, info)
+	}
+
+	// MiniMax 聊天接口在额度耗尽等业务错误时仍返回 HTTP 200，
+	// 错误信息内嵌在 base_resp 中（如 {"base_resp":{"status_code":2056,...}}）。
+	// 在进入下游 handler 之前拦截并转为 NewAPIError，以便重试与自动禁用逻辑生效。
+	if !info.IsStream {
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, types.NewOpenAIError(readErr, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
+		}
+		service.CloseResponseBodyGracefully(resp)
+		var miniMaxResp struct {
+			BaseResp MiniMaxBaseResp `json:"base_resp"`
+		}
+		if unmarshalErr := json.Unmarshal(bodyBytes, &miniMaxResp); unmarshalErr == nil && miniMaxResp.BaseResp.StatusCode != 0 {
+			return nil, types.NewOpenAIError(
+				fmt.Errorf("minimax error: %d - %s", miniMaxResp.BaseResp.StatusCode, miniMaxResp.BaseResp.StatusMsg),
+				types.ErrorCodeBadResponse,
+				http.StatusOK,
+			)
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	}
 
 	switch info.RelayFormat {

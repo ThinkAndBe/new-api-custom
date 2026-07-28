@@ -245,6 +245,8 @@ var quotaExhaustedKeywords = []string{
 	"余额用尽",
 	"后可继续使用",
 	"请充值",
+	"用量上限",
+	"token plan",
 }
 
 // isQuotaExhaustedByKeywords 通过关键词判断是否为额度耗尽
