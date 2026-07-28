@@ -20,8 +20,8 @@ import (
 // RelayMcp 将 MCP（Model Context Protocol）请求透明代理到管理员配置的 MCP 渠道。
 //
 // 使用方式：
-//  1. 管理员创建类型为 Custom(8) 的渠道，Base URL 填 MCP 服务器地址（如 https://mcp.example.com/mcp），
-//     密钥填平台侧真实的 API Key，模型列表填 mcp（或用参数覆盖指定任意模型名）。
+//  1. 管理员创建类型为 MCP(58) 的渠道，Base URL 填 MCP 服务器的 streamable-http 地址
+//     （如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp），密钥填平台侧真实 API Key。
 //  2. 用户只需使用 new-api 的令牌（sk-xxx），通过 Authorization: Bearer 或 x-api-key 头访问
 //     POST /mcp 或 GET /mcp（SSE），请求会被代理到该渠道对应的 MCP 服务器，
 //     平台密钥由网关注入，用户无需也无法接触。
@@ -179,11 +179,14 @@ func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 			if ch.Status != common.ChannelStatusEnabled {
 				return nil, fmt.Errorf("指定的 MCP 渠道 #%d 未启用", id)
 			}
+			if ch.Type != constant.ChannelTypeMCP {
+				return nil, fmt.Errorf("渠道 #%d 不是 MCP 类型", id)
+			}
 			return ch, nil
 		}
 	}
 
-	// 自动选择：提供 "mcp" 模型的启用渠道。
+	// 自动选择：提供 "mcp" 模型的启用渠道（仅限 MCP 类型渠道，防止 LLM 渠道 models 混入 mcp 被误选）。
 	// 令牌分组为空时用用户的实际分组（UsingGroup，auth 中间件已把空令牌分组回落为用户分组），
 	// 否则空分组令牌会查到不存在的 "" 分组，报"当前分组下没有可用的 MCP 渠道"
 	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
@@ -205,6 +208,9 @@ func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 	fullChannel, err := model.GetChannelById(channel.Id, true)
 	if err != nil {
 		return nil, fmt.Errorf("加载 MCP 渠道 #%d 失败: %s", channel.Id, err.Error())
+	}
+	if fullChannel.Type != constant.ChannelTypeMCP {
+		return nil, fmt.Errorf("当前分组下没有可用的 MCP 渠道（命中的 #%d 不是 MCP 类型）", fullChannel.Id)
 	}
 	return fullChannel, nil
 }

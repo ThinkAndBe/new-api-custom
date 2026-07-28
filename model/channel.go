@@ -324,6 +324,30 @@ func (channel *Channel) SetOtherInfo(otherInfo map[string]interface{}) {
 	channel.OtherInfo = string(otherInfoBytes)
 }
 
+// GetMcpTools 返回 MCP 渠道最近一次测试缓存的工具清单（other_info.mcp_tools）。
+// 未测试过时返回 nil。
+func (channel *Channel) GetMcpTools() []interface{} {
+	raw, ok := channel.GetOtherInfo()["mcp_tools"]
+	if !ok {
+		return nil
+	}
+	if tools, ok := raw.([]interface{}); ok {
+		return tools
+	}
+	return nil
+}
+
+// SetMcpTools 把 MCP 测试拿到的工具清单写入 other_info.mcp_tools（保留其他键），
+// 并持久化到数据库，供用户侧接口展示，避免每次实时调用上游。
+func (channel *Channel) SetMcpTools(tools []interface{}) {
+	info := channel.GetOtherInfo()
+	info["mcp_tools"] = tools
+	channel.SetOtherInfo(info)
+	if err := DB.Model(channel).Select("other_info").Updates(map[string]interface{}{"other_info": channel.OtherInfo}).Error; err != nil {
+		common.SysError(fmt.Sprintf("failed to persist mcp_tools: channel_id=%d, error=%v", channel.Id, err))
+	}
+}
+
 func (channel *Channel) GetTag() string {
 	if channel.Tag == nil {
 		return ""

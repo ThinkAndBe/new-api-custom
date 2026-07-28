@@ -370,6 +370,17 @@ func migrateDBFast() error {
 		}
 	}
 	common.SysLog("database migrated")
+	// 一次性迁移：把旧的 Custom(8)+models含mcp 的"假 MCP"渠道归正为 MCP(58) 类型。
+	// models 字段是逗号分隔串，用前后补逗号的方式做精确匹配，三库通用。
+	migrateResult := DB.Exec(
+		"UPDATE channels SET type = ? WHERE type = ? AND (',' || models || ',') LIKE ?",
+		constant.ChannelTypeMCP, constant.ChannelTypeCustom, "%,mcp,%",
+	)
+	if migrateResult.Error != nil {
+		common.SysError("failed to migrate MCP channels: " + migrateResult.Error.Error())
+	} else if migrateResult.RowsAffected > 0 {
+		common.SysLog(fmt.Sprintf("migrated %d custom channels to MCP type", migrateResult.RowsAffected))
+	}
 	return nil
 }
 

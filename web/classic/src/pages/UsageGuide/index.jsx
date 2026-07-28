@@ -8,9 +8,10 @@ import {
   Banner,
   Empty,
   Select,
+  Tabs,
   TextArea,
 } from '@douyinfe/semi-ui';
-import { Download, Terminal, Check, Save } from 'lucide-react';
+import { Download, Terminal, Check, Copy, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showInfo, showSuccess } from '../../helpers';
 import { StatusContext } from '../../context/Status';
@@ -45,6 +46,10 @@ const UsageGuide = () => {
   const [templateLoaded, setTemplateLoaded] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
 
+  // MCP 服务（仅展示当前用户分组可用的 MCP 渠道，不暴露渠道密钥）
+  const [mcpServers, setMcpServers] = useState([]);
+  const [copiedMcpKey, setCopiedMcpKey] = useState('');
+
   const serverAddress = statusState?.status?.server_address || '';
   const baseUrl = serverAddress
     ? serverAddress.replace(/\/$/, '')
@@ -61,8 +66,13 @@ const UsageGuide = () => {
       API.get('/api/user/models?all=1'),
       API.get('/api/user/models/meta?all=1'),
       API.get('/api/user/models/template'),
+      // 用户分组可用的 MCP 服务（未登录/无权限时忽略失败，不阻断页面）
+      API.get('/api/user/mcp_servers').catch(() => null),
     ])
-      .then(([tokenRes, modelRes, metaRes, allModelRes, allMetaRes, templateRes]) => {
+      .then(([tokenRes, modelRes, metaRes, allModelRes, allMetaRes, templateRes, mcpServersRes]) => {
+        if (mcpServersRes?.data?.success) {
+          setMcpServers(mcpServersRes.data.data || []);
+        }
         if (tokenRes.data.success) {
           const items = tokenRes.data.data?.items || [];
           const active = items.filter((tk) => tk.status === 1);
@@ -285,6 +295,53 @@ pause`;
       showSuccess(t('脚本已复制到剪贴板'));
     });
   }, [autoScript, t]);
+
+  // MCP 配置复制：按客户端生成一键粘贴的 JSON 配置（url 固定为 <baseUrl>/mcp）
+  const copyMcpConfig = (server, client) => {
+    if (!tokenKey) {
+      showError(t('请先选择令牌'));
+      return;
+    }
+    const serverName = (server.name || `mcp-${server.id}`)
+      .replace(/[^\w-]+/g, '-')
+      .toLowerCase();
+    const url = `${baseUrl.replace(/\/+$/, '')}/mcp`;
+    let config;
+    if (client === 'zcode') {
+      // zcode: ~/.zcode/cli/config.json
+      config = {
+        mcp: {
+          servers: {
+            [serverName]: {
+              type: 'http',
+              url,
+              headers: { Authorization: `Bearer ${tokenKey}` },
+            },
+          },
+        },
+      };
+    } else {
+      // Cursor (~/.cursor/mcp.json) / Claude Desktop (claude_desktop_config.json) 均为 mcpServers 结构
+      config = {
+        mcpServers: {
+          [serverName]: {
+            type: 'http',
+            url,
+            headers: { Authorization: `Bearer ${tokenKey}` },
+          },
+        },
+      };
+    }
+    const text = JSON.stringify(config, null, 2);
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopiedMcpKey(`${server.id}-${client}`);
+        showSuccess(t('已复制 MCP 配置'));
+        setTimeout(() => setCopiedMcpKey(''), 2000);
+      })
+      .catch(() => showError(t('复制失败')));
+  };
 
   // 管理员保存模板
   const handleSaveTemplate = useCallback(async () => {
@@ -555,6 +612,160 @@ pause`;
           </div>
         )}
       </Card>
+
+      {/* MCP 服务（当前用户分组可用的 MCP 渠道，一键复制客户端配置） */}
+      {mcpServers.length > 0 && (
+        <Card bordered style={{ marginTop: 16, padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%',
+              background: 'var(--semi-color-cyan)',
+              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 14, fontWeight: 'bold',
+            }}>
+              M
+            </div>
+            <Text strong style={{ fontSize: 16 }}>{t('MCP 服务')}</Text>
+            <Tag color='cyan' shape='circle' size='small'>
+              {mcpServers.length}
+            </Tag>
+          </div>
+          <Text type='tertiary' size='small'>
+            {t('选择客户端，一键复制配置粘贴到对应配置文件即可使用。所有 MCP 服务共用上方选中的令牌密钥。')}
+          </Text>
+
+          {mcpServers.map((server) => {
+            const serverName = (server.name || `mcp-${server.id}`)
+              .replace(/[^\w-]+/g, '-')
+              .toLowerCase();
+            const mcpUrl = `${baseUrl.replace(/\/+$/, '')}/mcp`;
+            const clients = [
+              {
+                key: 'zcode',
+                name: 'ZCode',
+                path: '~/.zcode/cli/config.json',
+                config: {
+                  mcp: {
+                    servers: {
+                      [serverName]: {
+                        type: 'http',
+                        url: mcpUrl,
+                        headers: {
+                          Authorization: `Bearer ${tokenKey || 'sk-xxx'}`,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                key: 'cursor',
+                name: 'Cursor',
+                path: '~/.cursor/mcp.json',
+                config: {
+                  mcpServers: {
+                    [serverName]: {
+                      type: 'http',
+                      url: mcpUrl,
+                      headers: {
+                        Authorization: `Bearer ${tokenKey || 'sk-xxx'}`,
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                key: 'claude',
+                name: 'Claude Desktop',
+                path: 'claude_desktop_config.json',
+                config: {
+                  mcpServers: {
+                    [serverName]: {
+                      type: 'http',
+                      url: mcpUrl,
+                      headers: {
+                        Authorization: `Bearer ${tokenKey || 'sk-xxx'}`,
+                      },
+                    },
+                  },
+                },
+              },
+            ];
+            return (
+              <Card
+                key={server.id}
+                bordered
+                shadows='hover'
+                style={{ marginTop: 16 }}
+                bodyStyle={{ padding: '12px 16px' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <Text strong style={{ fontSize: 15 }}>{server.name}</Text>
+                  {Array.isArray(server.tools) && server.tools.length > 0 ? (
+                    server.tools.map((tool, idx) => (
+                      <Tag key={idx} size='small' color='cyan' shape='circle'>
+                        {tool?.name || `tool_${idx}`}
+                      </Tag>
+                    ))
+                  ) : (
+                    <Tag size='small' color='grey' shape='circle' type='ghost'>
+                      {t('未测试')}
+                    </Tag>
+                  )}
+                </div>
+                {server.description && (
+                  <Text type='tertiary' size='small' style={{ display: 'block', marginTop: 6 }}>
+                    {server.description}
+                  </Text>
+                )}
+                <Tabs type='card' style={{ marginTop: 12 }}>
+                  {clients.map((client) => {
+                    const copied = copiedMcpKey === `${server.id}-${client.key}`;
+                    return (
+                      <Tabs.TabPane key={client.key} tab={client.name} itemKey={client.key}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                          <Text type='tertiary' size='small'>
+                            {t('配置文件路径')}：<Text code size='small'>{client.path}</Text>
+                          </Text>
+                          <Button
+                            size='small'
+                            type={copied ? 'primary' : 'tertiary'}
+                            theme={copied ? 'solid' : 'borderless'}
+                            icon={copied ? <Check size={12} /> : <Copy size={12} />}
+                            onClick={() => copyMcpConfig(server, client.key)}
+                          >
+                            {copied ? t('已复制') : t('复制配置')}
+                          </Button>
+                        </div>
+                        <pre style={{
+                          marginTop: 8,
+                          padding: 12,
+                          background: 'var(--semi-color-fill-0)',
+                          borderRadius: 8,
+                          fontSize: 11,
+                          lineHeight: 1.5,
+                          overflow: 'auto',
+                          maxHeight: 220,
+                          whiteSpace: 'pre',
+                          wordBreak: 'normal',
+                        }}>
+                          {JSON.stringify(client.config, null, 2)}
+                        </pre>
+                      </Tabs.TabPane>
+                    );
+                  })}
+                </Tabs>
+              </Card>
+            );
+          })}
+
+          <Banner
+            type='info'
+            description={t('接入地址统一为 <baseUrl>/mcp，客户端通过 Authorization: Bearer <你的令牌密钥> 鉴权；多个 MCP 服务时系统自动从你有权限的分组中选择可用服务。')}
+            style={{ marginTop: 16 }}
+          />
+        </Card>
+      )}
 
       <Banner
         type='info'

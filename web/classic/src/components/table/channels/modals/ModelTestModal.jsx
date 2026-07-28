@@ -58,6 +58,7 @@ const ModelTestModal = ({
   t,
 }) => {
   const hasChannel = Boolean(currentTestChannel);
+  const isMcpChannel = hasChannel && currentTestChannel.type === 58;
   const streamToggleDisabled = [
     'embeddings',
     'image-generation',
@@ -70,6 +71,16 @@ const ModelTestModal = ({
       setIsStreamTest(false);
     }
   }, [streamToggleDisabled, isStreamTest, setIsStreamTest]);
+
+  // MCP 渠道不支持端点类型/流式选择，统一走 streamable-http 握手
+  React.useEffect(() => {
+    if (isMcpChannel && selectedEndpointType) {
+      setSelectedEndpointType('');
+    }
+    if (isMcpChannel && isStreamTest) {
+      setIsStreamTest(false);
+    }
+  }, [isMcpChannel, selectedEndpointType, setSelectedEndpointType, isStreamTest, setIsStreamTest]);
 
   const filteredModels = hasChannel
     ? currentTestChannel.models
@@ -136,7 +147,7 @@ const ModelTestModal = ({
 
   const columns = [
     {
-      title: t('模型名称'),
+      title: isMcpChannel ? t('服务') : t('模型名称'),
       dataIndex: 'model',
       render: (text) => (
         <div className='flex items-center'>
@@ -207,6 +218,33 @@ const ModelTestModal = ({
                 )}
               </div>
             )}
+            {isMcpChannel && testResult.success && (
+              <div className='flex flex-col gap-1'>
+                <Typography.Text type='tertiary' size='small'>
+                  {Array.isArray(testResult.tools)
+                    ? t('发现 ${count} 个 MCP 工具').replace(
+                        '${count}',
+                        testResult.tools.length,
+                      )
+                    : t('该 MCP 渠道暂未发现工具')}
+                </Typography.Text>
+                {Array.isArray(testResult.tools) &&
+                  testResult.tools.length > 0 && (
+                    <div className='flex flex-wrap gap-1'>
+                      {testResult.tools.map((tool, idx) => (
+                        <Tooltip
+                          key={tool?.name || idx}
+                          content={tool?.description || t('无描述')}
+                        >
+                          <Tag color='cyan' shape='circle' size='small'>
+                            {tool?.name || `tool_${idx}`}
+                          </Tag>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  )}
+              </div>
+            )}
           </div>
         );
       },
@@ -257,7 +295,8 @@ const ModelTestModal = ({
                 strong
                 className='!text-[var(--semi-color-text-0)] !text-base'
               >
-                {currentTestChannel.name} {t('渠道的模型测试')}
+                {currentTestChannel.name}{' '}
+                {isMcpChannel ? t('MCP 渠道测试') : t('渠道的模型测试')}
               </Typography.Text>
               <Typography.Text type='tertiary' size='small'>
                 {t('共')} {currentTestChannel.models.split(',').length}{' '}
@@ -302,48 +341,56 @@ const ModelTestModal = ({
     >
       {hasChannel && (
         <div className='model-test-scroll'>
-          {/* Endpoint toolbar */}
-          <div className='flex flex-col sm:flex-row sm:items-center gap-2 w-full mb-2'>
-            <div className='flex items-center gap-2 flex-1 min-w-0'>
-              <Typography.Text strong className='shrink-0'>
-                {t('端点类型')}:
-              </Typography.Text>
-              <Select
-                value={selectedEndpointType}
-                onChange={setSelectedEndpointType}
-                optionList={endpointTypeOptions}
-                className='!w-full min-w-0'
-                placeholder={t('选择端点类型')}
-              />
+          {/* Endpoint toolbar（MCP 渠道固定走 streamable-http 握手，隐藏 LLM 专属选项） */}
+          {!isMcpChannel && (
+            <div className='flex flex-col sm:flex-row sm:items-center gap-2 w-full mb-2'>
+              <div className='flex items-center gap-2 flex-1 min-w-0'>
+                <Typography.Text strong className='shrink-0'>
+                  {t('端点类型')}:
+                </Typography.Text>
+                <Select
+                  value={selectedEndpointType}
+                  onChange={setSelectedEndpointType}
+                  optionList={endpointTypeOptions}
+                  className='!w-full min-w-0'
+                  placeholder={t('选择端点类型')}
+                />
+              </div>
+              <div className='flex items-center justify-between sm:justify-end gap-2 shrink-0'>
+                <Typography.Text strong className='shrink-0'>
+                  {t('流式')}:
+                </Typography.Text>
+                <Switch
+                  checked={isStreamTest}
+                  onChange={setIsStreamTest}
+                  size='small'
+                  disabled={streamToggleDisabled}
+                  aria-label={t('流式')}
+                />
+              </div>
             </div>
-            <div className='flex items-center justify-between sm:justify-end gap-2 shrink-0'>
-              <Typography.Text strong className='shrink-0'>
-                {t('流式')}:
-              </Typography.Text>
-              <Switch
-                checked={isStreamTest}
-                onChange={setIsStreamTest}
-                size='small'
-                disabled={streamToggleDisabled}
-                aria-label={t('流式')}
-              />
-            </div>
-          </div>
+          )}
 
           <Banner
             type='info'
             closeIcon={null}
             icon={<IconInfoCircle />}
             className='!rounded-lg mb-2'
-            description={t(
-              '说明：本页测试为非流式请求；若渠道仅支持流式返回，可能出现测试失败，请以实际使用为准。',
-            )}
+            description={
+              isMcpChannel
+                ? t(
+                    'MCP 渠道测试将执行 initialize → tools/list 握手，测试成功后可在结果列查看工具清单。',
+                  )
+                : t(
+                    '说明：本页测试为非流式请求；若渠道仅支持流式返回，可能出现测试失败，请以实际使用为准。',
+                  )
+            }
           />
 
           {/* 搜索与操作按钮 */}
           <div className='flex flex-col sm:flex-row sm:items-center gap-2 w-full mb-2'>
             <Input
-              placeholder={t('搜索模型...')}
+              placeholder={isMcpChannel ? t('搜索...') : t('搜索模型...')}
               value={modelSearchKeyword}
               onChange={(v) => {
                 setModelSearchKeyword(v);
@@ -354,12 +401,14 @@ const ModelTestModal = ({
               showClear
             />
 
-            <div className='flex items-center justify-end gap-2'>
-              <Button onClick={handleCopySelected}>{t('复制已选')}</Button>
-              <Button type='tertiary' onClick={handleSelectSuccess}>
-                {t('选择成功')}
-              </Button>
-            </div>
+            {!isMcpChannel && (
+              <div className='flex items-center justify-end gap-2'>
+                <Button onClick={handleCopySelected}>{t('复制已选')}</Button>
+                <Button type='tertiary' onClick={handleSelectSuccess}>
+                  {t('选择成功')}
+                </Button>
+              </div>
+            )}
           </div>
 
           <Table

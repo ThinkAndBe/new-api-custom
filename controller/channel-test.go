@@ -91,6 +91,10 @@ func testChannel(channel *model.Channel, testUserID int, testModel string, endpo
 			localErr: fmt.Errorf("%s channel test is not supported", channelTypeName),
 		}
 	}
+	// MCP 渠道走独立的 initialize → tools/list 握手测试
+	if channel.Type == constant.ChannelTypeMCP {
+		return TestMcpChannel(channel)
+	}
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
@@ -883,11 +887,16 @@ func TestChannel(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"success": true,
 		"message": "",
 		"time":    consumedTime,
-	})
+	}
+	// MCP 渠道测试时附带本次握手拿到的工具清单，前端可直接展示
+	if channel.Type == constant.ChannelTypeMCP {
+		resp["tools"] = channel.GetMcpTools()
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 var testAllChannelsLock sync.Mutex

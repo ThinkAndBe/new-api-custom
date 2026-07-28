@@ -677,6 +677,10 @@ const EditChannelModal = (props) => {
         case 36:
           localModels = ['suno_music', 'suno_lyrics'];
           break;
+        case 58:
+          // MCP 渠道：固定注册 "mcp" 模型，无需用户选择模型列表
+          localModels = ['mcp'];
+          break;
         case 45:
           localModels = getChannelModels(value);
           setInputs((prevInputs) => ({
@@ -2383,6 +2387,8 @@ data.upstream_model_update_last_detected_models = [];
                   </Text>
 
                   <div className='mb-4'>
+                    {inputs.type !== 58 && (
+                    <>
                     <div className='flex items-center justify-between gap-2 mb-1'>
                       <Text className='text-sm font-medium'>{t('参数覆盖')}</Text>
                       <Space>
@@ -2436,6 +2442,8 @@ data.upstream_model_update_last_detected_models = [];
                         {paramOverrideMeta.preview}
                       </pre>
                     </div>
+                    </>
+                    )}
                   </div>
 
                   <Form.TextArea
@@ -3580,7 +3588,15 @@ data.upstream_model_update_last_detected_models = [];
                     </div>
                   )}
 
-                  {/* Model Selection - Part of Core Config */}
+                  {/* Model Selection - Part of Core Config (MCP 渠道固定为 mcp，无需选择) */}
+                  {inputs.type === 58 ? (
+                    <Banner
+                      type='info'
+                      description={t(
+                        'MCP 渠道固定提供 mcp 服务，模型列表无需配置。Base URL 请填 MCP 服务器的 streamable-http 地址，例如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp；密钥填平台侧真实 API Key，将随 Authorization: Bearer 与 x-api-key 头注入上游。',
+                      )}
+                    />
+                  ) : (
                   <Form.Select
                       field='models'
                       label={t('模型')}
@@ -3690,8 +3706,10 @@ data.upstream_model_update_last_detected_models = [];
                         </Space>
                       }
                     />
+                  )}
 
-                  {/* Custom Model Name - Core Config */}
+                  {/* Custom Model Name - Core Config (MCP 渠道不需要) */}
+                  {inputs.type !== 58 && (
                   <Form.Input
                     field='custom_model'
                     label={t('自定义模型名称')}
@@ -3708,6 +3726,7 @@ data.upstream_model_update_last_detected_models = [];
                       </Button>
                     }
                   />
+                  )}
 
                   {/* Groups - Core Config */}
                   <Form.Select
@@ -3725,7 +3744,8 @@ data.upstream_model_update_last_detected_models = [];
                     onChange={(value) => handleInputChange('groups', value)}
                   />
 
-                  {/* Model Mapping - Core Config */}
+                  {/* Model Mapping - Core Config (MCP 渠道不适用) */}
+                  {inputs.type !== 58 && (
                   <JSONEditor
                     key={`model_mapping-${isEdit ? channelId : 'new'}`}
                     field='model_mapping'
@@ -3769,6 +3789,7 @@ data.upstream_model_update_last_detected_models = [];
                       '键为请求中的模型名称，值为要替换的模型名称',
                     )}
                   />
+                  )}
 
                   {/* Auto Ban - Core Config */}
                   <Form.Switch
@@ -3783,7 +3804,8 @@ data.upstream_model_update_last_detected_models = [];
                     initValue={autoBan}
                   />
 
-                  {/* Test Model - Core Config */}
+                  {/* Test Model - Core Config (MCP 渠道测试走 tools/list，无需模型) */}
+                  {inputs.type !== 58 && (
                   <Form.Input
                     field='test_model'
                     label={t('默认测试模型')}
@@ -3793,6 +3815,7 @@ data.upstream_model_update_last_detected_models = [];
                     }
                     showClear
                   />
+                  )}
                 </Card>
 
                 {/* Advanced Settings Toggle / Collapse */}
