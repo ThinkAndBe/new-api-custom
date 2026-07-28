@@ -4209,7 +4209,14 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "暂不可用": "Tạm không khả dụng",
+    "能力": "Khả năng",
+    "视觉": "Thị giác",
+    "推理": "Suy luận",
+    "工具调用": "Gọi công cụ",
+    "最大输入": "Đầu vào tối đa",
+    "最大输出": "Đầu ra tối đa"
   },
   "彻底删除": "Xóa vĩnh viễn",
   "彻底删除用户": "Xóa vĩnh viễn ngườù dùng",

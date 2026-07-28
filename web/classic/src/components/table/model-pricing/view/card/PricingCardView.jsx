@@ -45,6 +45,11 @@ import PricingCardSkeleton from './PricingCardSkeleton';
 import { useMinimumLoadingTime } from '../../../../../hooks/common/useMinimumLoadingTime';
 import { renderLimitedItems } from '../../../../common/ui/RenderUtils';
 import { useIsMobile } from '../../../../../hooks/common/useIsMobile';
+import {
+  renderAvailabilityTag,
+  renderCapabilityTags,
+  renderContextWindow,
+} from '../ModelCapabilityTags';
 
 const CARD_STYLES = {
   container:
@@ -256,6 +261,7 @@ const PricingCardView = ({
               key={modelKey || index}
               className={`!rounded-2xl transition-all duration-200 hover:shadow-lg border cursor-pointer ${isSelected ? CARD_STYLES.selected : CARD_STYLES.default}`}
               bodyStyle={{ height: '100%' }}
+              style={model.available === false ? { opacity: 0.55 } : undefined}
               onClick={() => openModelDetail && openModelDetail(model)}
             >
               <div className='flex flex-col h-full'>
@@ -274,6 +280,12 @@ const PricingCardView = ({
                           formatPriceInfo(priceData, t, siteDisplayType)
                         )}
                       </div>
+                      {/* 可用状态 + 上下文窗口 + 能力标签（视觉/推理/工具调用） */}
+                      <div className='flex items-center gap-1 flex-wrap mt-1'>
+                        {renderAvailabilityTag(model, t)}
+                        {renderContextWindow(model, t)}
+                      </div>
+                      {renderCapabilityTags(model, t)}
                     </div>
                   </div>
 

@@ -36,6 +36,14 @@ type Pricing struct {
 	BillingMode            string                  `json:"billing_mode,omitempty"`
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
 	PricingVersion         string                  `json:"pricing_version,omitempty"`
+	// 能力参数（与使用教程 models.json 同一数据源：models 表）
+	MaxInputTokens    int  `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens   int  `json:"max_output_tokens,omitempty"`
+	SupportsToolCall  bool `json:"supports_tool_call,omitempty"`
+	SupportsImages    bool `json:"supports_images,omitempty"`
+	SupportsReasoning bool `json:"supports_reasoning,omitempty"`
+	// Available=false 表示该模型所属渠道当前全部被禁用（暂不可用），仍展示给用户但置灰
+	Available bool `json:"available"`
 }
 
 type PricingVendor struct {
@@ -87,6 +95,30 @@ func InvalidatePricingCache() {
 }
 
 // GetVendors 返回当前定价接口使用到的供应商信息
+// GetAvailableModelSet 返回当前至少有一个 enabled 渠道的模型集合（用于标记暂不可用模型）。
+func GetAvailableModelSet() map[string]bool {
+	var names []string
+	DB.Table("abilities").Where("enabled = ?", true).Distinct("model").Pluck("model", &names)
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
+
+// GetModelParamsMap 返回 models 表里已注册模型的能力参数（max_in/out/tool/vision/reasoning）。
+// 未注册的模型不在 map 里，前端拿到零值字段自行兜底。
+func GetModelParamsMap() map[string]Model {
+	var models []Model
+	DB.Unscoped().Select("model_name", "max_input_tokens", "max_output_tokens", "supports_tool_call", "supports_images", "supports_reasoning").
+		Where("model_name <> ''").Find(&models)
+	m := make(map[string]Model, len(models))
+	for _, item := range models {
+		m[item.ModelName] = item
+	}
+	return m
+}
+
 func GetVendors() []PricingVendor {
 	if time.Since(lastGetPricingTime) > time.Minute*1 || len(pricingMap) == 0 {
 		// 保证先刷新一次

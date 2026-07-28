@@ -64,6 +64,20 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
+	// 补充能力参数 + 可用状态（与使用教程同一数据源：models 表 + abilities 表）
+	availableSet := model.GetAvailableModelSet()
+	paramsMap := model.GetModelParamsMap()
+	for i := range pricing {
+		pricing[i].Available = availableSet[pricing[i].ModelName]
+		if p, ok := paramsMap[pricing[i].ModelName]; ok {
+			pricing[i].MaxInputTokens = p.MaxInputTokens
+			pricing[i].MaxOutputTokens = p.MaxOutputTokens
+			pricing[i].SupportsToolCall = p.SupportsToolCall
+			pricing[i].SupportsImages = p.SupportsImages
+			pricing[i].SupportsReasoning = p.SupportsReasoning
+		}
+	}
+
 	c.JSON(200, gin.H{
 		"success":            true,
 		"data":               pricing,

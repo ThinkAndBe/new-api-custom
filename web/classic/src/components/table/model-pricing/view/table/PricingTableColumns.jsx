@@ -32,6 +32,11 @@ import {
   renderDescription,
 } from '../../../../common/ui/RenderUtils';
 import { useIsMobile } from '../../../../../hooks/common/useIsMobile';
+import {
+  renderAvailabilityTag,
+  renderCapabilityTags,
+  renderContextWindow,
+} from '../ModelCapabilityTags';
 
 function renderQuotaType(type, t) {
   switch (type) {
@@ -156,6 +161,31 @@ export const getPricingTableColumns = ({
       record.model_name.toLowerCase().includes(value.toLowerCase()),
   };
 
+  const availabilityColumn = {
+    title: t('状态'),
+    dataIndex: 'available',
+    width: 90,
+    render: (text, record) => renderAvailabilityTag(record, t),
+    onFilter: (value, record) =>
+      value === 'unavailable' ? record.available === false : record.available !== false,
+  };
+
+  const capabilityColumn = {
+    title: t('能力'),
+    dataIndex: 'supports_tool_call',
+    render: (text, record) => {
+      const caps = renderCapabilityTags(record, t);
+      const ctx = renderContextWindow(record, t);
+      if (!caps && !ctx) return '-';
+      return (
+        <div className='flex items-center gap-1 flex-wrap'>
+          {caps}
+          {ctx}
+        </div>
+      );
+    },
+  };
+
   const quotaColumn = {
     title: t('计费类型'),
     dataIndex: 'quota_type',
@@ -185,7 +215,9 @@ export const getPricingTableColumns = ({
 
   const baseColumns = [
     modelNameColumn,
+    availabilityColumn,
     vendorColumn,
+    capabilityColumn,
     descriptionColumn,
     tagsColumn,
     quotaColumn,

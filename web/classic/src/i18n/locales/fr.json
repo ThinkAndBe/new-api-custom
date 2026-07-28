@@ -3675,7 +3675,14 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "暂不可用": "Indisponible",
+    "能力": "Capacités",
+    "视觉": "Vision",
+    "推理": "Raisonnement",
+    "工具调用": "Appel d'outils",
+    "最大输入": "Entrée max",
+    "最大输出": "Sortie max"
   },
   "彻底删除": "Supprimer définitivement",
   "彻底删除用户": "Supprimer définitivement l'utilisateur",
