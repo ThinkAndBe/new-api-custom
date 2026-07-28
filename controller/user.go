@@ -887,10 +887,12 @@ func GetUserModelsRecovery(c *gin.Context) {
 	}
 	// 查这些模型在用户分组下的禁用渠道（未启用 + 未删除），取其 other_info 里的 recovery_at
 	var channels []model.Channel
-	if err := model.DB.Select("id", "name", "models", model.CommonGroupCol(), "other_info").
-		Where("status <> ?", common.ChannelStatusEnabled).
-		Where(model.CommonGroupCol()+" IN ?", groupNames).
-		Find(&channels).Error; err != nil {
+	query := model.DB.Select("id", "name", "models", model.CommonGroupCol(), "other_info").
+		Where("status <> ?", common.ChannelStatusEnabled)
+	for _, g := range groupNames {
+		query = query.Or(model.CommonGroupCol()+" LIKE ?", "%,"+g+",%")
+	}
+	if err := query.Find(&channels).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
