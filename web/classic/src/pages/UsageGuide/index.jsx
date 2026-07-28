@@ -12,7 +12,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { Download, Terminal, Check, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { API, showError, showSuccess } from '../../helpers';
+import { API, showError, showInfo, showSuccess } from '../../helpers';
 import { StatusContext } from '../../context/Status';
 import { UserContext } from '../../context/User';
 
@@ -39,6 +39,9 @@ const UsageGuide = () => {
 
   // 管理员模板编辑
   const [template, setTemplate] = useState('');
+  // savedTemplate: 数据库里已保存的模板（用户配置真正的数据来源）。
+  // 编辑器里的 template 只是本地编辑草稿，未点「保存模板」前不影响用户看到的配置。
+  const [savedTemplate, setSavedTemplate] = useState('');
   const [templateLoaded, setTemplateLoaded] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
 
@@ -92,16 +95,18 @@ const UsageGuide = () => {
           setAllModelParamsMap(buildMap(allMetaRes.data.data));
         }
         if (templateRes.data.success && templateRes.data.data) {
-          setTemplate(templateRes.data.data);
-        // 管理员打开时，若模板是合法 JSON 则自动美化为缩进格式，和配置预览排版一致
-        if (templateRes.data.data && String(templateRes.data.data).trim()) {
-          try {
-            const parsed = JSON.parse(templateRes.data.data);
-            setTemplate(JSON.stringify(parsed, null, 2));
-          } catch (e) {
-            setTemplate(templateRes.data.data);
+          // savedTemplate 始终存数据库原文：配置预览/下载的数据来源，
+          // 编辑器里的本地草稿（template）未保存前不影响用户看到的配置
+          setSavedTemplate(templateRes.data.data);
+          // 编辑器里展示美化后的缩进格式，和配置预览排版一致
+          if (String(templateRes.data.data).trim()) {
+            try {
+              const parsed = JSON.parse(templateRes.data.data);
+              setTemplate(JSON.stringify(parsed, null, 2));
+            } catch (e) {
+              setTemplate(templateRes.data.data);
+            }
           }
-        }
         }
         setTemplateLoaded(true);
       })
@@ -154,12 +159,15 @@ const UsageGuide = () => {
     return JSON.stringify({ models }, null, 2);
   }, [tokenKey, effectiveModels, baseUrl, effectiveParamsMap]);
 
-  // 最终 models.json：优先使用管理员模板（替换占位符），否则自动生成
+  // 最终 models.json：优先使用管理员已保存的模板（替换占位符），否则自动生成。
+  // 注意：这里读的是 savedTemplate（数据库里已保存的模板），而不是编辑器里的
+  // 本地草稿 template —— 管理员点了「从当前自动生成填充」但没保存时，
+  // 用户侧看到的配置不能跟着草稿变。
   // 模板模式：管理员模板里的模型列表可能滞后（新模型/渠道禁用未同步），
   // 这里用当前完整清单补齐缺失模型并移除已下线的模型，仅保留模板里的参数。
   const modelsJson = useCallback(() => {
-    if (template.trim()) {
-      const replaced = template
+    if (savedTemplate.trim()) {
+      const replaced = savedTemplate
         .replace(/\{\{apiKey\}\}/g, tokenKey || 'YOUR_API_KEY')
         .replace(/\{\{baseUrl\}\}/g, baseUrl);
       try {
@@ -195,7 +203,7 @@ const UsageGuide = () => {
       }
     }
     return autoModelsJson();
-  }, [template, tokenKey, baseUrl, autoModelsJson, effectiveModels, effectiveParamsMap]);
+  }, [savedTemplate, tokenKey, baseUrl, autoModelsJson, effectiveModels, effectiveParamsMap]);
 
   const handleDownload = useCallback(() => {
     const json = modelsJson();
@@ -296,6 +304,8 @@ pause`;
         value: template,
       });
       if (res.data.success) {
+        // 保存成功后才更新 savedTemplate，用户侧配置此时才真正变更
+        setSavedTemplate(template);
         showSuccess(t('模板已保存，所有用户的使用教程将同步更新'));
       } else {
         showError(res.data.message || t('保存失败'));
@@ -315,9 +325,11 @@ pause`;
       const tpl = auto
         .replace(new RegExp(tokenKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '{{apiKey}}')
         .replace(new RegExp(baseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '{{baseUrl}}');
+      // 只填到编辑器草稿里，不点「保存模板」不会影响用户看到的配置
       setTemplate(tpl);
+      showInfo(t('已填充到编辑器，点击「保存模板」后才会生效到用户配置'));
     }
-  }, [autoModelsJson, tokenKey, baseUrl]);
+  }, [autoModelsJson, tokenKey, baseUrl, t]);
 
   const tokenOptions = tokens.map((tk) => ({
     value: String(tk.id),
@@ -450,7 +462,7 @@ pause`;
           <Text type='tertiary'>{t('请先选择令牌')}</Text>
         ) : (
           <div>
-            {template.trim() && (
+            {savedTemplate.trim() && (
               <Banner
                 type='info'
                 description={t('当前使用管理员自定义模板')}

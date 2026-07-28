@@ -31,7 +31,8 @@ var modelParamsSeedData = map[string]struct {
 	"deepseek-v3":       {In: 128000, Out: 16000, Tools: true},
 	"deepseek-r1":       {In: 128000, Out: 32000, Tools: true, Reasoning: true},
 	// ========== 阿里 Qwen ==========
-	"qwen3.7-max":      {In: 1000000, Out: 65536, Tools: true, Reasoning: true},
+	"qwen3.7-max":         {In: 1000000, Out: 65536, Tools: true, Reasoning: true},
+	"qwen3.8-max-preview": {In: 1000000, Out: 65536, Tools: true, Reasoning: true},
 	"qwen3.6-plus":     {In: 1000000, Out: 65536, Tools: true, Vision: true, Reasoning: true},
 	"qwen3.6-27b":      {In: 262100, Out: 262100, Tools: true, Vision: true, Reasoning: true},
 	"qwen3.5-plus":     {In: 1000000, Out: 65536, Tools: true, Vision: true, Reasoning: true},
