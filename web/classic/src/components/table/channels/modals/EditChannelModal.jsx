@@ -67,7 +67,7 @@ import SecureVerificationModal from '../../../common/modals/SecureVerificationMo
 import StatusCodeRiskGuardModal from './StatusCodeRiskGuardModal';
 import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
 import { useSecureVerification } from '../../../../hooks/common/useSecureVerification';
-import { parseChannelConnectionString } from '../../../../helpers/token';
+import { parseChannelConnectionString, encodeChannelConnectionString } from '../../../../helpers/token';
 import { createApiCalls } from '../../../../services/secureVerification';
 import {
   collectInvalidStatusCodeEntries,
@@ -606,6 +606,53 @@ const EditChannelModal = (props) => {
       }
     } catch {
       showError(t('无法读取剪贴板'));
+    }
+  };
+
+  // 复制配置到剪贴板（与「从剪贴板粘贴配置」互逆）。
+  // 编辑已有渠道时密钥不明文存储在表单里，先走安全验证拉取真实密钥；
+  // 新建渠道时表单里的 key 就是用户刚填的，直接复制。
+  const copyConfigToClipboard = async () => {
+    let key = inputs.key || '';
+    const url = inputs.base_url || '';
+    if (isEdit) {
+      try {
+        const result = await withVerification(
+          createApiCalls.viewChannelKey(channelId),
+          {
+            title: t('复制渠道连接信息'),
+            description: t('为了保护账户安全，请验证您的身份。'),
+            preferredMethod: 'passkey',
+          },
+        );
+        const fetched = result?.data?.key ?? result?.key;
+        if (result?.success && fetched) {
+          key = fetched;
+        } else if (result?.success && !fetched) {
+          showError(t('获取密钥失败'));
+          return;
+        } else if (!result) {
+          // 用户取消验证
+          return;
+        }
+      } catch (error) {
+        showError(error.message || t('获取密钥失败'));
+        return;
+      }
+    }
+    if (!key) {
+      showInfo(t('请先填写密钥'));
+      return;
+    }
+    if (!url) {
+      showInfo(t('请先填写 Base URL'));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(encodeChannelConnectionString(key, url));
+      showSuccess(t('连接信息已复制到剪贴板'));
+    } catch {
+      showError(t('复制失败'));
     }
   };
 
@@ -2254,6 +2301,15 @@ data.upstream_model_update_last_detected_models = [];
                 {t('从剪贴板粘贴配置')}
               </Button>
             )}
+            <Button
+              size='small'
+              type='tertiary'
+              className='shrink-0'
+              icon={<IconCopy />}
+              onClick={copyConfigToClipboard}
+            >
+              {t('复制配置到剪贴板')}
+            </Button>
           </div>
         }
         bodyStyle={{ padding: '0' }}

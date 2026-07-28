@@ -3662,7 +3662,12 @@
     "发现 ${count} 个 MCP 工具": "${count} 個の MCP ツールを検出",
     "该 MCP 渠道暂未发现工具": "この MCP チャネルではまだツールが見つかっていません",
     "MCP 渠道固定提供 mcp 服务，模型列表无需配置。Base URL 请填 MCP 服务器的 streamable-http 地址，例如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp；密钥填平台侧真实 API Key，将随 Authorization: Bearer 与 x-api-key 头注入上游。": "MCP チャネルは常に mcp サービスを提供し、モデルリストは不要です。Base URL には MCP サーバーの streamable-http アドレス（例：https://open.bigmodel.cn/api/mcp/web_search_prime/mcp）を入力し、キーにはプラットフォーム側の実際の API Key を入力してください。Authorization: Bearer と x-api-key ヘッダーで上流に注入されます。",
-    "配置文件路径": "設定ファイルのパス"
+    "配置文件路径": "設定ファイルのパス",
+    "复制配置到剪贴板": "設定をクリップボードにコピー",
+    "复制渠道连接信息": "チャネル接続情報をコピー",
+    "连接信息已复制到剪贴板": "接続情報をクリップボードにコピーしました",
+    "请先填写密钥": "先にキーを入力してください",
+    "请先填写 Base URL": "先にベース URL を入力してください"
   },
   "彻底删除": "完全削除",
   "彻底删除用户": "ユーザーを完全削除",

@@ -4227,7 +4227,12 @@
     "发现 ${count} 个 MCP 工具": "Đã tìm thấy ${count} công cụ MCP",
     "该 MCP 渠道暂未发现工具": "Kênh MCP này chưa tìm thấy công cụ nào",
     "MCP 渠道固定提供 mcp 服务，模型列表无需配置。Base URL 请填 MCP 服务器的 streamable-http 地址，例如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp；密钥填平台侧真实 API Key，将随 Authorization: Bearer 与 x-api-key 头注入上游。": "Kênh MCP luôn cung cấp dịch vụ mcp; không cần danh sách model. Base URL điền địa chỉ streamable-http của máy chủ MCP, ví dụ https://open.bigmodel.cn/api/mcp/web_search_prime/mcp; key điền API Key thật phía nền tảng, sẽ được chèn vào upstream qua header Authorization: Bearer và x-api-key.",
-    "配置文件路径": "Đường dẫn file cấu hình"
+    "配置文件路径": "Đường dẫn file cấu hình",
+    "复制配置到剪贴板": "Sao chép cấu hình vào khay nhớ tạm",
+    "复制渠道连接信息": "Sao chép thông tin kết nối kênh",
+    "连接信息已复制到剪贴板": "Đã sao chép thông tin kết nối vào khay nhớ tạm",
+    "请先填写密钥": "Vui lòng nhập khóa trước",
+    "请先填写 Base URL": "Vui lòng nhập Base URL trước"
   },
   "彻底删除": "Xóa vĩnh viễn",
   "彻底删除用户": "Xóa vĩnh viễn ngườù dùng",

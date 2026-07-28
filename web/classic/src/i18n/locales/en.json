@@ -3839,7 +3839,12 @@
     "发现 ${count} 个 MCP 工具": "Found ${count} MCP tools",
     "该 MCP 渠道暂未发现工具": "No tools found on this MCP channel yet",
     "MCP 渠道固定提供 mcp 服务，模型列表无需配置。Base URL 请填 MCP 服务器的 streamable-http 地址，例如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp；密钥填平台侧真实 API Key，将随 Authorization: Bearer 与 x-api-key 头注入上游。": "MCP channels always provide the mcp service; no model list needed. Set Base URL to the MCP server streamable-http address, e.g. https://open.bigmodel.cn/api/mcp/web_search_prime/mcp; set the key to the platform-side real API Key, injected upstream via Authorization: Bearer and x-api-key headers.",
-    "配置文件路径": "Config file path"
+    "配置文件路径": "Config file path",
+    "复制配置到剪贴板": "Copy config to clipboard",
+    "复制渠道连接信息": "Copy channel connection info",
+    "连接信息已复制到剪贴板": "Connection info copied to clipboard",
+    "请先填写密钥": "Please enter the key first",
+    "请先填写 Base URL": "Please enter the Base URL first"
   },
   "彻底删除": "Delete Permanently",
   "彻底删除用户": "Delete User Permanently",

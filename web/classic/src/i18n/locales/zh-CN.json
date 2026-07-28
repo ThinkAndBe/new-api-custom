@@ -3822,7 +3822,12 @@
     "发现 ${count} 个 MCP 工具": "发现 ${count} 个 MCP 工具",
     "该 MCP 渠道暂未发现工具": "该 MCP 渠道暂未发现工具",
     "MCP 渠道固定提供 mcp 服务，模型列表无需配置。Base URL 请填 MCP 服务器的 streamable-http 地址，例如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp；密钥填平台侧真实 API Key，将随 Authorization: Bearer 与 x-api-key 头注入上游。": "MCP 渠道固定提供 mcp 服务，模型列表无需配置。Base URL 请填 MCP 服务器的 streamable-http 地址，例如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp；密钥填平台侧真实 API Key，将随 Authorization: Bearer 与 x-api-key 头注入上游。",
-    "配置文件路径": "配置文件路径"
+    "配置文件路径": "配置文件路径",
+    "复制配置到剪贴板": "复制配置到剪贴板",
+    "复制渠道连接信息": "复制渠道连接信息",
+    "连接信息已复制到剪贴板": "连接信息已复制到剪贴板",
+    "请先填写密钥": "请先填写密钥",
+    "请先填写 Base URL": "请先填写 Base URL"
   },
   "彻底删除": "彻底删除",
   "彻底删除用户": "彻底删除用户",
