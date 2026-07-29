@@ -11,8 +11,9 @@ import {
   Tabs,
   TextArea,
   Tooltip,
+  Collapsible,
 } from '@douyinfe/semi-ui';
-import { Download, Terminal, Check, Copy, Save } from 'lucide-react';
+import { Download, Terminal, Check, Copy, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showInfo, showSuccess, timestamp2string } from '../../helpers';
 import { StatusContext } from '../../context/Status';
@@ -46,6 +47,8 @@ const UsageGuide = () => {
   const [savedTemplate, setSavedTemplate] = useState('');
   const [templateLoaded, setTemplateLoaded] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  // 管理员模板编辑区是否展开（默认收起，保持页面简洁）
+  const [tplEditorOpen, setTplEditorOpen] = useState(false);
 
   // 暂不可用模型的渠道预计恢复时间（model_name -> {recovery_at, channel_name}）
   const [modelRecoveryMap, setModelRecoveryMap] = useState({});
@@ -420,49 +423,65 @@ pause`;
         {t('下载配置文件，一键替换 WorkBuddy / CodeBuddy 设置')}
       </Text>
 
-      {/* 管理员：模板编辑 */}
+      {/* 管理员：模板编辑（默认收起，保持页面简洁） */}
       {isAdmin && templateLoaded && (
         <Card bordered style={{ marginTop: 24, padding: '20px 24px', borderColor: 'var(--semi-color-warning)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <Text strong style={{ fontSize: 16 }}>{t('管理员：models.json 模板')}</Text>
-            <Tag size='small' color='orange'>{t('仅管理员可见')}</Tag>
-          </div>
-          <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
-            {t('编辑此模板后保存，所有用户的使用教程将使用此模板生成配置。使用 {{apiKey}} 和 {{baseUrl}} 作为占位符，用户访问时自动替换为其实际值。留空则使用系统自动生成。')}
-          </Text>
-          <TextArea
-            value={template}
-            onChange={setTemplate}
-            placeholder={t('留空 = 使用系统自动生成。或粘贴完整 models.json 模板，用 {{apiKey}} 和 {{baseUrl}} 作为占位符。')}
-            autosize={{ minRows: 10, maxRows: 30 }}
-            style={{ fontFamily: 'monospace', fontSize: 12 }}
-          />
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+            onClick={() => setTplEditorOpen((v) => !v)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text strong style={{ fontSize: 16 }}>{t('管理员：models.json 模板')}</Text>
+              <Tag size='small' color='orange'>{t('仅管理员可见')}</Tag>
+            </div>
             <Button
-              type='primary'
-              icon={<Save size={14} />}
-              loading={savingTemplate}
-              onClick={handleSaveTemplate}
+              theme='borderless'
+              size='small'
+              icon={tplEditorOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             >
-              {t('保存模板')}
+              {tplEditorOpen ? t('收起') : t('展开编辑')}
             </Button>
-            <Button
-              type='tertiary'
-              onClick={handleFillFromAuto}
-              disabled={!ready}
-            >
-              {t('从当前自动生成填充')}
-            </Button>
-            {template && (
-              <Button
-                type='danger'
-                theme='borderless'
-                onClick={() => setTemplate('')}
-              >
-                {t('清空模板')}
-              </Button>
-            )}
           </div>
+          <Collapsible isOpen={tplEditorOpen} keepDOM>
+            <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12 }}>
+              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
+                {t('编辑此模板后保存，所有用户的使用教程将使用此模板生成配置。使用 {{apiKey}} 和 {{baseUrl}} 作为占位符，用户访问时自动替换为其实际值。留空则使用系统自动生成。')}
+              </Text>
+              <TextArea
+                value={template}
+                onChange={setTemplate}
+                placeholder={t('留空 = 使用系统自动生成。或粘贴完整 models.json 模板，用 {{apiKey}} 和 {{baseUrl}} 作为占位符。')}
+                autosize={{ minRows: 10, maxRows: 30 }}
+                style={{ fontFamily: 'monospace', fontSize: 12 }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <Button
+                  type='primary'
+                  icon={<Save size={14} />}
+                  loading={savingTemplate}
+                  onClick={handleSaveTemplate}
+                >
+                  {t('保存模板')}
+                </Button>
+                <Button
+                  type='tertiary'
+                  onClick={handleFillFromAuto}
+                  disabled={!ready}
+                >
+                  {t('从当前自动生成填充')}
+                </Button>
+                {template && (
+                  <Button
+                    type='danger'
+                    theme='borderless'
+                    onClick={() => setTemplate('')}
+                  >
+                    {t('清空模板')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Collapsible>
         </Card>
       )}
 
