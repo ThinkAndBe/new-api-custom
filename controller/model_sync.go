@@ -341,7 +341,7 @@ func SyncUpstreamModels(c *gin.Context) {
 		}
 	}
 
-	// 3) 执行同步：仅创建缺失模型；若上游缺失该模型则跳过
+	// 3) 执行同步：仅创建缺失模型；上游不存在的模型也会创建占位记录（仅模型名）
 	createdModels := 0
 	createdVendors := 0
 	updatedModels := 0
@@ -354,10 +354,6 @@ func SyncUpstreamModels(c *gin.Context) {
 
 	for _, name := range missing {
 		up, ok := modelByName[name]
-		if !ok {
-			skipped = append(skipped, name)
-			continue
-		}
 
 		// 若本地已存在且设置为不同步，则跳过（极端情况：缺失列表与本地状态不同步时）
 		var existing model.Model
@@ -366,6 +362,23 @@ func SyncUpstreamModels(c *gin.Context) {
 				skipped = append(skipped, name)
 				continue
 			}
+		}
+
+		if !ok {
+			// 上游数据中不存在该模型（例如渠道上配置的自定义/私有模型）：
+			// 仍然创建一个仅含模型名的占位记录，方便管理员在模型管理中手动维护参数，
+			// 否则这类模型永远无法通过同步进入模型管理。
+			mi := &model.Model{
+				ModelName: name,
+				Status:    1,
+			}
+			if err := mi.Insert(); err == nil {
+				createdModels++
+				createdList = append(createdList, name)
+			} else {
+				skipped = append(skipped, name)
+			}
+			continue
 		}
 
 		// 确保 vendor 存在
@@ -567,12 +580,17 @@ func SyncUpstreamPreview(c *gin.Context) {
 		}
 	}
 
-	// 3) 缺失且上游存在的模型
+	// 3) 缺失模型：
+	// - 上游存在的：同步时会带上上游的描述/图标等完整信息
+	// - 上游不存在的（渠道上配置的自定义/私有模型）：同步时也会创建仅含模型名的占位记录
 	missingList, _ := model.GetMissingModels()
 	var missing []string
+	var missingNoUpstream []string
 	for _, name := range missingList {
 		if _, ok := modelByName[name]; ok {
 			missing = append(missing, name)
+		} else {
+			missingNoUpstream = append(missingNoUpstream, name)
 		}
 	}
 
@@ -622,8 +640,9 @@ func SyncUpstreamPreview(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"missing":   missing,
-			"conflicts": conflicts,
+			"missing":             missing,
+			"missing_no_upstream": missingNoUpstream,
+			"conflicts":           conflicts,
 			"source": gin.H{
 				"locale":      locale,
 				"models_url":  modelsURL,
