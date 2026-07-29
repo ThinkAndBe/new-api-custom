@@ -618,9 +618,7 @@ pause`;
                     const rec = modelRecoveryMap[m];
                     const hasRecoveryTime = rec && rec.recovery_at > 0;
                     const tooltip = hasRecoveryTime
-                      ? t('渠道「${name}」预计恢复时间：${time}')
-                          .replace('${name}', rec.channel_name || '-')
-                          .replace('${time}', timestamp2string(rec.recovery_at))
+                      ? t('预计恢复时间：${time}').replace('${time}', timestamp2string(rec.recovery_at))
                       : t('暂无预计恢复时间');
                     return (
                       <Tooltip key={m} content={tooltip}>

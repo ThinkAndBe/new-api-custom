@@ -3884,5 +3884,6 @@
   "暂不可用模型": "Temporarily unavailable models",
   "这些模型已包含在配置中，渠道恢复后立即可用，无需重新下载。": "These models are included in the config. They will work as soon as the channel recovers—no need to re-download.",
   "配置里同时包含「可用」和「暂不可用」的模型。即使某些渠道临时禁用，配置里也保留，渠道恢复后立即可用，无需重新下载。": "The config includes both available and temporarily unavailable models. Even if some channels are temporarily disabled, the config keeps them—no need to re-download after recovery.",
-  "配置里只包含当前可用的模型。如果渠道被临时禁用，模型会从配置中消失，恢复后需要重新下载。": "The config only includes currently available models. If a channel is temporarily disabled, its models disappear from the config and you'll need to re-download after recovery."
+  "配置里只包含当前可用的模型。如果渠道被临时禁用，模型会从配置中消失，恢复后需要重新下载。": "The config only includes currently available models. If a channel is temporarily disabled, its models disappear from the config and you'll need to re-download after recovery.",
+  "预计恢复时间：${time}": "Estimated recovery time: ${time}"
 }

@@ -833,9 +833,8 @@ func GetUserModelsMeta(c *gin.Context) {
 
 // modelRecoveryInfo 暂不可用模型的渠道恢复信息（用户侧使用教程用）
 type modelRecoveryInfo struct {
-	ModelName   string `json:"model_name"`
-	RecoveryAt  int64  `json:"recovery_at"`  // 最早预计恢复时间戳（秒），0 表示无预计时间
-	ChannelName string `json:"channel_name"` // 提供该恢复时间的渠道名
+	ModelName  string `json:"model_name"`
+	RecoveryAt int64  `json:"recovery_at"` // 最早预计恢复时间戳（秒），0 表示无预计时间
 }
 
 // GetUserModelsRecovery 返回当前用户分组下"暂不可用"模型（完整清单 - 当前可用）
@@ -918,13 +917,11 @@ func GetUserModelsRecovery(c *gin.Context) {
 				// 已有记录：保留恢复时间更早的；都无时间则保持原样
 				if recoveryAt > 0 && (existing.RecoveryAt == 0 || recoveryAt < existing.RecoveryAt) {
 					existing.RecoveryAt = recoveryAt
-					existing.ChannelName = ch.Name
 				}
 			} else {
 				recoveryMap[m] = &modelRecoveryInfo{
-					ModelName:   m,
-					RecoveryAt:  recoveryAt,
-					ChannelName: ch.Name,
+					ModelName:  m,
+					RecoveryAt: recoveryAt,
 				}
 			}
 		}
