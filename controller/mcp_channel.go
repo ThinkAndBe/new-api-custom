@@ -138,7 +138,7 @@ func GetMcpChannelTools(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if channel.Type != constant.ChannelTypeMCP {
+	if !isMcpChannel(channel) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "该渠道不是 MCP 类型"})
 		return
 	}
@@ -177,7 +177,11 @@ func GetUserMcpServers(c *gin.Context) {
 	}
 
 	var channels []*model.Channel
-	if err := model.DB.Where("type = ? AND status = ?", constant.ChannelTypeMCP, common.ChannelStatusEnabled).
+	// 兼容：type=58（标准 MCP）+ type=8 且 models 含 mcp（迁移前的历史"假 MCP"渠道）
+	if err := model.DB.Where(
+		"type = ? OR (type = ? AND (',' || REPLACE(models, ' ', '') || ',') LIKE ?)",
+		constant.ChannelTypeMCP, constant.ChannelTypeCustom, "%,mcp,%",
+	).Where("status = ?", common.ChannelStatusEnabled).
 		Find(&channels).Error; err != nil {
 		common.ApiError(c, err)
 		return

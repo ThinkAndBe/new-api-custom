@@ -310,6 +310,31 @@ func migrateDB() error {
 			return err
 		}
 	}
+	common.SysLog("database migrated")
+	if err := migrateLegacyMcpChannels(); err != nil {
+		common.SysError("failed to migrate MCP channels: " + err.Error())
+	}
+	return nil
+}
+
+// migrateLegacyMcpChannels 把旧的"假 MCP"渠道（任意类型、models 透传 mcp 模型）
+// 归正为 MCP(58) 类型。幂等：仅命中 type != 58 且 models 含 mcp 的渠道。
+// 之前这段 SQL 被误放进 migrateDBFast（死代码、全程无人调用），
+// 导致 #26 这类历史渠道一直停在 type=8，getMcpChannel 在 RelayMcp 中以
+// "命中的 #N 不是 MCP 类型"拒绝访问。
+func migrateLegacyMcpChannels() error {
+	// models 是逗号分隔串；前后补逗号做精确匹配，REPLACE 去空格容忍 "mcp, xxx" 写法；
+	// || 拼接 ANSI 标准，MySQL/SQLite/PG 三库通用。
+	migrateResult := DB.Exec(
+		"UPDATE channels SET type = ? WHERE type <> ? AND (',' || REPLACE(models, ' ', '') || ',') LIKE ?",
+		constant.ChannelTypeMCP, constant.ChannelTypeMCP, "%,mcp,%",
+	)
+	if migrateResult.Error != nil {
+		return migrateResult.Error
+	}
+	if migrateResult.RowsAffected > 0 {
+		common.SysLog(fmt.Sprintf("migrated %d legacy channels to MCP type (type=58)", migrateResult.RowsAffected))
+	}
 	return nil
 }
 
@@ -380,17 +405,9 @@ func migrateDBFast() error {
 		}
 	}
 	common.SysLog("database migrated")
-	// 一次性迁移：把旧的"假 MCP"渠道（models 里塞了 mcp 模型的任意类型渠道）归正为 MCP(58) 类型。
-	// models 字段是逗号分隔串，用前后补逗号的方式做精确匹配，REPLACE 去掉空格容忍 "mcp, xxx" 写法；
-	// || 拼接 ANSI 标准，MySQL/SQLite/PG 三库通用。
-	migrateResult := DB.Exec(
-		"UPDATE channels SET type = ? WHERE type <> ? AND (',' || REPLACE(models, ' ', '') || ',') LIKE ?",
-		constant.ChannelTypeMCP, constant.ChannelTypeMCP, "%,mcp,%",
-	)
-	if migrateResult.Error != nil {
-		common.SysError("failed to migrate MCP channels: " + migrateResult.Error.Error())
-	} else if migrateResult.RowsAffected > 0 {
-		common.SysLog(fmt.Sprintf("migrated %d channels to MCP type", migrateResult.RowsAffected))
+	// 同步：归正历史"假 MCP"渠道（详见 migrateLegacyMcpChannels 注释）
+	if err := migrateLegacyMcpChannels(); err != nil {
+		common.SysError("failed to migrate MCP channels: " + err.Error())
 	}
 	return nil
 }

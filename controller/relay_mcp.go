@@ -167,6 +167,28 @@ func RelayMcp(c *gin.Context) {
 	io.Copy(c.Writer, resp.Body)
 }
 
+// isMcpChannel 判断渠道是否承担 MCP 中转职责：
+//  - type=58（ChannelTypeMCP）：标准 MCP 渠道，首选
+//  - type=8（Custom）且 models 字段含 mcp 模型：历史"假 MCP"渠道
+//    迁移为 58 在 migrateLegacyMcpChannels 中完成（启动时自动跑），
+//    但管理员在渠道编辑器里新建此类渠道后到下次重启前，仍需以 8 形态工作。
+func isMcpChannel(ch *model.Channel) bool {
+	if ch == nil {
+		return false
+	}
+	if ch.Type == constant.ChannelTypeMCP {
+		return true
+	}
+	if ch.Type == constant.ChannelTypeCustom {
+		for _, m := range strings.Split(ch.Models, ",") {
+			if strings.TrimSpace(m) == "mcp" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // getMcpChannel 选择用于 MCP 代理的渠道
 func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 	// 优先：key 后缀指定渠道 id（sk-xxx:123，仅管理员）
@@ -176,14 +198,14 @@ func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 			if err != nil {
 				return nil, fmt.Errorf("指定的 MCP 渠道 #%d 不存在", id)
 			}
-			if ch.Status != common.ChannelStatusEnabled {
-				return nil, fmt.Errorf("指定的 MCP 渠道 #%d 未启用", id)
-			}
-			if ch.Type != constant.ChannelTypeMCP {
-				return nil, fmt.Errorf("渠道 #%d 不是 MCP 类型", id)
-			}
-			return ch, nil
+		if ch.Status != common.ChannelStatusEnabled {
+			return nil, fmt.Errorf("指定的 MCP 渠道 #%d 未启用", id)
 		}
+		if !isMcpChannel(ch) {
+			return nil, fmt.Errorf("渠道 #%d 不是 MCP 类型", id)
+		}
+		return ch, nil
+	}
 	}
 
 	// 自动选择：提供 "mcp" 模型的启用渠道（仅限 MCP 类型渠道，防止 LLM 渠道 models 混入 mcp 被误选）。
@@ -209,7 +231,7 @@ func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("加载 MCP 渠道 #%d 失败: %s", channel.Id, err.Error())
 	}
-	if fullChannel.Type != constant.ChannelTypeMCP {
+	if !isMcpChannel(fullChannel) {
 		return nil, fmt.Errorf("当前分组下没有可用的 MCP 渠道（命中的 #%d 不是 MCP 类型）", fullChannel.Id)
 	}
 	return fullChannel, nil
