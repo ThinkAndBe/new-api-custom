@@ -24,6 +24,59 @@ const { Title, Text } = Typography;
 // 当后端模型参数未配置时的兜底默认值
 const DEFAULT_MODEL_PARAMS = { in: 0, out: 0, tools: false, vision: false, reasoning: false };
 
+// 构建 MCP 服务接入「一键提示词」：把可用工具以自然语言清单形式组织，
+// 粘到 zcode / Claude / 任意聊天助手即可让对方知道有哪些 MCP 工具可调用。
+// 对不会编辑 config.json 的用户最友好——Zero-touch onboarding。
+function buildMcpPrompt(server, serverName, mcpUrl, tokenKey) {
+  const toolBrief = (Array.isArray(server.tools) && server.tools.length > 0)
+    ? server.tools.map((tool) => {
+        const name = tool?.name || 'unknown';
+        const desc = (tool?.description || '').trim().split('\n')[0];
+        const required = Array.isArray(tool?.inputSchema?.required) && tool.inputSchema.required.length > 0
+          ? `（必填：${tool.inputSchema.required.join(', ')}）`
+          : '';
+        return desc ? `- ${name}：${desc}${required}` : `- ${name}${required}`;
+      }).join('\n')
+    : '';
+  const maskedKey = tokenKey ? (tokenKey.slice(0, 8) + '...') : 'sk-xxx';
+  const zcodeConfig = {
+    mcp: {
+      servers: {
+        [serverName]: {
+          type: 'http',
+          url: mcpUrl,
+          headers: { Authorization: `Bearer ${tokenKey || 'sk-xxx'}` },
+        },
+      },
+    },
+  };
+  return [
+    `# MCP 工具接入`,
+    ``,
+    `服务：${server.name}`,
+    server.description ? `说明：${server.description}` : '',
+    ``,
+    `以下工具可通过 MCP 协议调用（由网关中转，使用令牌「${maskedKey}」鉴权）：`,
+    toolBrief || '（暂无可用工具，请等待管理员测试渠道）',
+    ``,
+    `## 接入方式`,
+    ``,
+    `### 方式一：在 zcode / Cursor / Claude Desktop 中接入`,
+    `把以下配置写入对应文件（zcode: ~/.zcode/cli/config.json；Cursor: ~/.cursor/mcp.json；Claude Desktop: claude_desktop_config.json），重启客户端后即可让助手自动调用：`,
+    '```json',
+    JSON.stringify(zcodeConfig, null, 2),
+    '```',
+    ``,
+    `### 方式二：在对话里直接告诉助手`,
+    `如果你的客户端不能接入 MCP，可把上面这一段工具清单贴给助手，`,
+    `让它按需用 HTTP POST 调用 ${mcpUrl}（每次请求带 Authorization: Bearer <你的令牌密钥> 头）。`,
+    ``,
+    `## 调用流程（streamable-http）`,
+    `1. POST ${mcpUrl}，body=`+'`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"my-client","version":"1.0"}}}`，从响应头取 `Mcp-Session-Id`',
+    `2. 用同一 session 继续发 tools/list、tools/call 即可`,
+  ].filter(Boolean).join('\n');
+}
+
 const UsageGuide = () => {
   const { t } = useTranslation();
   const [tokens, setTokens] = useState([]);
@@ -319,6 +372,19 @@ pause`;
   const copyMcpConfig = (server, client) => {
     if (!tokenKey) {
       showError(t('请先选择令牌'));
+      return;
+    }
+    // 「一键提示词」tab：复制自然语言接入说明（不依赖客户端 config 编辑能力）
+    if (client === 'prompt') {
+      const text = buildMcpPrompt(server, serverName, mcpUrl, tokenKey);
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          setCopiedMcpKey(`${server.id}-prompt`);
+          showSuccess(t('已复制 MCP 提示词'));
+          setTimeout(() => setCopiedMcpKey(''), 2000);
+        })
+        .catch(() => showError(t('复制失败')));
       return;
     }
     const serverName = (server.name || `mcp-${server.id}`)
@@ -684,7 +750,14 @@ pause`;
               .replace(/[^\w-]+/g, '-')
               .toLowerCase();
             const mcpUrl = `${baseUrl.replace(/\/+$/, '')}/mcp`;
+            const promptText = buildMcpPrompt(server, serverName, mcpUrl, tokenKey);
             const clients = [
+              {
+                key: 'prompt',
+                name: t('一键提示词'),
+                path: '',
+                promptText,
+              },
               {
                 key: 'zcode',
                 name: 'ZCode',
@@ -763,14 +836,18 @@ pause`;
                     {server.description}
                   </Text>
                 )}
-                <Tabs type='card' style={{ marginTop: 12 }}>
+                <Tabs type='card' style={{ marginTop: 12 }} defaultActiveKey='prompt'>
                   {clients.map((client) => {
                     const copied = copiedMcpKey === `${server.id}-${client.key}`;
+                    const isPrompt = client.key === 'prompt';
                     return (
                       <Tabs.TabPane key={client.key} tab={client.name} itemKey={client.key}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                           <Text type='tertiary' size='small'>
-                            {t('配置文件路径')}：<Text code size='small'>{client.path}</Text>
+                            {isPrompt
+                              ? t('粘贴到任意 AI 助手对话即可让其调用 MCP 工具，无需编辑配置文件')
+                              : <>{t('配置文件路径')}：<Text code size='small'>{client.path}</Text></>
+                            }
                           </Text>
                           <Button
                             size='small'
@@ -779,7 +856,7 @@ pause`;
                             icon={copied ? <Check size={12} /> : <Copy size={12} />}
                             onClick={() => copyMcpConfig(server, client.key)}
                           >
-                            {copied ? t('已复制') : t('复制配置')}
+                            {copied ? t('已复制') : (isPrompt ? t('复制提示词') : t('复制配置'))}
                           </Button>
                         </div>
                         <pre style={{
@@ -790,11 +867,11 @@ pause`;
                           fontSize: 11,
                           lineHeight: 1.5,
                           overflow: 'auto',
-                          maxHeight: 220,
+                          maxHeight: isPrompt ? 360 : 220,
                           whiteSpace: 'pre',
                           wordBreak: 'normal',
                         }}>
-                          {JSON.stringify(client.config, null, 2)}
+                          {isPrompt ? (client.promptText || '') : JSON.stringify(client.config, null, 2)}
                         </pre>
                       </Tabs.TabPane>
                     );
