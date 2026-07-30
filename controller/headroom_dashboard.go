@@ -34,13 +34,11 @@ type HeadroomLogRow struct {
 
 type HeadroomAggRow struct {
 	Name             string  `json:"name"`
-	TokensSaved      int     `json:"tokens_saved"`        // 压缩服务自报节省（cl100k 口径）
-	TokensInput      int     `json:"tokens_input"`        // 压缩前输入（cl100k 口径）
+	TokensSaved      int     `json:"tokens_saved"`
+	TokensInput      int     `json:"tokens_input"`
 	RequestCount     int     `json:"request_count"`
-	AverageRatio     float64 `json:"average_ratio"`       // 自报节省率
-	RealUpstreamTokens int   `json:"real_upstream_tokens"` // 上游真实计费 token（压缩后）
-	RealSavedTokens  int     `json:"real_saved_tokens"`   // 真实节省 = input - 上游真实
-	RealSavedRatio   float64 `json:"real_saved_ratio"`    // 真实节省率
+	AverageRatio     float64 `json:"average_ratio"` // 节省率 = saved/input（同口径，反映压缩真实效果）
+	UpstreamBillTokens int   `json:"upstream_bill_tokens"` // 上游实际计费 token（压缩后，不同 tokenizer，仅参考）
 }
 
 // getHeadroomRows 读取 headroom 明细行，应用 HeadroomRetentionDays 留存窗口限制。
@@ -182,8 +180,7 @@ func aggregateHeadroom(rows []HeadroomLogRow, keyFn func(HeadroomLogRow) string)
 		}
 		m[key].TokensSaved += r.HeadroomSaved
 		m[key].TokensInput += r.HeadroomInput
-		m[key].RealUpstreamTokens += r.PromptTokens
-		m[key].RealSavedTokens += r.HeadroomInput - r.PromptTokens
+		m[key].UpstreamBillTokens += r.PromptTokens
 		m[key].RequestCount++
 		ratioSum[key] += r.HeadroomRatio
 	}
@@ -191,9 +188,6 @@ func aggregateHeadroom(rows []HeadroomLogRow, keyFn func(HeadroomLogRow) string)
 	for k, v := range m {
 		if v.RequestCount > 0 {
 			v.AverageRatio = ratioSum[k] / float64(v.RequestCount)
-		}
-		if v.TokensInput > 0 {
-			v.RealSavedRatio = float64(v.RealSavedTokens) / float64(v.TokensInput)
 		}
 		out = append(out, *v)
 	}
@@ -221,35 +215,28 @@ func GetHeadroomSummary(c *gin.Context) {
 		return
 	}
 	totalSaved, totalInput, totalCompressed := 0, 0, 0
-	// 真实口径：用上游返回的 prompt_tokens（压缩后真实计费值）对比压缩前 input。
-	// 压缩服务自报的 HeadroomSaved 用 cl100k tokenizer 算，与上游计费 tokenizer
-	// 不同，会系统性偏差（实测对 glm/deepseek 高估 2 倍以上），不能直接当账单节省。
-	totalRealUpstream, realSaved := 0, 0
+	// 上游真实计费 token（压缩后）——展示用，不与 input 做减法。
+	// 注意：headroom_tokens_input 与 prompt_tokens 用不同 tokenizer 量，
+	// 两者相减（input - prompt）没有意义，会出现负数，不是压缩无效。
+	// 压缩是否有效看 average_ratio（压缩服务同口径自报节省率）。
+	totalRealUpstream := 0
 	for _, r := range rows {
 		totalSaved += r.HeadroomSaved
 		totalInput += r.HeadroomInput
-		totalCompressed += r.HeadroomInput - r.HeadroomSaved // 压缩服务口径：压缩后 token
+		totalCompressed += r.HeadroomInput - r.HeadroomSaved // 压缩后 token（与 input 同口径）
 		totalRealUpstream += r.PromptTokens                  // 上游真实计费 token（压缩后）
-		realSaved += r.HeadroomInput - r.PromptTokens        // 真实口径节省 = 压缩前 - 上游真实
 	}
 	ratio := 0.0
 	if totalInput > 0 {
 		ratio = float64(totalSaved) / float64(totalInput)
 	}
-	realRatio := 0.0
-	if totalInput > 0 {
-		realRatio = float64(realSaved) / float64(totalInput)
-	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
-		"request_count":      len(rows),
-		"tokens_saved":       totalSaved,       // 压缩服务自报节省（cl100k 口径，仅供参考）
-		"tokens_input":       totalInput,       // 原始输入（压缩前，cl100k 口径）
-		"tokens_compressed":  totalCompressed,  // 压缩服务口径：压缩后 token
-		"average_ratio":      ratio,            // 自报节省率
-		// 真实口径：基于上游实际计费 token，反映真实账单节省
-		"real_upstream_tokens": totalRealUpstream, // 上游真实计费 token 总量（压缩后）
-		"real_saved_tokens":    realSaved,         // 真实节省 = 压缩前 input - 上游真实 prompt
-		"real_saved_ratio":     realRatio,         // 真实节省率
+		"request_count":        len(rows),
+		"tokens_saved":         totalSaved,        // 节省量（与 input 同口径，可靠）
+		"tokens_input":         totalInput,        // 压缩前 token
+		"tokens_compressed":    totalCompressed,   // 压缩后 token
+		"average_ratio":        ratio,             // 节省率 = saved/input（同口径，反映压缩真实效果）
+		"upstream_bill_tokens": totalRealUpstream, // 上游实际计费 token（压缩后，不同 tokenizer 口径，仅参考）
 	}})
 }
 

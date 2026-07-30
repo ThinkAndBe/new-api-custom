@@ -345,31 +345,24 @@ const HeadroomDashboard = () => {
             </Text>
           </div>
 
-          <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4'>
+          <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4'>
             <Card>
-              <Text type='tertiary'>{t('真实节省 Tokens')}</Text>
-              <div className='text-2xl font-bold text-green-600'>{renderNumber(summary.real_saved_tokens || 0)}</div>
-              <Text type='tertiary' size='small'>{t('按上游实际计费')}</Text>
+              <Text type='tertiary'>{t('节省 Tokens')}</Text>
+              <div className='text-2xl font-bold text-green-600'>{renderNumber(summary.tokens_saved || 0)}</div>
             </Card>
             <Card>
-              <Text type='tertiary'>{t('真实节省率')}</Text>
-              <div className='text-2xl font-bold text-green-600'>{((summary.real_saved_ratio || 0) * 100).toFixed(1)}%</div>
-              <Text type='tertiary' size='small'>{t('账单口径')}</Text>
-            </Card>
-            <Card>
-              <Text type='tertiary'>{t('上游实际 Tokens')}</Text>
-              <div className='text-2xl font-bold'>{renderNumber(summary.real_upstream_tokens || 0)}</div>
-              <Text type='tertiary' size='small'>{t('压缩后发送')}</Text>
+              <Text type='tertiary'>{t('节省率')}</Text>
+              <div className='text-2xl font-bold text-green-600'>{((summary.average_ratio || 0) * 100).toFixed(1)}%</div>
             </Card>
             <Card>
               <Text type='tertiary'>{t('原输入 Tokens')}</Text>
               <div className='text-2xl font-bold'>{renderNumber(summary.tokens_input || 0)}</div>
-              <Text type='tertiary' size='small'>{t('压缩前估算')}</Text>
+              <Text type='tertiary' size='small'>{t('压缩前')}</Text>
             </Card>
             <Card>
-              <Text type='tertiary'>{t('压缩自报节省')}</Text>
-              <div className='text-2xl font-bold'>{renderNumber(summary.tokens_saved || 0)}</div>
-              <Text type='tertiary' size='small'>{((summary.average_ratio || 0) * 100).toFixed(1)}% · cl100k 口径</Text>
+              <Text type='tertiary'>{t('压缩后 Tokens')}</Text>
+              <div className='text-2xl font-bold'>{renderNumber(summary.tokens_compressed || 0)}</div>
+              <Text type='tertiary' size='small'>{t('实际发送')}</Text>
             </Card>
             <Card>
               <Text type='tertiary'>{t('压缩请求数')}</Text>
@@ -378,7 +371,7 @@ const HeadroomDashboard = () => {
           </div>
           <Banner
             type='info'
-            description={t('「真实节省」按上游实际计费 token 计算（账单口径）；「压缩自报节省」是压缩服务用 cl100k 内部估算，因 tokenizer 差异会与真实账单偏差较大，仅供算法参考。判断压缩是否划算请看绿色「真实节省」数字。')}
+            description={t('节省率 = 节省量 / 原输入，压缩前后用同一口径计算，反映内容真实压缩比例。上游计费 token 因各模型 tokenizer 不同，无法直接换算，评估压缩是否划算请以「节省率」为准。')}
             style={{ marginTop: 12 }}
           />
 

@@ -3744,13 +3744,10 @@
   "配置文件（models.json）": "Config (models.json)",
   "已启用自定义模板": "Modèle personnalisé activé",
   "当前使用系统自动生成": "Génération automatique système",
-  "真实节省 Tokens": "Tokens réellement économisés",
-  "按上游实际计费": "selon facturation amont",
-  "真实节省率": "Taux d'économie réel",
-  "账单口径": "base facturation",
-  "上游实际 Tokens": "Tokens amont",
-  "压缩后发送": "après compression",
-  "压缩前估算": "avant compression",
-  "压缩自报节省": "Économies auto-déclarées",
-  "「真实节省」按上游实际计费 token 计算（账单口径）；「压缩自报节省」是压缩服务用 cl100k 内部估算，因 tokenizer 差异会与真实账单偏差较大，仅供算法参考。判断压缩是否划算请看绿色「真实节省」数字。": "«Économies réelles» calculée d'après les tokens facturés par l'amont (base facturation); «Économies auto-déclarées» est l'estimation interne cl100k du service de compression, qui diverge de la facturation réelle en raison des différences de tokenizer — référence algorithme uniquement. Pour juger si la compression vaut le coup, regardez les chiffres verts «Économies réelles»."
+  "节省 Tokens": "Tokens économisés",
+  "节省率": "Taux d'économie",
+  "压缩前": "avant",
+  "实际发送": "envoyé",
+  "压缩后 Tokens": "Après compression",
+  "节省率 = 节省量 / 原输入，压缩前后用同一口径计算，反映内容真实压缩比例。上游计费 token 因各模型 tokenizer 不同，无法直接换算，评估压缩是否划算请以「节省率」为准。": "Taux d'économie = économisé / entrée originale, calculé avec un tokenizer cohérent avant et après compression, reflétant le vrai ratio de compression. Les tokens de facturation amont utilisent des tokenizers différents par modèle et ne peuvent être convertis directement ; utilisez le «Taux d'économie» pour juger si la compression vaut le coup."
 }

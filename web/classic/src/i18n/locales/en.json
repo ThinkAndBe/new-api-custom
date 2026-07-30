@@ -3890,13 +3890,10 @@
   "配置文件（models.json）": "Config (models.json)",
   "已启用自定义模板": "Custom template enabled",
   "当前使用系统自动生成": "Using system auto-generation",
-  "真实节省 Tokens": "Real Saved Tokens",
-  "按上游实际计费": "by upstream billing",
-  "真实节省率": "Real Savings Rate",
-  "账单口径": "billing basis",
-  "上游实际 Tokens": "Upstream Tokens",
-  "压缩后发送": "after compression",
-  "压缩前估算": "before compression",
-  "压缩自报节省": "Self-reported Savings",
-  "「真实节省」按上游实际计费 token 计算（账单口径）；「压缩自报节省」是压缩服务用 cl100k 内部估算，因 tokenizer 差异会与真实账单偏差较大，仅供算法参考。判断压缩是否划算请看绿色「真实节省」数字。": "\"Real Saved\" is calculated from upstream actual billing tokens (billing basis); \"Self-reported Savings\" is the compression service's internal cl100k estimate, which diverges from real billing due to tokenizer differences — for algorithm reference only. To judge whether compression pays off, look at the green \"Real Saved\" figures."
+  "节省 Tokens": "Tokens Saved",
+  "节省率": "Savings Rate",
+  "压缩前": "before",
+  "实际发送": "sent",
+  "压缩后 Tokens": "After Compression",
+  "节省率 = 节省量 / 原输入，压缩前后用同一口径计算，反映内容真实压缩比例。上游计费 token 因各模型 tokenizer 不同，无法直接换算，评估压缩是否划算请以「节省率」为准。": "Savings Rate = saved / original input, computed with a consistent tokenizer before and after compression, reflecting the true content compression ratio. Upstream billing tokens use different tokenizers per model and cannot be directly converted; use \"Savings Rate\" to judge whether compression pays off."
 }
