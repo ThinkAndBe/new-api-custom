@@ -3889,5 +3889,14 @@
   "展开编辑": "Expand editor",
   "配置文件（models.json）": "Config (models.json)",
   "已启用自定义模板": "Custom template enabled",
-  "当前使用系统自动生成": "Using system auto-generation"
+  "当前使用系统自动生成": "Using system auto-generation",
+  "真实节省 Tokens": "Real Saved Tokens",
+  "按上游实际计费": "by upstream billing",
+  "真实节省率": "Real Savings Rate",
+  "账单口径": "billing basis",
+  "上游实际 Tokens": "Upstream Tokens",
+  "压缩后发送": "after compression",
+  "压缩前估算": "before compression",
+  "压缩自报节省": "Self-reported Savings",
+  "「真实节省」按上游实际计费 token 计算（账单口径）；「压缩自报节省」是压缩服务用 cl100k 内部估算，因 tokenizer 差异会与真实账单偏差较大，仅供算法参考。判断压缩是否划算请看绿色「真实节省」数字。": "\"Real Saved\" is calculated from upstream actual billing tokens (billing basis); \"Self-reported Savings\" is the compression service's internal cl100k estimate, which diverges from real billing due to tokenizer differences — for algorithm reference only. To judge whether compression pays off, look at the green \"Real Saved\" figures."
 }

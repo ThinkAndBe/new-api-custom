@@ -33,7 +33,8 @@ WORKDIR /build
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 # headroom-ai[all] 包含 litellm（自带 tiktoken 编码文件）、transformers 等
-RUN pip install --prefix=/install "headroom-ai[all]==0.10.0"
+# 0.33.0：升级到 Kompress-v2-base 模型 + ContentRouter 三引擎（SmartCrusher/CodeCompressor/Kompress）
+RUN pip install --prefix=/install "headroom-ai[all]==0.33.0"
 
 # FastAPI + Uvicorn（app.py 运行时依赖）
 RUN pip install --prefix=/install "fastapi>=0.110" "uvicorn[standard]>=0.29"

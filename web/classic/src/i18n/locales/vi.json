@@ -4277,5 +4277,14 @@
   "展开编辑": "Mở rộng trình chỉnh sửa",
   "配置文件（models.json）": "Cấu hình (models.json)",
   "已启用自定义模板": "Đã bật mẫu tùy chỉnh",
-  "当前使用系统自动生成": "Đang dùng tự động tạo của hệ thống"
+  "当前使用系统自动生成": "Đang dùng tự động tạo của hệ thống",
+  "真实节省 Tokens": "Token tiết kiệm thực",
+  "按上游实际计费": "theo thanh toán thượng nguồn",
+  "真实节省率": "Tỷ lệ tiết kiệm thực",
+  "账单口径": "theo hóa đơn",
+  "上游实际 Tokens": "Token thượng nguồn",
+  "压缩后发送": "sau nén",
+  "压缩前估算": "trước nén",
+  "压缩自报节省": "Tiết kiệm tự báo",
+  "「真实节省」按上游实际计费 token 计算（账单口径）；「压缩自报节省」是压缩服务用 cl100k 内部估算，因 tokenizer 差异会与真实账单偏差较大，仅供算法参考。判断压缩是否划算请看绿色「真实节省」数字。": "«Tiết kiệm thực» được tính từ token thanh toán thực tế của thượng nguồn (theo hóa đơn); «Tiết kiệm tự báo» là ước tính nội bộ cl100k của dịch vụ nén, sai lệch lớn với hóa đơn thực do khác tokenizer, chỉ tham khảo thuật toán. Để xét nén có đáng không, xem số «Tiết kiệm thực» màu xanh."
 }

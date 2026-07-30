@@ -44,22 +44,23 @@ except Exception as _e:
     _logger.warning("failed to set TIKTOKEN_CACHE_DIR: %s", _e)
 
 # -------------------------------------------------------------------
-# 2. Kompress ML 离线：patch hf_hub_download 和 AutoTokenizer
-#    让 Headroom 从本地 /models/kompress-base 加载模型，不联网。
-#    模型文件需预先下载到 /models/kompress-base/ 和 /models/modernbert-base/
+# 2. Kompress ML 离线：patch huggingface_hub.hf_hub_download
+#    让 Headroom 从本地 /models 目录加载模型，不联网。
+#    0.33.0 用 kompress-v2-base（repo_id: chopratejas/kompress-v2-base），
+#    兼容旧 kompress-base；ONNX 文件名未变（onnx/kompress-int8-wo.onnx 等），
+#    v2 额外需要 model.safetensors（PyTorch 权重）。
 # -------------------------------------------------------------------
 KOMPRESS_LOCAL_DIR = os.getenv("KOMPRESS_LOCAL_DIR", "/models/kompress-base")
 MODERNBERT_LOCAL_DIR = os.getenv("MODERNBERT_LOCAL_DIR", "/models/modernbert-base")
 
-# Kompress ONNX 模型必须配套 ModernBERT tokenizer（用于分词），
-# 二者缺一不可，否则 Kompress 会被判定为不可用并自动禁用。
-# 支持所有 onnx 文件名：int8-wo (推荐) > fp32 > int8
+# kompress-v2-base 的 ONNX 文件名与 v1 相同；额外有 model.safetensors
 _kompress_onnx_path = None
 for _fname in ("kompress-int8-wo.onnx", "kompress-fp32.onnx", "kompress-int8.onnx"):
     _p = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", _fname)
     if os.path.isfile(_p):
         _kompress_onnx_path = _p
         break
+_kompress_safetensors = os.path.join(KOMPRESS_LOCAL_DIR, "model.safetensors")
 _kompress_available = (
     _kompress_onnx_path is not None
     and os.path.isfile(os.path.join(MODERNBERT_LOCAL_DIR, "tokenizer.json"))
@@ -68,36 +69,42 @@ _kompress_available = (
 if _kompress_available:
     _logger.info("Kompress ML model found locally at %s", KOMPRESS_LOCAL_DIR)
 
-    # Patch hf_hub_download to return local file paths
+    # Patch huggingface_hub.hf_hub_download to return local file paths.
+    # 0.33.0 的 headroom.onnx_runtime.hf_hub_download_local_first 内部仍调此函数，
+    # 且会传 revision kwarg（_resolve_revision 给已知 repo pin SHA），所以签名要兼容。
     import huggingface_hub
     _orig_hf_hub_download = huggingface_hub.hf_hub_download
 
+    # 兼容所有 kompress repo_id 写法（v1/v2，带不带用户前缀）
+    _KOMPRESS_REPOS = {
+        "chopratejas/kompress-base", "chopratejas/kompress-v2-base",
+        "kompress-base", "kompress-v2-base",
+    }
+
     def _local_hub_download(repo_id, filename, **kwargs):
-        # Kompress ONNX model (支持 kompress-base / kompress-v2-base，兼容不带前缀的 repo_id)
-        if repo_id in ("chopratejas/kompress-base", "chopratejas/kompress-v2-base", "kompress-base", "kompress-v2-base"):
-            local_path = os.path.join(KOMPRESS_LOCAL_DIR, filename)
-            if os.path.isfile(local_path):
-                _logger.debug("hf_hub_download(local): %s/%s -> %s", repo_id, filename, local_path)
-                return local_path
-            # v2-base 可能用不同文件名，按优先级尝试
-            if filename == "onnx/kompress-int8-wo.onnx":
-                for alt_name in ("kompress-int8-wo.onnx", "kompress-fp32.onnx", "kompress-int8.onnx"):
-                    alt_path = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", alt_name)
-                    if os.path.isfile(alt_path):
-                        _logger.debug("hf_hub_download(alt): %s/%s -> %s", repo_id, filename, alt_path)
-                        return alt_path
-            elif filename == "onnx/kompress-fp32.onnx":
-                for alt_name in ("kompress-fp32.onnx", "kompress-int8-wo.onnx", "kompress-int8.onnx"):
-                    alt_path = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", alt_name)
-                    if os.path.isfile(alt_path):
-                        _logger.debug("hf_hub_download(alt): %s/%s -> %s", repo_id, filename, alt_path)
-                        return alt_path
-            elif filename == "onnx/kompress-int8.onnx":
-                for alt_name in ("kompress-int8.onnx", "kompress-int8-wo.onnx", "kompress-fp32.onnx"):
-                    alt_path = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", alt_name)
-                    if os.path.isfile(alt_path):
-                        _logger.debug("hf_hub_download(alt): %s/%s -> %s", repo_id, filename, alt_path)
-                        return alt_path
+        # Kompress ONNX/权重
+        if repo_id in _KOMPRESS_REPOS:
+            # model.safetensors（v2 PyTorch 权重）
+            if filename == "model.safetensors":
+                if os.path.isfile(_kompress_safetensors):
+                    _logger.debug("hf_hub_download(local): %s/%s -> %s", repo_id, filename, _kompress_safetensors)
+                    return _kompress_safetensors
+            # ONNX 文件：按候选名回退
+            if filename.startswith("onnx/"):
+                _base = filename.split("/", 1)[1]
+                # 先精确，再候选
+                _exact = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", _base)
+                if os.path.isfile(_exact):
+                    return _exact
+                for alt in ("kompress-int8-wo.onnx", "kompress-fp32.onnx", "kompress-int8.onnx"):
+                    _alt = os.path.join(KOMPRESS_LOCAL_DIR, "onnx", alt)
+                    if os.path.isfile(_alt):
+                        _logger.debug("hf_hub_download(alt): %s/%s -> %s", repo_id, filename, _alt)
+                        return _alt
+            # 其它文件（config.json 等）直接映射根目录
+            _root_file = os.path.join(KOMPRESS_LOCAL_DIR, filename)
+            if os.path.isfile(_root_file):
+                return _root_file
         # ModernBERT tokenizer
         if repo_id == "answerdotai/ModernBERT-base":
             local_path = os.path.join(MODERNBERT_LOCAL_DIR, filename)
@@ -110,9 +117,14 @@ if _kompress_available:
 
     huggingface_hub.hf_hub_download = _local_hub_download
 
-    # Also patch the import in kompress_compressor (it imports directly)
-    import headroom.transforms.kompress_compressor as _kc
-    _kc.hf_hub_download = _local_hub_download
+    # 0.33.0：kompress_compressor 从 ..onnx_runtime import hf_hub_download_local_first，
+    # 该函数内部调 huggingface_hub.hf_hub_download（已 patch），无需单独 patch。
+    # 但保险起见也 patch onnx_runtime 模块的引用，防止未来版本改用直接 import。
+    try:
+        import headroom.onnx_runtime as _ort_mod
+        _ort_mod.hf_hub_download_local_first = lambda repo_id, filename, **kw: _local_hub_download(repo_id, filename, **{k: v for k, v in kw.items() if k != 'allow_network'})
+    except Exception as _e:
+        _logger.debug("onnx_runtime patch skipped: %s", _e)
 
     # Patch AutoTokenizer.from_pretrained for ModernBERT
     import transformers
@@ -168,13 +180,16 @@ for _i, _t in enumerate(_pipeline.transforms):
 _importlib.import_module("headroom.compress")._pipeline = _pipeline
 
 # -------------------------------------------------------------------
-# 5. 禁用 Magika ML 内容检测（用 regex 回退）
+# 5. Magika ML 内容检测：0.33.0 起保留启用
+#    0.10.0 时禁用 Magika 是因为旧版它不稳定且需联网模型；0.33.0 的 Magika
+#    已成熟，且 ContentRouter 依赖它做精准内容分类（JSON/代码/日志/文本），
+#    启用后路由更准、压缩率更高。若想强制用 regex 回退，取消下面注释：
 # -------------------------------------------------------------------
-try:
-    import headroom.transforms.content_router as _cr
-    _cr._magika_status = False
-except Exception:
-    pass
+# try:
+#     import sys
+#     sys.modules["magika"] = None  # 让 import magika 失败
+# except Exception:
+#     pass
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -187,9 +202,10 @@ PROTECT_RECENT = int(os.getenv("HEADROOM_PROTECT_RECENT", "4"))
 COMPRESS_USER_MESSAGES = os.getenv("HEADROOM_COMPRESS_USER_MESSAGES", "false").lower() == "true"
 MIN_TOKENS_TO_COMPRESS = int(os.getenv("HEADROOM_MIN_TOKENS_TO_COMPRESS", "250"))
 # 如果本地模型可用，默认启用 Kompress；否则 disabled
-# 注意：传 None 给 headroom.compress.CompressConfig(kompress_model=None) 时，
-# headroom 库会解读为"不压缩"，因此默认值必须显式传模型名 "kompress-base"。
-_DEFAULT_KOMPRESS_MODEL = "kompress-base"
+# 0.33.0：kompress-v2-base（repo_id: chopratejas/kompress-v2-base）
+# 注意：传 None 给 CompressConfig(kompress_model=None) 时 headroom 库会解读为"不压缩"，
+# 因此默认值必须显式传模型名。
+_DEFAULT_KOMPRESS_MODEL = "kompress-v2-base"
 if _kompress_available:
     KOMPRESS_MODEL = os.getenv("HEADROOM_KOMPRESS_MODEL", "") or _DEFAULT_KOMPRESS_MODEL
 else:
@@ -304,7 +320,7 @@ async def root() -> dict[str, str]:
     return {
         "service": "headroom-compress",
         "version": "2.0.0",
-        "mode": "compress-only (no CCR, no Magika, no Kompress ML)",
+        "mode": "compress-only (no CCR, no Magika; Kompress-v2 when model present)",
         "endpoints": "/v1/compress, /livez, /readyz, /health, /docs",
     }
 
