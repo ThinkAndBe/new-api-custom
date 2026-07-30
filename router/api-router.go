@@ -344,6 +344,7 @@ func SetApiRouter(router *gin.Engine) {
 				headroomDataRoute.GET("/by_model", controller.GetHeadroomByModel)
 				headroomDataRoute.GET("/by_user", controller.GetHeadroomByUser)
 				headroomDataRoute.GET("/by_channel", controller.GetHeadroomByChannel)
+				headroomDataRoute.GET("/by_channel_model", controller.GetHeadroomByChannelModel)
 				headroomDataRoute.GET("/recent", controller.GetHeadroomRecent)
 				headroomDataRoute.GET("/trend", controller.GetHeadroomTrend)
 				headroomDataRoute.GET("/monthly", controller.GetHeadroomMonthly)

@@ -36,6 +36,8 @@ type HeadroomLogRow struct {
 
 type HeadroomAggRow struct {
 	Name           string  `json:"name"`
+	ChannelName    string  `json:"channel_name,omitempty"` // 仅 by_channel_model 维度有值
+	ModelName      string  `json:"model_name,omitempty"`   // 仅 by_channel_model 维度有值
 	TokensSaved    int     `json:"tokens_saved"`
 	TokensInput    int     `json:"tokens_input"`
 	RequestCount   int     `json:"request_count"`
@@ -306,6 +308,57 @@ func GetHeadroomByChannel(c *gin.Context) {
 		}
 		return "(未知渠道)"
 	})})
+}
+
+// GetHeadroomByChannelModel 按渠道×模型组合聚合，展示每个渠道下每个模型的
+// 压缩节省率 + cache 命中率。key 用 "渠道名 / 模型名"。
+func GetHeadroomByChannelModel(c *gin.Context) {
+	startTs, endTs := parseHeadroomTime(c)
+	rows, err := getHeadroomRows(startTs, endTs)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// 先按 (channelId + modelName) 聚合，输出时填 ChannelName/ModelName
+	type cmKey struct{ chId int; model string }
+	m := map[cmKey]*HeadroomAggRow{}
+	ratioSum := map[cmKey]float64{}
+	promptSum := map[cmKey]int{}
+	for _, r := range rows {
+		k := cmKey{chId: r.ChannelId, model: r.ModelName}
+		if m[k] == nil {
+			m[k] = &HeadroomAggRow{}
+		}
+		m[k].TokensSaved += r.HeadroomSaved
+		m[k].TokensInput += r.HeadroomInput
+		m[k].CacheHitTokens += r.CacheTokens
+		m[k].RequestCount++
+		ratioSum[k] += r.HeadroomRatio
+		promptSum[k] += r.PromptTokens
+	}
+	out := make([]HeadroomAggRow, 0, len(m))
+	for k, v := range m {
+		chName := ""
+		if ch, err := model.GetChannelById(k.chId, false); err == nil {
+			chName = ch.Name
+		} else if k.chId > 0 {
+			chName = fmt.Sprintf("渠道 #%d", k.chId)
+		} else {
+			chName = "(未知渠道)"
+		}
+		v.ChannelName = chName
+		v.ModelName = k.model
+		v.Name = chName + " / " + k.model
+		if v.RequestCount > 0 {
+			v.AverageRatio = ratioSum[k] / float64(v.RequestCount)
+		}
+		if ps := promptSum[k]; ps > 0 {
+			v.CacheHitRate = float64(v.CacheHitTokens) / float64(ps)
+		}
+		out = append(out, *v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].TokensInput > out[j].TokensInput })
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": out})
 }
 
 func GetHeadroomRecent(c *gin.Context) {

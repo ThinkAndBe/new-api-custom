@@ -4285,5 +4285,9 @@
   "命中率": "Tỷ lệ trúng",
   "命中 Tokens": "Token trúng",
   "上游 Prompt": "Prompt thượng nguồn",
-  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。": "Nén có hiệu quả không: xem ① Tỷ lệ tiết kiệm; ổn định trúng cache: xem ② Tỷ lệ trúng. Hai chỉ số độc lập, không quy đổi chéo."
+  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。": "Nén có hiệu quả không: xem ① Tỷ lệ tiết kiệm; ổn định trúng cache: xem ② Tỷ lệ trúng. Hai chỉ số độc lập, không quy đổi chéo.",
+  "渠道×模型 缓存命中率明细": "Chi tiết Cache Kênh × Model",
+  "缓存命中率": "Tỷ lệ trúng cache",
+  "渠道": "Kênh",
+  "模型": "Model"
 }

@@ -3897,5 +3897,9 @@
   "命中率": "Hit Rate",
   "命中 Tokens": "Hit Tokens",
   "上游 Prompt": "Upstream Prompt",
-  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。": "Whether compression works: see ① Savings Rate; how compression stabilizes cache hits for repeated content: see ② Hit Rate. Two independent metrics, no cross-tokenizer conversion."
+  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。": "Whether compression works: see ① Savings Rate; how compression stabilizes cache hits for repeated content: see ② Hit Rate. Two independent metrics, no cross-tokenizer conversion.",
+  "渠道×模型 缓存命中率明细": "Channel × Model Cache Hit Detail",
+  "缓存命中率": "Cache Hit Rate",
+  "渠道": "Channel",
+  "模型": "Model"
 }

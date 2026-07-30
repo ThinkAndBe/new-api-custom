@@ -84,6 +84,7 @@ const HeadroomDashboard = () => {
   const [byModel, setByModel] = useState([]);
   const [byUser, setByUser] = useState([]);
   const [byChannel, setByChannel] = useState([]);
+  const [byChannelModel, setByChannelModel] = useState([]);
   const [recent, setRecent] = useState([]);
   const [recentTotal, setRecentTotal] = useState(0);
   const [recentPage, setRecentPage] = useState(1);
@@ -118,11 +119,12 @@ const HeadroomDashboard = () => {
 
   const loadAggData = useCallback(async () => {
     const params = buildParams();
-    const [s, m, u, c, tr, mo, yr] = await Promise.all([
+    const [s, m, u, c, cm, tr, mo, yr] = await Promise.all([
       API.get('/api/data/headroom/summary', { params }),
       API.get('/api/data/headroom/by_model', { params }),
       API.get('/api/data/headroom/by_user', { params }),
       API.get('/api/data/headroom/by_channel', { params }),
+      API.get('/api/data/headroom/by_channel_model', { params }),
       API.get('/api/data/headroom/trend', { params }),
       // 月度/年度汇总独立于时间范围，始终返回全部历史
       API.get('/api/data/headroom/monthly'),
@@ -132,6 +134,7 @@ const HeadroomDashboard = () => {
     if (m.data.success) setByModel(m.data.data || []);
     if (u.data.success) setByUser(u.data.data || []);
     if (c.data.success) setByChannel(c.data.data || []);
+    if (cm.data.success) setByChannelModel(cm.data.data || []);
     if (tr.data.success) {
       setTrend(tr.data.data || []);
       setTrendGranularity(tr.data.granularity || 'day');
@@ -410,6 +413,27 @@ const HeadroomDashboard = () => {
               </div>
             </Card>
           </div>
+
+          {/* 渠道×模型：压缩节省率 + cache 命中率明细表 */}
+          {byChannelModel.length > 0 && (
+            <Card className='!rounded-2xl mt-4' title={t('渠道×模型 缓存命中率明细')}>
+              <Table
+                dataSource={byChannelModel}
+                rowKey='name'
+                pagination={{ pageSize: 15, showSizeChanger: true }}
+                size='small'
+                columns={[
+                  { title: t('渠道'), dataIndex: 'channel_name', width: 180, sorter: (a,b) => a.channel_name?.localeCompare(b.channel_name) },
+                  { title: t('模型'), dataIndex: 'model_name', width: 160, sorter: (a,b) => a.model_name?.localeCompare(b.model_name) },
+                  { title: t('请求数'), dataIndex: 'request_count', width: 90, sorter: (a,b) => a.request_count - b.request_count, render: renderNumber },
+                  { title: t('节省率'), dataIndex: 'average_ratio', width: 90, sorter: (a,b) => a.average_ratio - b.average_ratio, defaultSortOrder: 'descend', render: (v) => <span className='text-green-600 font-semibold'>{((v||0)*100).toFixed(1)}%</span> },
+                  { title: t('缓存命中率'), dataIndex: 'cache_hit_rate', width: 100, sorter: (a,b) => a.cache_hit_rate - b.cache_hit_rate, render: (v) => <span className='text-blue-600 font-semibold'>{((v||0)*100).toFixed(1)}%</span> },
+                  { title: t('命中 Tokens'), dataIndex: 'cache_hit_tokens', width: 120, sorter: (a,b) => a.cache_hit_tokens - b.cache_hit_tokens, render: renderNumber },
+                  { title: t('节省 Tokens'), dataIndex: 'tokens_saved', width: 120, sorter: (a,b) => a.tokens_saved - b.tokens_saved, render: renderNumber },
+                ]}
+              />
+            </Card>
+          )}
 
           <Card className='!rounded-2xl' title={t('历史趋势')}>
             <div className='h-96'>

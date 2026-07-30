@@ -3751,5 +3751,9 @@
   "命中率": "Taux de hit",
   "命中 Tokens": "Tokens en cache",
   "上游 Prompt": "Prompt amont",
-  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。": "Efficacité de la compression: voir ① Taux d'économie; comment la compression stabilise les hits cache: voir ② Taux de hit. Deux métriques indépendantes, sans conversion croisée."
+  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。": "Efficacité de la compression: voir ① Taux d'économie; comment la compression stabilise les hits cache: voir ② Taux de hit. Deux métriques indépendantes, sans conversion croisée.",
+  "渠道×模型 缓存命中率明细": "Détail Cache Canal × Modèle",
+  "缓存命中率": "Taux de hit cache",
+  "渠道": "Canal",
+  "模型": "Modèle"
 }
