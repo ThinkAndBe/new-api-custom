@@ -541,8 +541,24 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 						CompressionRatio float64         `json:"compression_ratio"`
 					}
 					if decodeErr := common2.DecodeJson(compressResp.Body, &compressResult); decodeErr == nil {
-						// 即使 tokens_saved=0（noop），也记录 headroom_input 到日志，便于统计压缩覆盖率
-						if compressResult.TokensBefore > 0 {
+						// 即使 tokens_saved=0（noop），也记录 headroom_input 到日志，便于统计压缩覆盖率。
+						// 用 new-api 自己的 tokenizer 重算，与压缩成功分支口径一致。
+						var origMsgsForCount interface{}
+						if common2.Unmarshal(bodyBytes, &origMsgsForCount) == nil {
+							var origMsgsSlice interface{}
+							if m, ok := origMsgsForCount.(map[string]interface{}); ok {
+								origMsgsSlice = m["messages"]
+							}
+							modelName := info.UpstreamModelName
+							if modelName == "" {
+								modelName = info.OriginModelName
+							}
+							if tc := service.CountTokenInput(origMsgsSlice, modelName); tc > 0 {
+								info.HeadroomTokensInput = tc
+							} else if compressResult.TokensBefore > 0 {
+								info.HeadroomTokensInput = compressResult.TokensBefore
+							}
+						} else if compressResult.TokensBefore > 0 {
 							info.HeadroomTokensInput = compressResult.TokensBefore
 						}
 					if compressResult.TokensSaved > 0 {
@@ -647,21 +663,39 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 										}
 									}
 								}
+								// 压缩前 messages 会被下一行覆盖，先捕获以便同口径重算 token
+								origMsgsSnapshot := originalBody["messages"]
 								originalBody["messages"] = compressedMsgs
 								newBodyBytes, marshalErr := common2.Marshal(originalBody)
 								if marshalErr == nil {
 									req.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
 									req.ContentLength = int64(len(newBodyBytes))
-									info.HeadroomTokensSaved = compressResult.TokensSaved
-									// Headroom 的 compression_ratio 是保留率(压缩后/压缩前)，转换为节省率 = saved / input
-									if compressResult.TokensBefore > 0 {
-										info.HeadroomRatio = float64(compressResult.TokensSaved) / float64(compressResult.TokensBefore)
-									} else {
-										info.HeadroomRatio = compressResult.CompressionRatio
+									// 用 new-api 自己的 tokenizer（按模型选择 codec/估算）重算压缩前后 token，
+									// 覆盖压缩服务返回的 cl100k 口径值。压缩服务用 cl100k 量，上游用各自模型
+									// tokenizer 量，口径不一致导致看板"真实节省率"出现负数。
+									// 重算后 before/after 都用 new-api tokenizer，比值自洽，不再跨口径比较。
+									modelName := info.UpstreamModelName
+									if modelName == "" {
+										modelName = info.OriginModelName
 									}
-									logger.LogInfo(c, fmt.Sprintf("headroom compression: %d -> %d tokens, saved %d (%.1f%%)",
-										compressResult.TokensBefore, compressResult.TokensAfter,
-										compressResult.TokensSaved, info.HeadroomRatio*100))
+									tokenBefore := service.CountTokenInput(origMsgsSnapshot, modelName)
+									tokenAfter := service.CountTokenInput(compressedMsgs, modelName)
+									if tokenBefore > 0 && tokenAfter >= 0 && tokenAfter <= tokenBefore {
+										info.HeadroomTokensInput = tokenBefore
+										info.HeadroomTokensSaved = tokenBefore - tokenAfter
+										info.HeadroomRatio = float64(tokenBefore-tokenAfter) / float64(tokenBefore)
+									} else {
+										// 重算异常时回退到压缩服务自报值（cl100k 口径）
+										info.HeadroomTokensSaved = compressResult.TokensSaved
+										if compressResult.TokensBefore > 0 {
+											info.HeadroomTokensInput = compressResult.TokensBefore
+											info.HeadroomRatio = float64(compressResult.TokensSaved) / float64(compressResult.TokensBefore)
+										} else {
+											info.HeadroomRatio = compressResult.CompressionRatio
+										}
+									}
+									logger.LogInfo(c, fmt.Sprintf("headroom compression: %d -> %d tokens (re-counted by %s), saved %d (%.1f%%)",
+										tokenBefore, tokenAfter, modelName, info.HeadroomTokensSaved, info.HeadroomRatio*100))
 								}
 							}
 						}
