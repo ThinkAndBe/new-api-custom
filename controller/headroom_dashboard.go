@@ -30,6 +30,10 @@ type HeadroomLogRow struct {
 	// Claude 格式下 = prompt_tokens + cache_tokens，OpenAI 格式下 = prompt_tokens
 	PromptTokens      int `json:"prompt_tokens"`
 	CompletionTokens  int `json:"completion_tokens"`
+	// CacheTokens: 上游 prompt cache 命中读取量（从 other.cache_tokens 取）
+	CacheTokens int `json:"cache_tokens"`
+	// Quota: 该请求的实际扣费额度（最终账单，含压缩+cache折扣+模型倍率）
+	Quota int `json:"quota"`
 }
 
 type HeadroomAggRow struct {
@@ -37,8 +41,10 @@ type HeadroomAggRow struct {
 	TokensSaved      int     `json:"tokens_saved"`
 	TokensInput      int     `json:"tokens_input"`
 	RequestCount     int     `json:"request_count"`
-	AverageRatio     float64 `json:"average_ratio"` // 节省率 = saved/input（同口径，反映压缩真实效果）
-	UpstreamBillTokens int   `json:"upstream_bill_tokens"` // 上游实际计费 token（压缩后，不同 tokenizer，仅参考）
+	AverageRatio     float64 `json:"average_ratio"` // 节省率 = saved/input（同口径）
+	CacheHitTokens   int     `json:"cache_hit_tokens"`
+	CacheHitRate     float64 `json:"cache_hit_rate"` // cache 命中率
+	TotalQuota       int     `json:"total_quota"`    // 实际扣费
 }
 
 // getHeadroomRows 读取 headroom 明细行，应用 HeadroomRetentionDays 留存窗口限制。
@@ -130,6 +136,8 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 			HeadroomRatio:    ratio,
 			PromptTokens:     actualInput,
 			CompletionTokens: log.CompletionTokens,
+			CacheTokens:      cacheTokens,
+			Quota:            log.Quota,
 		})
 	}
 	return rows, nil
@@ -180,14 +188,28 @@ func aggregateHeadroom(rows []HeadroomLogRow, keyFn func(HeadroomLogRow) string)
 		}
 		m[key].TokensSaved += r.HeadroomSaved
 		m[key].TokensInput += r.HeadroomInput
-		m[key].UpstreamBillTokens += r.PromptTokens
+		m[key].CacheHitTokens += r.CacheTokens
+		m[key].TotalQuota += r.Quota
+		// 用 prompt_tokens 作为 cache 命中率的分母累计
 		m[key].RequestCount++
 		ratioSum[key] += r.HeadroomRatio
+	}
+	// 需要 prompt 总量来算 cache 命中率，再扫一遍
+	promptSum := map[string]int{}
+	for _, r := range rows {
+		key := keyFn(r)
+		if key == "" {
+			key = "(空)"
+		}
+		promptSum[key] += r.PromptTokens
 	}
 	out := make([]HeadroomAggRow, 0, len(m))
 	for k, v := range m {
 		if v.RequestCount > 0 {
 			v.AverageRatio = ratioSum[k] / float64(v.RequestCount)
+		}
+		if ps := promptSum[k]; ps > 0 {
+			v.CacheHitRate = float64(v.CacheHitTokens) / float64(ps)
 		}
 		out = append(out, *v)
 	}
@@ -215,28 +237,37 @@ func GetHeadroomSummary(c *gin.Context) {
 		return
 	}
 	totalSaved, totalInput, totalCompressed := 0, 0, 0
-	// 上游真实计费 token（压缩后）——展示用，不与 input 做减法。
-	// 注意：headroom_tokens_input 与 prompt_tokens 用不同 tokenizer 量，
-	// 两者相减（input - prompt）没有意义，会出现负数，不是压缩无效。
-	// 压缩是否有效看 average_ratio（压缩服务同口径自报节省率）。
-	totalRealUpstream := 0
+	// 三维度独立统计（不做跨口径减法）：
+	// 1) 压缩节省（同口径 saved/input）
+	// 2) cache 命中（上游 cache_tokens / prompt_tokens）
+	// 3) 实际 quota（最终扣费，含压缩+cache+倍率所有因素）
+	totalCacheRead, totalPrompt, totalQuota := 0, 0, 0
 	for _, r := range rows {
 		totalSaved += r.HeadroomSaved
 		totalInput += r.HeadroomInput
 		totalCompressed += r.HeadroomInput - r.HeadroomSaved // 压缩后 token（与 input 同口径）
-		totalRealUpstream += r.PromptTokens                  // 上游真实计费 token（压缩后）
+		totalCacheRead += r.CacheTokens                      // 上游 cache 命中读取量
+		totalPrompt += r.PromptTokens                        // 上游实际 prompt（含缓存）
+		totalQuota += r.Quota                                // 实际扣费
 	}
 	ratio := 0.0
 	if totalInput > 0 {
 		ratio = float64(totalSaved) / float64(totalInput)
 	}
+	cacheHitRate := 0.0
+	if totalPrompt > 0 {
+		cacheHitRate = float64(totalCacheRead) / float64(totalPrompt)
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"request_count":        len(rows),
-		"tokens_saved":         totalSaved,        // 节省量（与 input 同口径，可靠）
+		"tokens_saved":         totalSaved,        // 节省量（同口径，可靠）
 		"tokens_input":         totalInput,        // 压缩前 token
 		"tokens_compressed":    totalCompressed,   // 压缩后 token
 		"average_ratio":        ratio,             // 节省率 = saved/input（同口径，反映压缩真实效果）
-		"upstream_bill_tokens": totalRealUpstream, // 上游实际计费 token（压缩后，不同 tokenizer 口径，仅参考）
+		"cache_hit_tokens":     totalCacheRead,    // 上游 cache 命中读取总量
+		"cache_hit_rate":       cacheHitRate,      // cache 命中率 = cache_read/prompt
+		"upstream_prompt":      totalPrompt,       // 上游实际 prompt token 总量（含缓存）
+		"total_quota":          totalQuota,        // 实际扣费总额（用户最关心的钱）
 	}})
 }
 

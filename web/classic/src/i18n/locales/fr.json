@@ -3746,8 +3746,13 @@
   "当前使用系统自动生成": "Génération automatique système",
   "节省 Tokens": "Tokens économisés",
   "节省率": "Taux d'économie",
-  "压缩前": "avant",
-  "实际发送": "envoyé",
-  "压缩后 Tokens": "Après compression",
-  "节省率 = 节省量 / 原输入，压缩前后用同一口径计算，反映内容真实压缩比例。上游计费 token 因各模型 tokenizer 不同，无法直接换算，评估压缩是否划算请以「节省率」为准。": "Taux d'économie = économisé / entrée originale, calculé avec un tokenizer cohérent avant et après compression, reflétant le vrai ratio de compression. Les tokens de facturation amont utilisent des tokenizers différents par modèle et ne peuvent être convertis directement ; utilisez le «Taux d'économie» pour juger si la compression vaut le coup."
+  "① 压缩效益": "① Compression",
+  "② 缓存命中": "② Cache",
+  "③ 实际成本": "③ Coût réel",
+  "命中率": "Taux de hit",
+  "命中 Tokens": "Tokens en cache",
+  "上游 Prompt": "Prompt amont",
+  "实际扣费": "Total facturé",
+  "平均/请求": "Moy/Requête",
+  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」；实际花了多少钱看「③实际扣费」。三者独立统计，不做跨口径换算。": "Efficacité de la compression: voir ① Taux d'économie; comment la compression stabilise les hits cache pour le contenu répété: voir ② Taux de hit; combien vous avez dépensé: voir ③ Total facturé. Trois métriques indépendantes, sans conversion croisée."
 }

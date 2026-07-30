@@ -345,33 +345,70 @@ const HeadroomDashboard = () => {
             </Text>
           </div>
 
-          <div className='grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4'>
-            <Card>
-              <Text type='tertiary'>{t('节省 Tokens')}</Text>
-              <div className='text-2xl font-bold text-green-600'>{renderNumber(summary.tokens_saved || 0)}</div>
+          {/* 三维度独立展示：压缩 / 缓存 / 成本，不做跨口径减法 */}
+          <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+            {/* 维度1：压缩 */}
+            <Card className='!rounded-xl'>
+              <Text strong className='text-sm'>{t('① 压缩效益')}</Text>
+              <div className='mt-2 space-y-1'>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('节省率')}</Text>
+                  <span className='text-xl font-bold text-green-600'>{((summary.average_ratio || 0) * 100).toFixed(1)}%</span>
+                </div>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('节省 Tokens')}</Text>
+                  <span className='font-semibold'>{renderNumber(summary.tokens_saved || 0)}</span>
+                </div>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('原输入')}</Text>
+                  <span className='text-sm'>{renderNumber(summary.tokens_input || 0)}</span>
+                </div>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('压缩后')}</Text>
+                  <span className='text-sm'>{renderNumber(summary.tokens_compressed || 0)}</span>
+                </div>
+              </div>
             </Card>
-            <Card>
-              <Text type='tertiary'>{t('节省率')}</Text>
-              <div className='text-2xl font-bold text-green-600'>{((summary.average_ratio || 0) * 100).toFixed(1)}%</div>
+            {/* 维度2：缓存命中 */}
+            <Card className='!rounded-xl'>
+              <Text strong className='text-sm'>{t('② 缓存命中')}</Text>
+              <div className='mt-2 space-y-1'>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('命中率')}</Text>
+                  <span className='text-xl font-bold text-blue-600'>{((summary.cache_hit_rate || 0) * 100).toFixed(1)}%</span>
+                </div>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('命中 Tokens')}</Text>
+                  <span className='font-semibold'>{renderNumber(summary.cache_hit_tokens || 0)}</span>
+                </div>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('上游 Prompt')}</Text>
+                  <span className='text-sm'>{renderNumber(summary.upstream_prompt || 0)}</span>
+                </div>
+              </div>
             </Card>
-            <Card>
-              <Text type='tertiary'>{t('原输入 Tokens')}</Text>
-              <div className='text-2xl font-bold'>{renderNumber(summary.tokens_input || 0)}</div>
-              <Text type='tertiary' size='small'>{t('压缩前')}</Text>
-            </Card>
-            <Card>
-              <Text type='tertiary'>{t('压缩后 Tokens')}</Text>
-              <div className='text-2xl font-bold'>{renderNumber(summary.tokens_compressed || 0)}</div>
-              <Text type='tertiary' size='small'>{t('实际发送')}</Text>
-            </Card>
-            <Card>
-              <Text type='tertiary'>{t('压缩请求数')}</Text>
-              <div className='text-2xl font-bold'>{renderNumber(summary.request_count || 0)}</div>
+            {/* 维度3：实际成本 */}
+            <Card className='!rounded-xl'>
+              <Text strong className='text-sm'>{t('③ 实际成本')}</Text>
+              <div className='mt-2 space-y-1'>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('实际扣费')}</Text>
+                  <span className='text-xl font-bold text-orange-600'>¥{renderNumber(summary.total_quota || 0)}</span>
+                </div>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('请求数')}</Text>
+                  <span className='font-semibold'>{renderNumber(summary.request_count || 0)}</span>
+                </div>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('平均/请求')}</Text>
+                  <span className='text-sm'>¥{summary.request_count > 0 ? renderNumber(Math.round((summary.total_quota || 0) / summary.request_count)) : 0}</span>
+                </div>
+              </div>
             </Card>
           </div>
           <Banner
             type='info'
-            description={t('节省率 = 节省量 / 原输入，压缩前后用同一口径计算，反映内容真实压缩比例。上游计费 token 因各模型 tokenizer 不同，无法直接换算，评估压缩是否划算请以「节省率」为准。')}
+            description={t('压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」；实际花了多少钱看「③实际扣费」。三者独立统计，不做跨口径换算。')}
             style={{ marginTop: 12 }}
           />
 

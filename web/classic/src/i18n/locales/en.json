@@ -3892,8 +3892,13 @@
   "当前使用系统自动生成": "Using system auto-generation",
   "节省 Tokens": "Tokens Saved",
   "节省率": "Savings Rate",
-  "压缩前": "before",
-  "实际发送": "sent",
-  "压缩后 Tokens": "After Compression",
-  "节省率 = 节省量 / 原输入，压缩前后用同一口径计算，反映内容真实压缩比例。上游计费 token 因各模型 tokenizer 不同，无法直接换算，评估压缩是否划算请以「节省率」为准。": "Savings Rate = saved / original input, computed with a consistent tokenizer before and after compression, reflecting the true content compression ratio. Upstream billing tokens use different tokenizers per model and cannot be directly converted; use \"Savings Rate\" to judge whether compression pays off."
+  "① 压缩效益": "① Compression",
+  "② 缓存命中": "② Cache Hit",
+  "③ 实际成本": "③ Actual Cost",
+  "命中率": "Hit Rate",
+  "命中 Tokens": "Hit Tokens",
+  "上游 Prompt": "Upstream Prompt",
+  "实际扣费": "Total Billed",
+  "平均/请求": "Avg/Request",
+  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」；实际花了多少钱看「③实际扣费」。三者独立统计，不做跨口径换算。": "Whether compression works: see ① Savings Rate; how compression stabilizes cache hits for repeated content: see ② Hit Rate; how much you actually spent: see ③ Total Billed. Three independent metrics, no cross-tokenizer conversion."
 }
