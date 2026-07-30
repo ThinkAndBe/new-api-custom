@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -156,6 +157,15 @@ func GetChannel(group string, model string, retry int) (*Channel, error) {
 
 func (channel *Channel) AddAbilities(tx *gorm.DB) error {
 	models_ := strings.Split(channel.Models, ",")
+	// MCP 渠道按 mcp_service_name 注册（作为 /mcp/<服务名> 路由 key），
+	// 而非按 models 字段——models 对 MCP 渠道无业务意义。留空兜底 "mcp" 保持兼容。
+	if channel.Type == constant.ChannelTypeMCP {
+		sn := strings.TrimSpace(channel.MCPServiceName)
+		if sn == "" {
+			sn = "mcp"
+		}
+		models_ = []string{sn}
+	}
 	groups_ := strings.Split(channel.Group, ",")
 	abilitySet := make(map[string]struct{})
 	abilities := make([]Ability, 0, len(models_))
@@ -228,6 +238,14 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 
 	// Then add new abilities
 	models_ := strings.Split(channel.Models, ",")
+	// MCP 渠道按 mcp_service_name 注册（与 AddAbilities 保持一致）
+	if channel.Type == constant.ChannelTypeMCP {
+		sn := strings.TrimSpace(channel.MCPServiceName)
+		if sn == "" {
+			sn = "mcp"
+		}
+		models_ = []string{sn}
+	}
 	groups_ := strings.Split(channel.Group, ",")
 	abilitySet := make(map[string]struct{})
 	abilities := make([]Ability, 0, len(models_))

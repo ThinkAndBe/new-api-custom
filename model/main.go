@@ -314,6 +314,9 @@ func migrateDB() error {
 	if err := migrateLegacyMcpChannels(); err != nil {
 		common.SysError("failed to migrate MCP channels: " + err.Error())
 	}
+	if err := migrateLegacyMcpChannelServiceName(); err != nil {
+		common.SysError("failed to backfill MCP service name: " + err.Error())
+	}
 	return nil
 }
 
@@ -334,6 +337,23 @@ func migrateLegacyMcpChannels() error {
 	}
 	if migrateResult.RowsAffected > 0 {
 		common.SysLog(fmt.Sprintf("migrated %d legacy channels to MCP type (type=58)", migrateResult.RowsAffected))
+	}
+	return nil
+}
+
+// migrateLegacyMcpChannelServiceName 给存量 type=58 但 mcp_service_name 为空的渠道
+// 兜底填 "mcp"，保持向后兼容（旧客户端仍可用 /mcp 直接访问）。新渠道由管理员在
+// 编辑器填具体服务名（如 web-search-prime）。幂等。
+func migrateLegacyMcpChannelServiceName() error {
+	migrateResult := DB.Exec(
+		"UPDATE channels SET mcp_service_name = ? WHERE type = ? AND (mcp_service_name IS NULL OR mcp_service_name = ?)",
+		"mcp", constant.ChannelTypeMCP, "",
+	)
+	if migrateResult.Error != nil {
+		return migrateResult.Error
+	}
+	if migrateResult.RowsAffected > 0 {
+		common.SysLog(fmt.Sprintf("backfilled mcp_service_name='mcp' for %d legacy MCP channels", migrateResult.RowsAffected))
 	}
 	return nil
 }
@@ -408,6 +428,9 @@ func migrateDBFast() error {
 	// 同步：归正历史"假 MCP"渠道（详见 migrateLegacyMcpChannels 注释）
 	if err := migrateLegacyMcpChannels(); err != nil {
 		common.SysError("failed to migrate MCP channels: " + err.Error())
+	}
+	if err := migrateLegacyMcpChannelServiceName(); err != nil {
+		common.SysError("failed to backfill MCP service name: " + err.Error())
 	}
 	return nil
 }

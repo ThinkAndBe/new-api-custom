@@ -61,8 +61,8 @@ function buildMcpPrompt(server, serverName, mcpUrl, tokenKey) {
     ``,
     `## 接入方式`,
     ``,
-    `### 方式一：在 zcode / Cursor / Claude Desktop 中接入`,
-    `把以下配置写入对应文件（zcode: ~/.zcode/cli/config.json；Cursor: ~/.cursor/mcp.json；Claude Desktop: claude_desktop_config.json），重启客户端后即可让助手自动调用：`,
+    `### 方式一：在 zcode / WorkBuddy / CodeBuddy 中接入`,
+    `把以下配置写入对应文件（zcode: ~/.zcode/cli/config.json；WorkBuddy: ~/.workbuddy/config.json；CodeBuddy: ~/.codebuddy/config.json），重启客户端后即可让助手自动调用：`,
     '```json',
     JSON.stringify(zcodeConfig, null, 2),
     '```',
@@ -374,15 +374,28 @@ pause`;
       showError(t('请先选择令牌'));
       return;
     }
+    // serverName / mcpUrl 在外层 render 作用域里看不到（在 map 函数体内才定义），
+    // 这里就地重算一次，避免 ReferenceError 导致复制静默失败。
+    const sn2 = (server.name || `mcp-${server.id}`)
+      .replace(/[^\w-]+/g, '-')
+      .toLowerCase();
+    const mcpServiceName = server.service_name || 'mcp';
+    const mu = `${baseUrl.replace(/\/+$/, '')}/mcp/${mcpServiceName}`;
+    // 三种客户端（zcode/WorkBuddy/CodeBuddy）的 MCP 配置都是同构 mcp.servers
+    const clientConfig = {
+      mcp: {
+        servers: {
+          [sn2]: {
+            type: 'http',
+            url: mu,
+            headers: { Authorization: `Bearer ${tokenKey}` },
+          },
+        },
+      },
+    };
     // 「一键提示词」tab：复制自然语言接入说明（不依赖客户端 config 编辑能力）
     if (client === 'prompt') {
-      // serverName / mcpUrl 在外层 render 作用域里看不到（在 map 函数体内才定义），
-      // 这里就地重算一次，避免 ReferenceError 导致复制静默失败。
-      const sn = (server.name || `mcp-${server.id}`)
-        .replace(/[^\w-]+/g, '-')
-        .toLowerCase();
-      const mu = `${baseUrl.replace(/\/+$/, '')}/mcp`;
-      const text = buildMcpPrompt(server, sn, mu, tokenKey);
+      const text = buildMcpPrompt(server, sn2, mu, tokenKey);
       navigator.clipboard
         .writeText(text)
         .then(() => {
@@ -393,37 +406,7 @@ pause`;
         .catch(() => showError(t('复制失败')));
       return;
     }
-    const serverName = (server.name || `mcp-${server.id}`)
-      .replace(/[^\w-]+/g, '-')
-      .toLowerCase();
-    const url = `${baseUrl.replace(/\/+$/, '')}/mcp`;
-    let config;
-    if (client === 'zcode') {
-      // zcode: ~/.zcode/cli/config.json
-      config = {
-        mcp: {
-          servers: {
-            [serverName]: {
-              type: 'http',
-              url,
-              headers: { Authorization: `Bearer ${tokenKey}` },
-            },
-          },
-        },
-      };
-    } else {
-      // Cursor (~/.cursor/mcp.json) / Claude Desktop (claude_desktop_config.json) 均为 mcpServers 结构
-      config = {
-        mcpServers: {
-          [serverName]: {
-            type: 'http',
-            url,
-            headers: { Authorization: `Bearer ${tokenKey}` },
-          },
-        },
-      };
-    }
-    const text = JSON.stringify(config, null, 2);
+    const text = JSON.stringify(clientConfig, null, 2);
     navigator.clipboard
       .writeText(text)
       .then(() => {
@@ -673,6 +656,12 @@ pause`;
                 </Text>
               </div>
             )}
+
+            <Banner
+              type='info'
+              description={t('下载 .bat 脚本后双击运行即可自动配置。也可手动下载 models.json 放入对应目录。')}
+              style={{ marginTop: 12 }}
+            />
           </div>
         )}
       </Card>
@@ -702,8 +691,24 @@ pause`;
             const serverName = (server.name || `mcp-${server.id}`)
               .replace(/[^\w-]+/g, '-')
               .toLowerCase();
-            const mcpUrl = `${baseUrl.replace(/\/+$/, '')}/mcp`;
+            // 每个 MCP 服务一个独立路由入口 /mcp/<服务名>
+            const sn = server.service_name || 'mcp';
+            const mcpUrl = `${baseUrl.replace(/\/+$/, '')}/mcp/${sn}`;
             const promptText = buildMcpPrompt(server, serverName, mcpUrl, tokenKey);
+            // 三种客户端的 MCP 配置都是同构 mcp.servers，区别仅在配置文件路径
+            const buildClientConfig = () => ({
+              mcp: {
+                servers: {
+                  [serverName]: {
+                    type: 'http',
+                    url: mcpUrl,
+                    headers: {
+                      Authorization: `Bearer ${tokenKey || 'sk-xxx'}`,
+                    },
+                  },
+                },
+              },
+            });
             const clients = [
               {
                 key: 'prompt',
@@ -715,51 +720,19 @@ pause`;
                 key: 'zcode',
                 name: 'ZCode',
                 path: '~/.zcode/cli/config.json',
-                config: {
-                  mcp: {
-                    servers: {
-                      [serverName]: {
-                        type: 'http',
-                        url: mcpUrl,
-                        headers: {
-                          Authorization: `Bearer ${tokenKey || 'sk-xxx'}`,
-                        },
-                      },
-                    },
-                  },
-                },
+                config: buildClientConfig(),
               },
               {
-                key: 'cursor',
-                name: 'Cursor',
-                path: '~/.cursor/mcp.json',
-                config: {
-                  mcpServers: {
-                    [serverName]: {
-                      type: 'http',
-                      url: mcpUrl,
-                      headers: {
-                        Authorization: `Bearer ${tokenKey || 'sk-xxx'}`,
-                      },
-                    },
-                  },
-                },
+                key: 'workbuddy',
+                name: 'WorkBuddy',
+                path: '~/.workbuddy/config.json',
+                config: buildClientConfig(),
               },
               {
-                key: 'claude',
-                name: 'Claude Desktop',
-                path: 'claude_desktop_config.json',
-                config: {
-                  mcpServers: {
-                    [serverName]: {
-                      type: 'http',
-                      url: mcpUrl,
-                      headers: {
-                        Authorization: `Bearer ${tokenKey || 'sk-xxx'}`,
-                      },
-                    },
-                  },
-                },
+                key: 'codebuddy',
+                name: 'CodeBuddy',
+                path: '~/.codebuddy/config.json',
+                config: buildClientConfig(),
               },
             ];
             return (
@@ -836,7 +809,7 @@ pause`;
 
           <Banner
             type='info'
-            description={t('接入地址统一为 <baseUrl>/mcp，客户端通过 Authorization: Bearer <你的令牌密钥> 鉴权；多个 MCP 服务时系统自动从你有权限的分组中选择可用服务。')}
+            description={t('每个 MCP 服务对应一个独立地址 <baseUrl>/mcp/<服务名>，客户端通过 Authorization: Bearer <你的令牌密钥> 鉴权；同一服务名下若有多个渠道，系统自动从你有权限的分组中选择可用渠道。')}
             style={{ marginTop: 16 }}
           />
         </Card>
@@ -914,12 +887,6 @@ pause`;
           </Collapsible>
         </Card>
       )}
-
-      <Banner
-        type='info'
-        description={t('下载 .bat 脚本后双击运行即可自动配置。也可手动下载 models.json 放入对应目录。')}
-        style={{ marginTop: 16 }}
-      />
     </div>
   );
 };

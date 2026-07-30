@@ -55,6 +55,11 @@ type Channel struct {
 
 	OtherSettings string `json:"settings" gorm:"column:settings"` // 其他设置，存储azure版本等不需要检索的信息，详见dto.ChannelOtherSettings
 
+	// MCPServiceName 仅 type=58(MCP) 渠道使用：MCP 服务名（如 web-search-prime），
+	// 作为 /mcp/<服务名> 路由的 key，并在 abilities 表里按此名注册。
+	// 留空时兜底为 "mcp"，保持存量渠道向后兼容。
+	MCPServiceName string `json:"mcp_service_name" gorm:"column:mcp_service_name;type:varchar(255);default:''"`
+
 	// cache info
 	Keys []string `json:"-" gorm:"-"`
 }

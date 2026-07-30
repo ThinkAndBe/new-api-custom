@@ -190,6 +190,7 @@ func GetUserMcpServers(c *gin.Context) {
 	type mcpServerItem struct {
 		Id          int           `json:"id"`
 		Name        string        `json:"name"`
+		ServiceName string        `json:"service_name"`
 		Description string        `json:"description"`
 		Tools       []interface{} `json:"tools"`
 	}
@@ -214,9 +215,14 @@ func GetUserMcpServers(c *gin.Context) {
 		if ch.Remark != nil {
 			desc = *ch.Remark
 		}
+		sn := strings.TrimSpace(ch.MCPServiceName)
+		if sn == "" {
+			sn = "mcp"
+		}
 		items = append(items, mcpServerItem{
 			Id:          ch.Id,
 			Name:        ch.Name,
+			ServiceName: sn,
 			Description: desc,
 			Tools:       tools,
 		})

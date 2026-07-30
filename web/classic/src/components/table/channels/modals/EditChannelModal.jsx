@@ -183,6 +183,8 @@ const EditChannelModal = (props) => {
     models: [],
     auto_ban: 1,
     test_model: '',
+    // 仅 MCP(type=58)：MCP 服务名，作为 /mcp/<服务名> 路由 key
+    mcp_service_name: '',
     groups: ['default'],
     priority: 0,
     weight: 0,
@@ -762,8 +764,9 @@ const EditChannelModal = (props) => {
           localModels = ['suno_music', 'suno_lyrics'];
           break;
         case 58:
-          // MCP 渠道：固定注册 "mcp" 模型，无需用户选择模型列表
-          localModels = ['mcp'];
+          // MCP 渠道：models 字段无业务意义（路由按 mcp_service_name），
+          // 置空避免 abilities 表注册无用 model 名。服务名在专属输入框填。
+          localModels = [];
           break;
         case 45:
           localModels = getChannelModels(value);
@@ -3681,14 +3684,21 @@ data.upstream_model_update_last_detected_models = [];
                     </div>
                   )}
 
-                  {/* Model Selection - Part of Core Config (MCP 渠道固定为 mcp，无需选择) */}
+                  {/* Model Selection - Part of Core Config */}
                   {inputs.type === 58 ? (
+                    <>
+                    <Form.Input
+                      field='mcp_service_name'
+                      label={t('MCP 服务名')}
+                      placeholder={t('如 web-search-prime，用于路由 /mcp/<服务名>。留空兼容旧行为 mcp')}
+                    />
                     <Banner
                       type='info'
                       description={t(
-                        'MCP 渠道固定提供 mcp 服务，模型列表无需配置。Base URL 请填 MCP 服务器的 streamable-http 地址，例如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp；密钥填平台侧真实 API Key，将随 Authorization: Bearer 与 x-api-key 头注入上游。',
+                        'MCP 渠道按「MCP 服务名」路由：用户访问 /mcp/<服务名> 时命中本渠道。Base URL 填 MCP 服务器 streamable-http 地址（如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp）；密钥填平台侧真实 API Key，随 Authorization: Bearer 与 x-api-key 头注入上游。一个 MCP 服务建一个渠道（如联网搜索、网页读取各自独立）。',
                       )}
                     />
+                    </>
                   ) : (
                   <Form.Select
                       field='models'

@@ -3716,5 +3716,9 @@
   "已复制 MCP 提示词": "MCP プロンプトをコピーしました",
   "配置文件（models.json）": "設定ファイル (models.json)",
   "已启用自定义模板": "カスタムテンプレート有効",
-  "当前使用系统自动生成": "システム自動生成を使用中"
+  "当前使用系统自动生成": "システム自動生成を使用中",
+  "每个 MCP 服务对应一个独立地址 <baseUrl>/mcp/<服务名>，客户端通过 Authorization: Bearer <你的令牌密钥> 鉴权；同一服务名下若有多个渠道，系统自动从你有权限的分组中选择可用渠道。": "各 MCP サービスは固有のアドレス <baseUrl>/mcp/<サービス名> を持ちます。クライアントは Authorization: Bearer <あなたのトークンキー> で認証します。同じサービス名に複数チャネルがある場合、アクセス可能なグループから利用可能なチャネルが自動選択されます。",
+  "MCP 服务名": "MCP サービス名",
+  "如 web-search-prime，用于路由 /mcp/<服务名>。留空兼容旧行为 mcp": "例: web-search-prime、/mcp/<サービス名> のルーティングに使用。空欄で従来の mcp 動作",
+  "MCP 渠道按「MCP 服务名」路由：用户访问 /mcp/<服务名> 时命中本渠道。Base URL 填 MCP 服务器 streamable-http 地址（如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp）；密钥填平台侧真实 API Key，随 Authorization: Bearer 与 x-api-key 头注入上游。一个 MCP 服务建一个渠道（如联网搜索、网页读取各自独立）。": "MCPチャネルは「MCPサービス名」でルーティングされます：/mcp/<サービス名> へのリクエストがこのチャネルにヒットします。Base URL には MCPサーバーの streamable-http アドレス（例: https://open.bigmodel.cn/api/mcp/web_search_prime/mcp）を入力；キーにはプラットフォーム側の実際の APIキーを入れ、Authorization: Bearer と x-api-key ヘッダーで上流に注入します。MCPサービスごとに1つのチャネルを作成してください（Web検索とWebリーダーは別々）。"
 }

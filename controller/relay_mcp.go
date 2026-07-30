@@ -28,8 +28,51 @@ import (
 //
 // 渠道选择：支持在 key 后加渠道 id（sk-xxx:123）指定 MCP 渠道，否则自动选择
 // 令牌分组下提供 "mcp" 模型的第一个启用渠道。
+// parseMcpRoute 从 /mcp/*path 的 path 段解析出 (服务名, 上游子路径)。
+// 规则：
+//   /mcp/<svc>/<rest> → (<svc>, <rest>)
+//   /mcp/<svc>        → (<svc>, "")        （<svc> 是已知 MCP 服务名时）
+//   /mcp/<x>          → ("mcp", <x>)        （<x> 不是已知服务名，按旧客户端兼容：整段当上游子路径）
+//   /mcp 或 /mcp/      → ("mcp", "")
+//
+// "已知 MCP 服务名"通过查当前分组 abilities 是否存在该 model 名判断，
+// 让旧客户端 /mcp/messages 这类仍能按 "mcp" 服务路由（messages 当上游子路径）。
+func parseMcpRoute(c *gin.Context) (serviceName, upstreamSub string) {
+	rawPath := strings.TrimPrefix(c.Param("path"), "/")
+	parts := strings.SplitN(rawPath, "/", 2)
+	switch {
+	case len(parts) == 2 && parts[0] != "":
+		return parts[0], parts[1]
+	case len(parts) == 1 && parts[0] != "" && isKnownMcpService(c, parts[0]):
+		return parts[0], ""
+	default:
+		return "mcp", rawPath
+	}
+}
+
+// isKnownMcpService 判断给定名字是否是当前分组下已注册的 MCP 服务
+// （即存在以该名字为 model 的 enabled MCP 渠道）。
+func isKnownMcpService(c *gin.Context, name string) bool {
+	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	if tokenGroup == "" {
+		tokenGroup = common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	}
+	if tokenGroup == "" {
+		return false
+	}
+	channels := model.GetGroupEnabledModels(tokenGroup)
+	for _, m := range channels {
+		if m == name {
+			return true
+		}
+	}
+	return false
+}
+
 func RelayMcp(c *gin.Context) {
-	channel, err := getMcpChannel(c)
+	// 先解析路由得到服务名与上游子路径，再用服务名选渠道
+	serviceName, upstreamSub := parseMcpRoute(c)
+	channel, err := getMcpChannel(c, serviceName)
 	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"jsonrpc": "2.0",
@@ -42,12 +85,12 @@ func RelayMcp(c *gin.Context) {
 		return
 	}
 
-	// 目标 URL：渠道 BaseURL + 子路径（如 /mcp/sse -> {base}/sse）
+	// 目标 URL：渠道 BaseURL + 上游子路径。
+	// service_name 不参与上游 URL 拼接（它只是路由 key），上游地址由渠道 BaseURL 决定。
 	baseURL := strings.TrimSuffix(channel.GetBaseURL(), "/")
-	subPath := strings.TrimPrefix(c.Param("path"), "/")
 	targetURL := baseURL
-	if subPath != "" {
-		targetURL = baseURL + "/" + subPath
+	if strings.TrimSpace(upstreamSub) != "" {
+		targetURL = baseURL + "/" + upstreamSub
 	}
 	if c.Request.URL.RawQuery != "" {
 		targetURL += "?" + c.Request.URL.RawQuery
@@ -189,8 +232,14 @@ func isMcpChannel(ch *model.Channel) bool {
 	return false
 }
 
-// getMcpChannel 选择用于 MCP 代理的渠道
-func getMcpChannel(c *gin.Context) (*model.Channel, error) {
+// getMcpChannel 选择用于 MCP 代理的渠道。
+// serviceName 来自 parseMcpRoute 解析的路由首段；空则回落 "mcp"（兼容旧客户端）。
+// 渠道按该服务名（= ability model 名）在该分组下选择。
+func getMcpChannel(c *gin.Context, serviceName string) (*model.Channel, error) {
+	if serviceName == "" {
+		serviceName = "mcp"
+	}
+
 	// 优先：key 后缀指定渠道 id（sk-xxx:123，仅管理员）
 	if channelId, ok := c.Get("specific_channel_id"); ok {
 		if id, err := strconv.Atoi(fmt.Sprintf("%v", channelId)); err == nil && id > 0 {
@@ -198,17 +247,25 @@ func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 			if err != nil {
 				return nil, fmt.Errorf("指定的 MCP 渠道 #%d 不存在", id)
 			}
-		if ch.Status != common.ChannelStatusEnabled {
-			return nil, fmt.Errorf("指定的 MCP 渠道 #%d 未启用", id)
+			if ch.Status != common.ChannelStatusEnabled {
+				return nil, fmt.Errorf("指定的 MCP 渠道 #%d 未启用", id)
+			}
+			if !isMcpChannel(ch) {
+				return nil, fmt.Errorf("渠道 #%d 不是 MCP 类型", id)
+			}
+			// 校验服务名一致：管理员指定渠道但服务名不匹配时报错，避免误路由
+			chSn := strings.TrimSpace(ch.MCPServiceName)
+			if chSn == "" {
+				chSn = "mcp"
+			}
+			if chSn != serviceName {
+				return nil, fmt.Errorf("指定的渠道 #%d 提供 MCP 服务「%s」，与请求的服务「%s」不一致", id, chSn, serviceName)
+			}
+			return ch, nil
 		}
-		if !isMcpChannel(ch) {
-			return nil, fmt.Errorf("渠道 #%d 不是 MCP 类型", id)
-		}
-		return ch, nil
-	}
 	}
 
-	// 自动选择：提供 "mcp" 模型的启用渠道（仅限 MCP 类型渠道，防止 LLM 渠道 models 混入 mcp 被误选）。
+	// 自动选择：提供该服务名的启用渠道（仅限 MCP 类型渠道，防止 LLM 渠道 models 混入同名模型被误选）。
 	// 令牌分组为空时用用户的实际分组（UsingGroup，auth 中间件已把空令牌分组回落为用户分组），
 	// 否则空分组令牌会查到不存在的 "" 分组，报"当前分组下没有可用的 MCP 渠道"
 	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
@@ -218,13 +275,13 @@ func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 	channel, _, selectErr := service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
 		Ctx:        c,
 		TokenGroup: tokenGroup,
-		ModelName:  "mcp",
+		ModelName:  serviceName,
 	})
 	if selectErr != nil {
-		return nil, fmt.Errorf("当前分组下没有可用的 MCP 渠道（请在渠道模型列表中添加 mcp 模型）: %s", selectErr.Error())
+		return nil, fmt.Errorf("当前分组下没有可用的 MCP 服务「%s」（请在渠道编辑器填对应的 MCP 服务名）: %s", serviceName, selectErr.Error())
 	}
 	if channel == nil {
-		return nil, fmt.Errorf("当前分组下没有可用的 MCP 渠道（请在渠道模型列表中添加 mcp 模型）")
+		return nil, fmt.Errorf("当前分组下没有可用的 MCP 服务「%s」（请在渠道编辑器填对应的 MCP 服务名）", serviceName)
 	}
 	// 缓存中的渠道对象可能缺少部分字段（如 base_url），重新完整加载
 	fullChannel, err := model.GetChannelById(channel.Id, true)
@@ -232,7 +289,7 @@ func getMcpChannel(c *gin.Context) (*model.Channel, error) {
 		return nil, fmt.Errorf("加载 MCP 渠道 #%d 失败: %s", channel.Id, err.Error())
 	}
 	if !isMcpChannel(fullChannel) {
-		return nil, fmt.Errorf("当前分组下没有可用的 MCP 渠道（命中的 #%d 不是 MCP 类型）", fullChannel.Id)
+		return nil, fmt.Errorf("当前分组下没有可用的 MCP 服务「%s」（命中的 #%d 不是 MCP 类型）", serviceName, fullChannel.Id)
 	}
 	return fullChannel, nil
 }
