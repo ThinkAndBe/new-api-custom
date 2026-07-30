@@ -345,8 +345,8 @@ const HeadroomDashboard = () => {
             </Text>
           </div>
 
-          {/* 三维度独立展示：压缩 / 缓存 / 成本，不做跨口径减法 */}
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+          {/* 两维度独立展示：压缩 / 缓存，不做跨口径减法 */}
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
             {/* 维度1：压缩 */}
             <Card className='!rounded-xl'>
               <Text strong className='text-sm'>{t('① 压缩效益')}</Text>
@@ -366,6 +366,10 @@ const HeadroomDashboard = () => {
                 <div className='flex items-baseline justify-between'>
                   <Text type='tertiary' size='small'>{t('压缩后')}</Text>
                   <span className='text-sm'>{renderNumber(summary.tokens_compressed || 0)}</span>
+                </div>
+                <div className='flex items-baseline justify-between'>
+                  <Text type='tertiary' size='small'>{t('请求数')}</Text>
+                  <span className='text-sm'>{renderNumber(summary.request_count || 0)}</span>
                 </div>
               </div>
             </Card>
@@ -387,28 +391,10 @@ const HeadroomDashboard = () => {
                 </div>
               </div>
             </Card>
-            {/* 维度3：实际成本 */}
-            <Card className='!rounded-xl'>
-              <Text strong className='text-sm'>{t('③ 实际成本')}</Text>
-              <div className='mt-2 space-y-1'>
-                <div className='flex items-baseline justify-between'>
-                  <Text type='tertiary' size='small'>{t('实际扣费')}</Text>
-                  <span className='text-xl font-bold text-orange-600'>¥{renderNumber(summary.total_quota || 0)}</span>
-                </div>
-                <div className='flex items-baseline justify-between'>
-                  <Text type='tertiary' size='small'>{t('请求数')}</Text>
-                  <span className='font-semibold'>{renderNumber(summary.request_count || 0)}</span>
-                </div>
-                <div className='flex items-baseline justify-between'>
-                  <Text type='tertiary' size='small'>{t('平均/请求')}</Text>
-                  <span className='text-sm'>¥{summary.request_count > 0 ? renderNumber(Math.round((summary.total_quota || 0) / summary.request_count)) : 0}</span>
-                </div>
-              </div>
-            </Card>
           </div>
           <Banner
             type='info'
-            description={t('压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」；实际花了多少钱看「③实际扣费」。三者独立统计，不做跨口径换算。')}
+            description={t('压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。')}
             style={{ marginTop: 12 }}
           />
 

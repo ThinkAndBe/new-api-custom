@@ -3748,11 +3748,8 @@
   "节省率": "Taux d'économie",
   "① 压缩效益": "① Compression",
   "② 缓存命中": "② Cache",
-  "③ 实际成本": "③ Coût réel",
   "命中率": "Taux de hit",
   "命中 Tokens": "Tokens en cache",
   "上游 Prompt": "Prompt amont",
-  "实际扣费": "Total facturé",
-  "平均/请求": "Moy/Requête",
-  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」；实际花了多少钱看「③实际扣费」。三者独立统计，不做跨口径换算。": "Efficacité de la compression: voir ① Taux d'économie; comment la compression stabilise les hits cache pour le contenu répété: voir ② Taux de hit; combien vous avez dépensé: voir ③ Total facturé. Trois métriques indépendantes, sans conversion croisée."
+  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。": "Efficacité de la compression: voir ① Taux d'économie; comment la compression stabilise les hits cache: voir ② Taux de hit. Deux métriques indépendantes, sans conversion croisée."
 }

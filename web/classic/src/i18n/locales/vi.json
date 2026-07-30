@@ -4282,11 +4282,8 @@
   "节省率": "Tỷ lệ tiết kiệm",
   "① 压缩效益": "① Nén",
   "② 缓存命中": "② Cache",
-  "③ 实际成本": "③ Chi phí thực",
   "命中率": "Tỷ lệ trúng",
   "命中 Tokens": "Token trúng",
   "上游 Prompt": "Prompt thượng nguồn",
-  "实际扣费": "Tổng tính phí",
-  "平均/请求": "TB/Yêu cầu",
-  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」；实际花了多少钱看「③实际扣费」。三者独立统计，不做跨口径换算。": "Nén có hiệu quả không: xem ① Tỷ lệ tiết kiệm; nén giúp nội dung lặp ổn định trúng cache: xem ② Tỷ lệ trúng; thực tế bao nhiêu tiền: xem ③ Tổng tính phí. Ba chỉ số độc lập, không quy đổi chéo."
+  "压缩是否有效看「①节省率」；压缩让重复内容更稳定命中缓存看「②命中率」。两者独立统计，不做跨口径换算。": "Nén có hiệu quả không: xem ① Tỷ lệ tiết kiệm; ổn định trúng cache: xem ② Tỷ lệ trúng. Hai chỉ số độc lập, không quy đổi chéo."
 }
