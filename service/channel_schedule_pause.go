@@ -108,6 +108,32 @@ func processSchedulePause() {
 	}
 }
 
+// NextSchedulePauseRecovery 计算一个"当前处于定时暂停中"的渠道，下一次预计恢复（启用）时间戳（秒）。
+// 仅在渠道当前确实落在某个暂停窗口内时调用，返回该命中规则的结束时间；
+// 若无法计算（规则非法/未命中），返回 0。
+//
+// 用途：使用教程页"暂不可用模型"需要给定时暂停的渠道展示预计可用时间——
+// 而定时暂停渠道的 other_info 并不写 recovery_at（恢复时间从 rules 实时算），
+// 因此需要单独计算。
+func NextSchedulePauseRecovery(now time.Time, rules []dto.SchedulePauseRule) int64 {
+	inWindow, matchedRule := isInAnyPauseWindowWithRule(now, rules)
+	if !inWindow || matchedRule == nil {
+		return 0
+	}
+	endMin := parseTimeToMinutes(matchedRule.End)
+	startMin := parseTimeToMinutes(matchedRule.Start)
+	if endMin < 0 || startMin < 0 {
+		return 0
+	}
+	// 结束时间归到具体日期：start<=end 当天就结束；start>end（跨天）则结束在次日。
+	recovery := time.Date(now.Year(), now.Month(), now.Day(),
+		endMin/60, endMin%60, 0, 0, now.Location())
+	if startMin > endMin {
+		recovery = recovery.AddDate(0, 0, 1)
+	}
+	return recovery.Unix()
+}
+
 // isInAnyPauseWindow 判断当前时间是否在任一暂停规则窗口内
 func isInAnyPauseWindow(now time.Time, rules []dto.SchedulePauseRule) bool {
 	_, rule := isInAnyPauseWindowWithRule(now, rules)

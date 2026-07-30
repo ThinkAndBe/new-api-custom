@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -884,9 +885,13 @@ func GetUserModelsRecovery(c *gin.Context) {
 	for m := range disabledSet {
 		disabledNames = append(disabledNames, m)
 	}
-	// 查这些模型在用户分组下的禁用渠道（未启用 + 未删除），取其 other_info 里的 recovery_at
+	// 查这些模型在用户分组下的禁用渠道（未启用 + 未删除），取其预计恢复时间。
+	// - 自动禁用(3)：读 other_info.recovery_at（429 额度耗尽解析出的重置时间）
+	// - 定时暂停(4)：other_info 无 recovery_at，按 SchedulePauseRules 实时算出窗口结束时间。
+	//   需要把 other_settings 也 select 出来。
+	now := time.Now()
 	var channels []model.Channel
-	query := model.DB.Select("id", "name", "models", model.CommonGroupCol(), "other_info").
+	query := model.DB.Select("id", "name", "status", "models", model.CommonGroupCol(), "other_info", "settings").
 		Where("status <> ?", common.ChannelStatusEnabled)
 	for _, g := range groupNames {
 		query = query.Or(model.CommonGroupCol()+" LIKE ?", "%,"+g+",%")
@@ -898,15 +903,24 @@ func GetUserModelsRecovery(c *gin.Context) {
 	recoveryMap := make(map[string]*modelRecoveryInfo)
 	for i := range channels {
 		ch := &channels[i]
-		info := ch.GetOtherInfo()
 		var recoveryAt int64
-		switch v := info["recovery_at"].(type) {
-		case float64:
-			recoveryAt = int64(v)
-		case int64:
-			recoveryAt = v
-		case int:
-			recoveryAt = int64(v)
+		if ch.Status == common.ChannelStatusSchedulePaused {
+			// 定时暂停：按规则算下一次恢复时间
+			settings := ch.GetOtherSettings()
+			if settings.SchedulePauseEnabled && len(settings.SchedulePauseRules) > 0 {
+				recoveryAt = service.NextSchedulePauseRecovery(now, settings.SchedulePauseRules)
+			}
+		} else {
+			// 其它禁用形态：读 other_info.recovery_at（若没有则 0）
+			info := ch.GetOtherInfo()
+			switch v := info["recovery_at"].(type) {
+			case float64:
+				recoveryAt = int64(v)
+			case int64:
+				recoveryAt = v
+			case int:
+				recoveryAt = int64(v)
+			}
 		}
 		for _, m := range strings.Split(ch.Models, ",") {
 			m = strings.TrimSpace(m)
