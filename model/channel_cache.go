@@ -46,14 +46,6 @@ func InitChannelCache() {
 		groups := strings.Split(channel.Group, ",")
 		for _, group := range groups {
 			models := strings.Split(channel.Models, ",")
-			// MCP 渠道按 mcp_service_name 注册（作为 /mcp/<服务名> 路由 key），留空兜底 "mcp"
-			if channel.Type == constant.ChannelTypeMCP {
-				sn := strings.TrimSpace(channel.MCPServiceName)
-				if sn == "" {
-					sn = "mcp"
-				}
-				models = []string{sn}
-			}
 			for _, model := range models {
 				if _, ok := newGroup2model2channels[group][model]; !ok {
 					newGroup2model2channels[group][model] = make([]int, 0)

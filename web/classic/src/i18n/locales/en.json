@@ -3887,15 +3887,7 @@
   "配置里只包含当前可用的模型。如果渠道被临时禁用，模型会从配置中消失，恢复后需要重新下载。": "The config only includes currently available models. If a channel is temporarily disabled, its models disappear from the config and you'll need to re-download after recovery.",
   "预计恢复时间：${time}": "Estimated recovery time: ${time}",
   "展开编辑": "Expand editor",
-  "一键提示词": "Quick Prompt",
-  "复制提示词": "Copy prompt",
-  "粘贴到任意 AI 助手对话即可让其调用 MCP 工具，无需编辑配置文件": "Paste into any AI assistant chat to let it call MCP tools — no config editing needed",
-  "已复制 MCP 提示词": "MCP prompt copied",
   "配置文件（models.json）": "Config (models.json)",
   "已启用自定义模板": "Custom template enabled",
-  "当前使用系统自动生成": "Using system auto-generation",
-  "每个 MCP 服务对应一个独立地址 <baseUrl>/mcp/<服务名>，客户端通过 Authorization: Bearer <你的令牌密钥> 鉴权；同一服务名下若有多个渠道，系统自动从你有权限的分组中选择可用渠道。": "Each MCP service has its own endpoint <baseUrl>/mcp/<service_name>; clients authenticate via Authorization: Bearer <your token key>; when a service name has multiple channels, the gateway picks an available one from your accessible groups.",
-  "MCP 服务名": "MCP service name",
-  "如 web-search-prime，用于路由 /mcp/<服务名>。留空兼容旧行为 mcp": "e.g. web-search-prime, used for routing /mcp/<service_name>. Leave blank for legacy mcp behavior",
-  "MCP 渠道按「MCP 服务名」路由：用户访问 /mcp/<服务名> 时命中本渠道。Base URL 填 MCP 服务器 streamable-http 地址（如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp）；密钥填平台侧真实 API Key，随 Authorization: Bearer 与 x-api-key 头注入上游。一个 MCP 服务建一个渠道（如联网搜索、网页读取各自独立）。": "MCP channels route by \"MCP service name\": requests to /mcp/<service_name> hit this channel. Fill Base URL with the MCP server streamable-http address (e.g. https://open.bigmodel.cn/api/mcp/web_search_prime/mcp); key is the platform-side real API Key, injected upstream via Authorization: Bearer and x-api-key headers. Create one channel per MCP service (e.g. web search and web reader are separate)."
+  "当前使用系统自动生成": "Using system auto-generation"
 }

@@ -55,11 +55,6 @@ type Channel struct {
 
 	OtherSettings string `json:"settings" gorm:"column:settings"` // 其他设置，存储azure版本等不需要检索的信息，详见dto.ChannelOtherSettings
 
-	// MCPServiceName 仅 type=58(MCP) 渠道使用：MCP 服务名（如 web-search-prime），
-	// 作为 /mcp/<服务名> 路由的 key，并在 abilities 表里按此名注册。
-	// 留空时兜底为 "mcp"，保持存量渠道向后兼容。
-	MCPServiceName string `json:"mcp_service_name" gorm:"column:mcp_service_name;type:varchar(255);default:''"`
-
 	// cache info
 	Keys []string `json:"-" gorm:"-"`
 }
@@ -327,30 +322,6 @@ func (channel *Channel) SetOtherInfo(otherInfo map[string]interface{}) {
 		return
 	}
 	channel.OtherInfo = string(otherInfoBytes)
-}
-
-// GetMcpTools 返回 MCP 渠道最近一次测试缓存的工具清单（other_info.mcp_tools）。
-// 未测试过时返回 nil。
-func (channel *Channel) GetMcpTools() []interface{} {
-	raw, ok := channel.GetOtherInfo()["mcp_tools"]
-	if !ok {
-		return nil
-	}
-	if tools, ok := raw.([]interface{}); ok {
-		return tools
-	}
-	return nil
-}
-
-// SetMcpTools 把 MCP 测试拿到的工具清单写入 other_info.mcp_tools（保留其他键），
-// 并持久化到数据库，供用户侧接口展示，避免每次实时调用上游。
-func (channel *Channel) SetMcpTools(tools []interface{}) {
-	info := channel.GetOtherInfo()
-	info["mcp_tools"] = tools
-	channel.SetOtherInfo(info)
-	if err := DB.Model(channel).Select("other_info").Updates(map[string]interface{}{"other_info": channel.OtherInfo}).Error; err != nil {
-		common.SysError(fmt.Sprintf("failed to persist mcp_tools: channel_id=%d, error=%v", channel.Id, err))
-	}
 }
 
 func (channel *Channel) GetTag() string {

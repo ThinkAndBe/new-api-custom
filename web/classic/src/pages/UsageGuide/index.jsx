@@ -24,59 +24,6 @@ const { Title, Text } = Typography;
 // 当后端模型参数未配置时的兜底默认值
 const DEFAULT_MODEL_PARAMS = { in: 0, out: 0, tools: false, vision: false, reasoning: false };
 
-// 构建 MCP 服务接入「一键提示词」：把可用工具以自然语言清单形式组织，
-// 粘到 zcode / Claude / 任意聊天助手即可让对方知道有哪些 MCP 工具可调用。
-// 对不会编辑 config.json 的用户最友好——Zero-touch onboarding。
-function buildMcpPrompt(server, serverName, mcpUrl, tokenKey) {
-  const toolBrief = (Array.isArray(server.tools) && server.tools.length > 0)
-    ? server.tools.map((tool) => {
-        const name = tool?.name || 'unknown';
-        const desc = (tool?.description || '').trim().split('\n')[0];
-        const required = Array.isArray(tool?.inputSchema?.required) && tool.inputSchema.required.length > 0
-          ? `（必填：${tool.inputSchema.required.join(', ')}）`
-          : '';
-        return desc ? `- ${name}：${desc}${required}` : `- ${name}${required}`;
-      }).join('\n')
-    : '';
-  const maskedKey = tokenKey ? (tokenKey.slice(0, 8) + '...') : 'sk-xxx';
-  const zcodeConfig = {
-    mcp: {
-      servers: {
-        [serverName]: {
-          type: 'http',
-          url: mcpUrl,
-          headers: { Authorization: `Bearer ${tokenKey || 'sk-xxx'}` },
-        },
-      },
-    },
-  };
-  return [
-    `# MCP 工具接入`,
-    ``,
-    `服务：${server.name}`,
-    server.description ? `说明：${server.description}` : '',
-    ``,
-    `以下工具可通过 MCP 协议调用（由网关中转，使用令牌「${maskedKey}」鉴权）：`,
-    toolBrief || '（暂无可用工具，请等待管理员测试渠道）',
-    ``,
-    `## 接入方式`,
-    ``,
-    `### 方式一：在 zcode / WorkBuddy / CodeBuddy 中接入`,
-    `把以下配置写入对应文件（zcode: ~/.zcode/cli/config.json；WorkBuddy: ~/.workbuddy/config.json；CodeBuddy: ~/.codebuddy/config.json），重启客户端后即可让助手自动调用：`,
-    '```json',
-    JSON.stringify(zcodeConfig, null, 2),
-    '```',
-    ``,
-    `### 方式二：在对话里直接告诉助手`,
-    `如果你的客户端不能接入 MCP，可把上面这一段工具清单贴给助手，`,
-    `让它按需用 HTTP POST 调用 ${mcpUrl}（每次请求带 Authorization: Bearer <你的令牌密钥> 头）。`,
-    ``,
-    `## 调用流程（streamable-http）`,
-    `1. POST ${mcpUrl}，body=`+'`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"my-client","version":"1.0"}}}`，从响应头取 `Mcp-Session-Id`',
-    `2. 用同一 session 继续发 tools/list、tools/call 即可`,
-  ].filter(Boolean).join('\n');
-}
-
 const UsageGuide = () => {
   const { t } = useTranslation();
   const [tokens, setTokens] = useState([]);
@@ -103,12 +50,8 @@ const UsageGuide = () => {
   // 管理员模板编辑区是否展开（默认收起，保持页面简洁）
   const [tplEditorOpen, setTplEditorOpen] = useState(false);
 
-  // 暂不可用模型的渠道预计恢复时间（model_name -> {recovery_at, channel_name}）
+  // 暂不可用模型的渠道预计恢复时间（model_name -> {recovery_at}）
   const [modelRecoveryMap, setModelRecoveryMap] = useState({});
-
-  // MCP 服务（仅展示当前用户分组可用的 MCP 渠道，不暴露渠道密钥）
-  const [mcpServers, setMcpServers] = useState([]);
-  const [copiedMcpKey, setCopiedMcpKey] = useState('');
 
   const serverAddress = statusState?.status?.server_address || '';
   const baseUrl = serverAddress
@@ -128,22 +71,16 @@ const UsageGuide = () => {
       API.get('/api/user/models/template'),
       // 暂不可用模型的渠道预计恢复时间（失败不阻断页面）
       API.get('/api/user/models/recovery').catch(() => null),
-      // 用户分组可用的 MCP 服务（未登录/无权限时忽略失败，不阻断页面）
-      API.get('/api/user/mcp_servers').catch(() => null),
     ])
-      .then(([tokenRes, modelRes, metaRes, allModelRes, allMetaRes, templateRes, recoveryRes, mcpServersRes]) => {
+      .then(([tokenRes, modelRes, metaRes, allModelRes, allMetaRes, templateRes, recoveryRes]) => {
         if (recoveryRes?.data?.success) {
           const rm = {};
           for (const it of recoveryRes.data.data || []) {
             rm[it.model_name] = {
               recovery_at: it.recovery_at || 0,
-              channel_name: it.channel_name || '',
             };
           }
           setModelRecoveryMap(rm);
-        }
-        if (mcpServersRes?.data?.success) {
-          setMcpServers(mcpServersRes.data.data || []);
         }
         if (tokenRes.data.success) {
           const items = tokenRes.data.data?.items || [];
@@ -368,55 +305,6 @@ pause`;
     });
   }, [autoScript, t]);
 
-  // MCP 配置复制：按客户端生成一键粘贴的 JSON 配置（url 固定为 <baseUrl>/mcp）
-  const copyMcpConfig = (server, client) => {
-    if (!tokenKey) {
-      showError(t('请先选择令牌'));
-      return;
-    }
-    // serverName / mcpUrl 在外层 render 作用域里看不到（在 map 函数体内才定义），
-    // 这里就地重算一次，避免 ReferenceError 导致复制静默失败。
-    const sn2 = (server.name || `mcp-${server.id}`)
-      .replace(/[^\w-]+/g, '-')
-      .toLowerCase();
-    const mcpServiceName = server.service_name || 'mcp';
-    const mu = `${baseUrl.replace(/\/+$/, '')}/mcp/${mcpServiceName}`;
-    // 三种客户端（zcode/WorkBuddy/CodeBuddy）的 MCP 配置都是同构 mcp.servers
-    const clientConfig = {
-      mcp: {
-        servers: {
-          [sn2]: {
-            type: 'http',
-            url: mu,
-            headers: { Authorization: `Bearer ${tokenKey}` },
-          },
-        },
-      },
-    };
-    // 「一键提示词」tab：复制自然语言接入说明（不依赖客户端 config 编辑能力）
-    if (client === 'prompt') {
-      const text = buildMcpPrompt(server, sn2, mu, tokenKey);
-      navigator.clipboard
-        .writeText(text)
-        .then(() => {
-          setCopiedMcpKey(`${server.id}-prompt`);
-          showSuccess(t('已复制 MCP 提示词'));
-          setTimeout(() => setCopiedMcpKey(''), 2000);
-        })
-        .catch(() => showError(t('复制失败')));
-      return;
-    }
-    const text = JSON.stringify(clientConfig, null, 2);
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        setCopiedMcpKey(`${server.id}-${client}`);
-        showSuccess(t('已复制 MCP 配置'));
-        setTimeout(() => setCopiedMcpKey(''), 2000);
-      })
-      .catch(() => showError(t('复制失败')));
-  };
-
   // 管理员保存模板
   const handleSaveTemplate = useCallback(async () => {
     // 验证 JSON 格式
@@ -478,6 +366,60 @@ pause`;
         {t('下载配置文件，一键替换 WorkBuddy / CodeBuddy 设置')}
       </Text>
 
+      {/* 顶部醒目：可用 / 暂不可用模型状态总览 */}
+      {userModels.length > 0 && (
+        <Card bordered style={{ marginTop: 16, padding: '16px 20px', borderColor: disabledModels.length > 0 ? 'var(--semi-color-warning)' : 'var(--semi-color-success)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: '50%',
+              background: 'var(--semi-color-success)',
+              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 'bold',
+            }}>✓</div>
+            <Text strong>{t('可用模型')}（{userModels.length}）</Text>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {userModels.map((m) => (
+              <Tag key={m} size='small' color='green' shape='circle' type='solid'>
+                {m}
+              </Tag>
+            ))}
+          </div>
+
+          {disabledModels.length > 0 && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 8 }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: '50%',
+                  background: 'var(--semi-color-warning)',
+                  color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 'bold',
+                }}>!</div>
+                <Text strong>{t('暂不可用模型')}（{disabledModels.length}）</Text>
+                <Text type='tertiary' size='small'>{t('已包含在配置中，渠道恢复后立即可用')}</Text>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {disabledModels.map((m) => {
+                  const rec = modelRecoveryMap[m];
+                  const hasRecoveryTime = rec && rec.recovery_at > 0;
+                  const tooltip = hasRecoveryTime
+                    ? t('预计恢复时间：${time}').replace('${time}', timestamp2string(rec.recovery_at))
+                    : t('暂无预计恢复时间');
+                  return (
+                    <Tooltip key={m} content={tooltip}>
+                      <Tag size='small' color='orange' shape='circle'>
+                        {m}
+                        {hasRecoveryTime && ` · ${t('预计')} ${timestamp2string(rec.recovery_at)}`}
+                      </Tag>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </Card>
+      )}
+
       {/* 第一步：选择令牌（全宽） */}
       <Card bordered style={{ marginTop: 24, padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -529,17 +471,8 @@ pause`;
         )}
       </Card>
 
-      {/* 第二步：配置文件 + MCP 服务 并排（宽屏两列，窄屏回落单列） */}
-      <div className='usage-guide-grid' style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))',
-        gap: 16,
-        marginTop: 16,
-        alignItems: 'start',
-      }}>
-
-      {/* 第二步-左：一键配置（models.json） */}
-      <Card bordered style={{ padding: '20px 24px' }}>
+      {/* 第二步：一键配置（models.json） */}
+      <Card bordered style={{ marginTop: 16, padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <div style={{
             width: 28, height: 28, borderRadius: '50%',
@@ -614,49 +547,6 @@ pause`;
               </pre>
             </div>
 
-            {/* 可用模型列表（始终只显示当前 enabled=true 的） */}
-            <div style={{ marginTop: 12 }}>
-              <Text type='tertiary' size='small'>
-                {t('可用模型')}（{userModels.length}）：
-              </Text>
-              <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {userModels.map((m) => (
-                  <Tag key={m} size='small' color='blue' shape='circle'>
-                    {m}
-                  </Tag>
-                ))}
-              </div>
-            </div>
-
-            {/* 暂不可用模型（提示用户这些模型已在配置里，渠道恢复后即可用） */}
-            {disabledModels.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <Text type='tertiary' size='small'>
-                  {t('暂不可用模型')}（{disabledModels.length}）：
-                </Text>
-                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {disabledModels.map((m) => {
-                    const rec = modelRecoveryMap[m];
-                    const hasRecoveryTime = rec && rec.recovery_at > 0;
-                    const tooltip = hasRecoveryTime
-                      ? t('预计恢复时间：${time}').replace('${time}', timestamp2string(rec.recovery_at))
-                      : t('暂无预计恢复时间');
-                    return (
-                      <Tooltip key={m} content={tooltip}>
-                        <Tag size='small' color='grey' shape='circle' type='ghost'>
-                          {m}
-                          {hasRecoveryTime && ` (${t('预计')} ${timestamp2string(rec.recovery_at)})`}
-                        </Tag>
-                      </Tooltip>
-                    );
-                  })}
-                </div>
-                <Text type='tertiary' size='small' style={{ display: 'block', marginTop: 6 }}>
-                  {t('这些模型已包含在配置中，渠道恢复后立即可用，无需重新下载。')}
-                </Text>
-              </div>
-            )}
-
             <Banner
               type='info'
               description={t('下载 .bat 脚本后双击运行即可自动配置。也可手动下载 models.json 放入对应目录。')}
@@ -666,155 +556,6 @@ pause`;
         )}
       </Card>
 
-      {/* 第二步-右：MCP 服务（当前用户分组可用的 MCP 渠道，一键复制客户端配置） */}
-      {mcpServers.length > 0 && (
-        <Card bordered style={{ padding: '20px 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%',
-              background: 'var(--semi-color-cyan)',
-              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 14, fontWeight: 'bold',
-            }}>
-              M
-            </div>
-            <Text strong style={{ fontSize: 16 }}>{t('MCP 服务')}</Text>
-            <Tag color='cyan' shape='circle' size='small'>
-              {mcpServers.length}
-            </Tag>
-          </div>
-          <Text type='tertiary' size='small'>
-            {t('选择客户端，一键复制配置粘贴到对应配置文件即可使用。所有 MCP 服务共用上方选中的令牌密钥。')}
-          </Text>
-
-          {mcpServers.map((server) => {
-            const serverName = (server.name || `mcp-${server.id}`)
-              .replace(/[^\w-]+/g, '-')
-              .toLowerCase();
-            // 每个 MCP 服务一个独立路由入口 /mcp/<服务名>
-            const sn = server.service_name || 'mcp';
-            const mcpUrl = `${baseUrl.replace(/\/+$/, '')}/mcp/${sn}`;
-            const promptText = buildMcpPrompt(server, serverName, mcpUrl, tokenKey);
-            // 三种客户端的 MCP 配置都是同构 mcp.servers，区别仅在配置文件路径
-            const buildClientConfig = () => ({
-              mcp: {
-                servers: {
-                  [serverName]: {
-                    type: 'http',
-                    url: mcpUrl,
-                    headers: {
-                      Authorization: `Bearer ${tokenKey || 'sk-xxx'}`,
-                    },
-                  },
-                },
-              },
-            });
-            const clients = [
-              {
-                key: 'prompt',
-                name: t('一键提示词'),
-                path: '',
-                promptText,
-              },
-              {
-                key: 'zcode',
-                name: 'ZCode',
-                path: '~/.zcode/cli/config.json',
-                config: buildClientConfig(),
-              },
-              {
-                key: 'workbuddy',
-                name: 'WorkBuddy',
-                path: '~/.workbuddy/config.json',
-                config: buildClientConfig(),
-              },
-              {
-                key: 'codebuddy',
-                name: 'CodeBuddy',
-                path: '~/.codebuddy/config.json',
-                config: buildClientConfig(),
-              },
-            ];
-            return (
-              <Card
-                key={server.id}
-                bordered
-                shadows='hover'
-                style={{ marginTop: 16 }}
-                bodyStyle={{ padding: '12px 16px' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <Text strong style={{ fontSize: 15 }}>{server.name}</Text>
-                  {Array.isArray(server.tools) && server.tools.length > 0 ? (
-                    server.tools.map((tool, idx) => (
-                      <Tag key={idx} size='small' color='cyan' shape='circle'>
-                        {tool?.name || `tool_${idx}`}
-                      </Tag>
-                    ))
-                  ) : (
-                    <Tag size='small' color='grey' shape='circle' type='ghost'>
-                      {t('未测试')}
-                    </Tag>
-                  )}
-                </div>
-                {server.description && (
-                  <Text type='tertiary' size='small' style={{ display: 'block', marginTop: 6 }}>
-                    {server.description}
-                  </Text>
-                )}
-                <Tabs type='card' style={{ marginTop: 12 }} defaultActiveKey='prompt'>
-                  {clients.map((client) => {
-                    const copied = copiedMcpKey === `${server.id}-${client.key}`;
-                    const isPrompt = client.key === 'prompt';
-                    return (
-                      <Tabs.TabPane key={client.key} tab={client.name} itemKey={client.key}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                          <Text type='tertiary' size='small'>
-                            {isPrompt
-                              ? t('粘贴到任意 AI 助手对话即可让其调用 MCP 工具，无需编辑配置文件')
-                              : <>{t('配置文件路径')}：<Text code size='small'>{client.path}</Text></>
-                            }
-                          </Text>
-                          <Button
-                            size='small'
-                            type={copied ? 'primary' : 'tertiary'}
-                            theme={copied ? 'solid' : 'borderless'}
-                            icon={copied ? <Check size={12} /> : <Copy size={12} />}
-                            onClick={() => copyMcpConfig(server, client.key)}
-                          >
-                            {copied ? t('已复制') : (isPrompt ? t('复制提示词') : t('复制配置'))}
-                          </Button>
-                        </div>
-                        <pre style={{
-                          marginTop: 8,
-                          padding: 12,
-                          background: 'var(--semi-color-fill-0)',
-                          borderRadius: 8,
-                          fontSize: 11,
-                          lineHeight: 1.5,
-                          overflow: 'auto',
-                          maxHeight: isPrompt ? 360 : 220,
-                          whiteSpace: 'pre',
-                          wordBreak: 'normal',
-                        }}>
-                          {isPrompt ? (client.promptText || '') : JSON.stringify(client.config, null, 2)}
-                        </pre>
-                      </Tabs.TabPane>
-                    );
-                  })}
-                </Tabs>
-              </Card>
-            );
-          })}
-
-          <Banner
-            type='info'
-            description={t('每个 MCP 服务对应一个独立地址 <baseUrl>/mcp/<服务名>，客户端通过 Authorization: Bearer <你的令牌密钥> 鉴权；同一服务名下若有多个渠道，系统自动从你有权限的分组中选择可用渠道。')}
-            style={{ marginTop: 16 }}
-          />
-        </Card>
-      )}
-      </div>
 
       {/* 管理员：模板编辑（默认收起，移到页面底部不干扰用户视图） */}
       {isAdmin && templateLoaded && (

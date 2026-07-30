@@ -170,18 +170,6 @@ func SetRelayRouter(router *gin.Engine) {
 	relayMjRouter.Use(middleware.SystemPerformanceCheck())
 	registerMjRouterGroup(relayMjRouter)
 
-	// MCP（Model Context Protocol）接入代理：用户只需 new-api 令牌即可使用平台配置的 MCP 能力，
-	// 平台侧 MCP 服务器的真实密钥由网关注入，不暴露给用户。
-	// 支持 GET（SSE 长连接）与 POST（streamable http），子路径透传（如 /mcp/sse -> {渠道base_url}/sse）。
-	relayMcpRouter := router.Group("/mcp")
-	relayMcpRouter.Use(middleware.RouteTag("relay"))
-	relayMcpRouter.Use(middleware.SystemPerformanceCheck())
-	relayMcpRouter.Use(middleware.TokenAuth())
-	{
-		relayMcpRouter.Any("/*path", controller.RelayMcp)
-		relayMcpRouter.Any("", controller.RelayMcp)
-	}
-
 	relayMjModeRouter := router.Group("/:mode/mj")
 	relayMjModeRouter.Use(middleware.RouteTag("relay"))
 	relayMjModeRouter.Use(middleware.SystemPerformanceCheck())

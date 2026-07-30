@@ -311,50 +311,6 @@ func migrateDB() error {
 		}
 	}
 	common.SysLog("database migrated")
-	if err := migrateLegacyMcpChannels(); err != nil {
-		common.SysError("failed to migrate MCP channels: " + err.Error())
-	}
-	if err := migrateLegacyMcpChannelServiceName(); err != nil {
-		common.SysError("failed to backfill MCP service name: " + err.Error())
-	}
-	return nil
-}
-
-// migrateLegacyMcpChannels 把旧的"假 MCP"渠道（任意类型、models 透传 mcp 模型）
-// 归正为 MCP(58) 类型。幂等：仅命中 type != 58 且 models 含 mcp 的渠道。
-// 之前这段 SQL 被误放进 migrateDBFast（死代码、全程无人调用），
-// 导致 #26 这类历史渠道一直停在 type=8，getMcpChannel 在 RelayMcp 中以
-// "命中的 #N 不是 MCP 类型"拒绝访问。
-func migrateLegacyMcpChannels() error {
-	// models 是逗号分隔串；前后补逗号做精确匹配，REPLACE 去空格容忍 "mcp, xxx" 写法；
-	// || 拼接 ANSI 标准，MySQL/SQLite/PG 三库通用。
-	migrateResult := DB.Exec(
-		"UPDATE channels SET type = ? WHERE type <> ? AND (',' || REPLACE(models, ' ', '') || ',') LIKE ?",
-		constant.ChannelTypeMCP, constant.ChannelTypeMCP, "%,mcp,%",
-	)
-	if migrateResult.Error != nil {
-		return migrateResult.Error
-	}
-	if migrateResult.RowsAffected > 0 {
-		common.SysLog(fmt.Sprintf("migrated %d legacy channels to MCP type (type=58)", migrateResult.RowsAffected))
-	}
-	return nil
-}
-
-// migrateLegacyMcpChannelServiceName 给存量 type=58 但 mcp_service_name 为空的渠道
-// 兜底填 "mcp"，保持向后兼容（旧客户端仍可用 /mcp 直接访问）。新渠道由管理员在
-// 编辑器填具体服务名（如 web-search-prime）。幂等。
-func migrateLegacyMcpChannelServiceName() error {
-	migrateResult := DB.Exec(
-		"UPDATE channels SET mcp_service_name = ? WHERE type = ? AND (mcp_service_name IS NULL OR mcp_service_name = ?)",
-		"mcp", constant.ChannelTypeMCP, "",
-	)
-	if migrateResult.Error != nil {
-		return migrateResult.Error
-	}
-	if migrateResult.RowsAffected > 0 {
-		common.SysLog(fmt.Sprintf("backfilled mcp_service_name='mcp' for %d legacy MCP channels", migrateResult.RowsAffected))
-	}
 	return nil
 }
 
@@ -425,13 +381,6 @@ func migrateDBFast() error {
 		}
 	}
 	common.SysLog("database migrated")
-	// 同步：归正历史"假 MCP"渠道（详见 migrateLegacyMcpChannels 注释）
-	if err := migrateLegacyMcpChannels(); err != nil {
-		common.SysError("failed to migrate MCP channels: " + err.Error())
-	}
-	if err := migrateLegacyMcpChannelServiceName(); err != nil {
-		common.SysError("failed to backfill MCP service name: " + err.Error())
-	}
 	return nil
 }
 

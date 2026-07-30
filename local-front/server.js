@@ -1,5 +1,5 @@
 // 本机前端静态服务（模拟生产：80 前端 + 3000 接口）
-// SPA fallback 只针对页面路由；/api、/mcp 等一律反代到 127.0.0.1:3000
+// SPA fallback 只针对页面路由；/api 等一律反代到 127.0.0.1:3000
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -24,8 +24,8 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-// 需要反代到后端的路径前缀（API、MCP、OAuth 回调、支付回调等）
-const PROXY_PREFIXES = ['/api/', '/mcp', '/oauth/', '/api'];
+// 需要反代到后端的路径前缀（API、OAuth 回调、支付回调等）
+const PROXY_PREFIXES = ['/api/', '/oauth/', '/api'];
 
 function shouldProxy(urlPath) {
   return PROXY_PREFIXES.some(
@@ -79,5 +79,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(80, () => {
-  console.log('front: http://localhost:80 (static dist + /api,/mcp proxy -> 127.0.0.1:3000)');
+  console.log('front: http://localhost:80 (static dist + /api proxy -> 127.0.0.1:3000)');
 });

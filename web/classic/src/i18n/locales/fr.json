@@ -3741,15 +3741,7 @@
   "配置里只包含当前可用的模型。如果渠道被临时禁用，模型会从配置中消失，恢复后需要重新下载。": "The config only includes currently available models. If a channel is temporarily disabled, its models disappear from the config and you'll need to re-download after recovery.",
   "预计恢复时间：${time}": "Heure de récupération estimée : ${time}",
   "展开编辑": "Développer l'éditeur",
-  "一键提示词": "Invite rapide",
-  "复制提示词": "Copier l'invite",
-  "粘贴到任意 AI 助手对话即可让其调用 MCP 工具，无需编辑配置文件": "Collez dans n'importe quel chat d'assistant IA pour lui permettre d'appeler les outils MCP — aucune édition de config requise",
-  "已复制 MCP 提示词": "Invite MCP copiée",
   "配置文件（models.json）": "Config (models.json)",
   "已启用自定义模板": "Modèle personnalisé activé",
-  "当前使用系统自动生成": "Génération automatique système",
-  "每个 MCP 服务对应一个独立地址 <baseUrl>/mcp/<服务名>，客户端通过 Authorization: Bearer <你的令牌密钥> 鉴权；同一服务名下若有多个渠道，系统自动从你有权限的分组中选择可用渠道。": "Chaque service MCP a son propre point d'accès <baseUrl>/mcp/<service_name> ; les clients s'authentifient via Authorization: Bearer <votre clé token> ; si un nom de service a plusieurs canaux, la passerelle choisit un canal disponible parmi vos groupes accessibles.",
-  "MCP 服务名": "Nom du service MCP",
-  "如 web-search-prime，用于路由 /mcp/<服务名>。留空兼容旧行为 mcp": "ex. web-search-prime, utilisé pour le routage /mcp/<service_name>. Laisser vide pour le comportement hérité mcp",
-  "MCP 渠道按「MCP 服务名」路由：用户访问 /mcp/<服务名> 时命中本渠道。Base URL 填 MCP 服务器 streamable-http 地址（如 https://open.bigmodel.cn/api/mcp/web_search_prime/mcp）；密钥填平台侧真实 API Key，随 Authorization: Bearer 与 x-api-key 头注入上游。一个 MCP 服务建一个渠道（如联网搜索、网页读取各自独立）。": "Les canaux MCP sont routés par « nom du service MCP » : les requêtes vers /mcp/<service_name> atteignent ce canal. Remplissez Base URL avec l'adresse streamable-http du serveur MCP (ex. https://open.bigmodel.cn/api/mcp/web_search_prime/mcp) ; la clé est la vraie clé API côté plateforme, injectée en amont via les en-têtes Authorization: Bearer et x-api-key. Créez un canal par service MCP (recherche web et lecteur web sont séparés)."
+  "当前使用系统自动生成": "Génération automatique système"
 }
