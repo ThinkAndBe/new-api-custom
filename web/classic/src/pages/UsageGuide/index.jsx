@@ -376,7 +376,13 @@ pause`;
     }
     // 「一键提示词」tab：复制自然语言接入说明（不依赖客户端 config 编辑能力）
     if (client === 'prompt') {
-      const text = buildMcpPrompt(server, serverName, mcpUrl, tokenKey);
+      // serverName / mcpUrl 在外层 render 作用域里看不到（在 map 函数体内才定义），
+      // 这里就地重算一次，避免 ReferenceError 导致复制静默失败。
+      const sn = (server.name || `mcp-${server.id}`)
+        .replace(/[^\w-]+/g, '-')
+        .toLowerCase();
+      const mu = `${baseUrl.replace(/\/+$/, '')}/mcp`;
+      const text = buildMcpPrompt(server, sn, mu, tokenKey);
       navigator.clipboard
         .writeText(text)
         .then(() => {
@@ -481,7 +487,7 @@ pause`;
   const ready = tokenKey && effectiveModels.length > 0;
 
   return (
-    <div className='mt-[60px] px-4 pb-8' style={{ maxWidth: 720, margin: '60px auto 0' }}>
+    <div className='mt-[60px] px-4 pb-8' style={{ maxWidth: 1080, margin: '60px auto 0' }}>
       <Title heading={3} style={{ marginBottom: 4 }}>
         {t('使用教程')}
       </Title>
@@ -489,69 +495,7 @@ pause`;
         {t('下载配置文件，一键替换 WorkBuddy / CodeBuddy 设置')}
       </Text>
 
-      {/* 管理员：模板编辑（默认收起，保持页面简洁） */}
-      {isAdmin && templateLoaded && (
-        <Card bordered style={{ marginTop: 24, padding: '20px 24px', borderColor: 'var(--semi-color-warning)' }}>
-          <div
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-            onClick={() => setTplEditorOpen((v) => !v)}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Text strong style={{ fontSize: 16 }}>{t('管理员：models.json 模板')}</Text>
-              <Tag size='small' color='orange'>{t('仅管理员可见')}</Tag>
-            </div>
-            <Button
-              theme='borderless'
-              size='small'
-              icon={tplEditorOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            >
-              {tplEditorOpen ? t('收起') : t('展开编辑')}
-            </Button>
-          </div>
-          <Collapsible isOpen={tplEditorOpen} keepDOM>
-            <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12 }}>
-              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
-                {t('编辑此模板后保存，所有用户的使用教程将使用此模板生成配置。使用 {{apiKey}} 和 {{baseUrl}} 作为占位符，用户访问时自动替换为其实际值。留空则使用系统自动生成。')}
-              </Text>
-              <TextArea
-                value={template}
-                onChange={setTemplate}
-                placeholder={t('留空 = 使用系统自动生成。或粘贴完整 models.json 模板，用 {{apiKey}} 和 {{baseUrl}} 作为占位符。')}
-                autosize={{ minRows: 10, maxRows: 30 }}
-                style={{ fontFamily: 'monospace', fontSize: 12 }}
-              />
-              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                <Button
-                  type='primary'
-                  icon={<Save size={14} />}
-                  loading={savingTemplate}
-                  onClick={handleSaveTemplate}
-                >
-                  {t('保存模板')}
-                </Button>
-                <Button
-                  type='tertiary'
-                  onClick={handleFillFromAuto}
-                  disabled={!ready}
-                >
-                  {t('从当前自动生成填充')}
-                </Button>
-                {template && (
-                  <Button
-                    type='danger'
-                    theme='borderless'
-                    onClick={() => setTemplate('')}
-                  >
-                    {t('清空模板')}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </Collapsible>
-        </Card>
-      )}
-
-      {/* 第一步：选择令牌 */}
+      {/* 第一步：选择令牌（全宽） */}
       <Card bordered style={{ marginTop: 24, padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <div style={{
@@ -602,8 +546,17 @@ pause`;
         )}
       </Card>
 
-      {/* 第二步：一键配置 */}
-      <Card bordered style={{ marginTop: 16, padding: '20px 24px' }}>
+      {/* 第二步：配置文件 + MCP 服务 并排（宽屏两列，窄屏回落单列） */}
+      <div className='usage-guide-grid' style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))',
+        gap: 16,
+        marginTop: 16,
+        alignItems: 'start',
+      }}>
+
+      {/* 第二步-左：一键配置（models.json） */}
+      <Card bordered style={{ padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <div style={{
             width: 28, height: 28, borderRadius: '50%',
@@ -613,7 +566,7 @@ pause`;
           }}>
             {ready ? <Check size={16} /> : '2'}
           </div>
-          <Text strong style={{ fontSize: 16 }}>{t('一键自动配置')}</Text>
+          <Text strong style={{ fontSize: 16 }}>{t('配置文件（models.json）')}</Text>
         </div>
 
         {!ready ? (
@@ -724,9 +677,9 @@ pause`;
         )}
       </Card>
 
-      {/* MCP 服务（当前用户分组可用的 MCP 渠道，一键复制客户端配置） */}
+      {/* 第二步-右：MCP 服务（当前用户分组可用的 MCP 渠道，一键复制客户端配置） */}
       {mcpServers.length > 0 && (
-        <Card bordered style={{ marginTop: 16, padding: '20px 24px' }}>
+        <Card bordered style={{ padding: '20px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <div style={{
               width: 28, height: 28, borderRadius: '50%',
@@ -886,6 +839,79 @@ pause`;
             description={t('接入地址统一为 <baseUrl>/mcp，客户端通过 Authorization: Bearer <你的令牌密钥> 鉴权；多个 MCP 服务时系统自动从你有权限的分组中选择可用服务。')}
             style={{ marginTop: 16 }}
           />
+        </Card>
+      )}
+      </div>
+
+      {/* 管理员：模板编辑（默认收起，移到页面底部不干扰用户视图） */}
+      {isAdmin && templateLoaded && (
+        <Card bordered style={{ marginTop: 24, padding: '20px 24px', borderColor: 'var(--semi-color-warning)' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+            onClick={() => setTplEditorOpen((v) => !v)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text strong style={{ fontSize: 16 }}>{t('管理员：models.json 模板')}</Text>
+              <Tag size='small' color='orange'>{t('仅管理员可见')}</Tag>
+            </div>
+            <Button
+              theme='borderless'
+              size='small'
+              icon={tplEditorOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            >
+              {tplEditorOpen ? t('收起') : t('展开编辑')}
+            </Button>
+          </div>
+          <Collapsible isOpen={tplEditorOpen} keepDOM>
+            <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12 }}>
+              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
+                {t('编辑此模板后保存，所有用户的使用教程将使用此模板生成配置。使用 {{apiKey}} 和 {{baseUrl}} 作为占位符，用户访问时自动替换为其实际值。留空则使用系统自动生成。')}
+              </Text>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <Button
+                  size='small'
+                  type='tertiary'
+                  onClick={handleFillFromAuto}
+                  disabled={!ready}
+                  icon={<Copy size={12} />}
+                >
+                  {t('从当前自动生成填充')}
+                </Button>
+                {savedTemplate.trim() && (
+                  <Tag size='small' color='blue'>{t('已启用自定义模板')}</Tag>
+                )}
+                {!savedTemplate.trim() && (
+                  <Tag size='small' color='grey'>{t('当前使用系统自动生成')}</Tag>
+                )}
+              </div>
+              <TextArea
+                value={template}
+                onChange={setTemplate}
+                placeholder={t('留空 = 使用系统自动生成。或粘贴完整 models.json 模板，用 {{apiKey}} 和 {{baseUrl}} 作为占位符。')}
+                autosize={{ minRows: 10, maxRows: 30 }}
+                style={{ fontFamily: 'monospace', fontSize: 12 }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <Button
+                  type='primary'
+                  icon={<Save size={14} />}
+                  loading={savingTemplate}
+                  onClick={handleSaveTemplate}
+                >
+                  {t('保存模板')}
+                </Button>
+                {template && (
+                  <Button
+                    type='danger'
+                    theme='borderless'
+                    onClick={() => setTemplate('')}
+                  >
+                    {t('清空模板')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Collapsible>
         </Card>
       )}
 

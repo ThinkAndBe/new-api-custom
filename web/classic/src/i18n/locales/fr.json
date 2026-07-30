@@ -3744,5 +3744,8 @@
   "一键提示词": "Invite rapide",
   "复制提示词": "Copier l'invite",
   "粘贴到任意 AI 助手对话即可让其调用 MCP 工具，无需编辑配置文件": "Collez dans n'importe quel chat d'assistant IA pour lui permettre d'appeler les outils MCP — aucune édition de config requise",
-  "已复制 MCP 提示词": "Invite MCP copiée"
+  "已复制 MCP 提示词": "Invite MCP copiée",
+  "配置文件（models.json）": "Config (models.json)",
+  "已启用自定义模板": "Modèle personnalisé activé",
+  "当前使用系统自动生成": "Génération automatique système"
 }

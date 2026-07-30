@@ -4278,5 +4278,8 @@
   "一键提示词": "Prompt nhanh",
   "复制提示词": "Sao chép prompt",
   "粘贴到任意 AI 助手对话即可让其调用 MCP 工具，无需编辑配置文件": "Dán vào bất kỳ cuộc trò chuyện trợ lý AI nào để nó gọi công cụ MCP — không cần chỉnh sửa cấu hình",
-  "已复制 MCP 提示词": "Đã sao chép prompt MCP"
+  "已复制 MCP 提示词": "Đã sao chép prompt MCP",
+  "配置文件（models.json）": "Cấu hình (models.json)",
+  "已启用自定义模板": "Đã bật mẫu tùy chỉnh",
+  "当前使用系统自动生成": "Đang dùng tự động tạo của hệ thống"
 }
