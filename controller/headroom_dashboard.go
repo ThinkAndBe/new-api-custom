@@ -67,9 +67,11 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 	}
 
 	var logs []model.Log
+	// 只查经过 headroom 压缩处理且有实际节省的日志（other 含 headroom_tokens_saved 字段）。
+	// 没开压缩的渠道不会写这个字段，自然被排除。
 	query := model.LOG_DB.Model(&model.Log{}).
 		Where("type = ?", model.LogTypeConsume).
-		Where("other <> ''")
+		Where("other <> '' AND other LIKE '%headroom_tokens_saved%'")
 	if startTs > 0 {
 		query = query.Where("created_at >= ?", startTs)
 	}
@@ -107,6 +109,11 @@ func getHeadroomRowsImpl(startTs, endTs int64, applyRetention bool) ([]HeadroomL
 			continue
 		}
 		saved := intFromAny(other["headroom_tokens_saved"])
+		// 只统计真正发生了压缩（节省量 > 0）的请求。
+		// saved=0 的 noop 请求（headroom 判定不需要压缩）不计入统计和明细。
+		if saved <= 0 {
+			continue
+		}
 		ratio := floatFromAny(other["headroom_ratio"])
 		chName := channelNames[log.ChannelId]
 		// 实际输入 token = prompt_tokens + cache_tokens
