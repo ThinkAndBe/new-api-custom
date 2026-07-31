@@ -72,3 +72,11 @@ service/openaicompat/chat_responses_live_local_test.go
 # Local runtime artifacts
 new-api.log
 or_models.json
+
+# 敏感/临时文件（勿提交）
+cookies.txt
+cookies2.txt
+prod_cookies.txt
+new-api-local-run.log
+web/classic/new-api-local-run.log
+local-front/server.js
