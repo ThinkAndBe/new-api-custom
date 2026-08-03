@@ -132,6 +132,25 @@ func GetCacheRatioMap() map[string]float64 {
 	return cacheRatioMap.ReadAll()
 }
 
+// GetDefaultCacheRatioMap 返回内置默认缓存命中倍率表的拷贝。
+// 用于定价覆盖「改回 0 恢复全局默认」时，把内置默认值写回全局配置。
+func GetDefaultCacheRatioMap() map[string]float64 {
+	out := make(map[string]float64, len(defaultCacheRatio))
+	for k, v := range defaultCacheRatio {
+		out[k] = v
+	}
+	return out
+}
+
+// GetDefaultCreateCacheRatioMap 返回内置默认缓存创建倍率表的拷贝。
+func GetDefaultCreateCacheRatioMap() map[string]float64 {
+	out := make(map[string]float64, len(defaultCreateCacheRatio))
+	for k, v := range defaultCreateCacheRatio {
+		out[k] = v
+	}
+	return out
+}
+
 // CacheRatio2JSONString converts the cache ratio map to a JSON string
 func CacheRatio2JSONString() string {
 	return cacheRatioMap.MarshalJSONString()

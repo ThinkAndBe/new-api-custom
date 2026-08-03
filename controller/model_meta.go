@@ -152,63 +152,87 @@ func UpdateModelMeta(c *gin.Context) {
 
 // syncModelPricingOverrides 将模型直接价格覆盖同步到全局配置。
 // 与模型参数 params_locked 同一思路：人工编辑后覆盖全局默认，litellm/官方同步不再覆盖。
-// 价格单位：美元 / 1M tokens。0 表示未配置，使用全局默认。
+// 价格单位：美元 / 1M tokens。0 表示未配置，恢复该维度的全局默认值。
 //
 // new-api 倍率约定：model_ratio=1 ↔ $2/1M 输入（QuotaPerUnit=500000，$1=50万quota，
 // 1M tokens × ratio 1 = 1M quota = $2）。其余倍率均为相对输入价的无量纲比值。
+//
+// Set-or-restore 语义：价格 > 0 写入覆盖值；价格 = 0 时把该模型从全局 map 里恢复为内置默认
+// （若内置默认也无，则写 1 或跳过，等价于走 hardcoded 兜底分支）。
 func syncModelPricingOverrides(m *model.Model) error {
 	name := m.ModelName
-	// 输入价格 → ModelRatio（ratio = 价格($/1M) / 2）
+
+	// 输入价格 -> ModelRatio（ratio = 价格($/1M) / 2）。0 恢复内置默认。
+	modelRatioMap := ratio_setting.GetModelRatioCopy()
 	if m.InputPrice > 0 {
-		modelRatioMap := ratio_setting.GetModelRatioCopy()
 		modelRatioMap[name] = m.InputPrice / 2
-		if b, err := common.Marshal(modelRatioMap); err == nil {
-			if err := model.UpdateOption("ModelRatio", string(b)); err != nil {
-				return err
-			}
-			if err := ratio_setting.UpdateModelRatioByJSONString(string(b)); err != nil {
-				return err
-			}
+	} else {
+		// 恢复内置默认；内置无该模型则删除条目（GetModelRatio 兜底返回 0.546）
+		if dv, ok := ratio_setting.GetDefaultModelRatioMap()[name]; ok {
+			modelRatioMap[name] = dv
+		} else {
+			delete(modelRatioMap, name)
 		}
 	}
-	// 输出价格 → 写入 CompletionRatio（输出倍率 = 输出价格 / 输入价格）
+	if b, err := common.Marshal(modelRatioMap); err == nil {
+		if err := model.UpdateOption("ModelRatio", string(b)); err != nil {
+			return err
+		}
+		_ = ratio_setting.UpdateModelRatioByJSONString(string(b))
+	}
+
+	// 输出价格 -> CompletionRatio（输出倍率 = 输出价格 / 输入价格）。0 恢复内置默认。
+	completionRatioMap := ratio_setting.GetCompletionRatioCopy()
 	if m.OutputPrice > 0 && m.InputPrice > 0 {
-		completionRatioMap := ratio_setting.GetCompletionRatioCopy()
 		completionRatioMap[name] = m.OutputPrice / m.InputPrice
-		if b, err := common.Marshal(completionRatioMap); err == nil {
-			if err := model.UpdateOption("CompletionRatio", string(b)); err != nil {
-				return err
-			}
-			if err := ratio_setting.UpdateCompletionRatioByJSONString(string(b)); err != nil {
-				return err
-			}
+	} else {
+		if dv, ok := ratio_setting.GetDefaultCompletionRatioMap()[name]; ok {
+			completionRatioMap[name] = dv
+		} else {
+			delete(completionRatioMap, name)
 		}
 	}
-	// 缓存命中价格 → 写入 CacheRatio（缓存读取倍率 = 缓存命中价格 / 输入价格）
+	if b, err := common.Marshal(completionRatioMap); err == nil {
+		if err := model.UpdateOption("CompletionRatio", string(b)); err != nil {
+			return err
+		}
+		_ = ratio_setting.UpdateCompletionRatioByJSONString(string(b))
+	}
+
+	// 缓存命中价格 -> CacheRatio（缓存读取倍率 = 缓存命中价格 / 输入价格）。0 恢复内置默认。
+	cacheRatioMap := ratio_setting.GetCacheRatioCopy()
 	if m.CacheHitPrice > 0 && m.InputPrice > 0 {
-		cacheRatioMap := ratio_setting.GetCacheRatioCopy()
 		cacheRatioMap[name] = m.CacheHitPrice / m.InputPrice
-		if b, err := common.Marshal(cacheRatioMap); err == nil {
-			if err := model.UpdateOption("CacheRatio", string(b)); err != nil {
-				return err
-			}
-			if err := ratio_setting.UpdateCacheRatioByJSONString(string(b)); err != nil {
-				return err
-			}
+	} else {
+		if dv, ok := ratio_setting.GetDefaultCacheRatioMap()[name]; ok {
+			cacheRatioMap[name] = dv
+		} else {
+			delete(cacheRatioMap, name)
 		}
 	}
-	// 缓存创建价格 → 写入 CreateCacheRatio（缓存创建倍率 = 缓存创建价格 / 输入价格）
-	if m.CacheCreatePrice > 0 && m.InputPrice > 0 {
-		createCacheRatioMap := ratio_setting.GetCreateCacheRatioCopy()
-		createCacheRatioMap[name] = m.CacheCreatePrice / m.InputPrice
-		if b, err := common.Marshal(createCacheRatioMap); err == nil {
-			if err := model.UpdateOption("CreateCacheRatio", string(b)); err != nil {
-				return err
-			}
-			if err := ratio_setting.UpdateCreateCacheRatioByJSONString(string(b)); err != nil {
-				return err
-			}
+	if b, err := common.Marshal(cacheRatioMap); err == nil {
+		if err := model.UpdateOption("CacheRatio", string(b)); err != nil {
+			return err
 		}
+		_ = ratio_setting.UpdateCacheRatioByJSONString(string(b))
+	}
+
+	// 缓存创建价格 -> CreateCacheRatio（缓存创建倍率 = 缓存创建价格 / 输入价格）。0 恢复内置默认。
+	createCacheRatioMap := ratio_setting.GetCreateCacheRatioCopy()
+	if m.CacheCreatePrice > 0 && m.InputPrice > 0 {
+		createCacheRatioMap[name] = m.CacheCreatePrice / m.InputPrice
+	} else {
+		if dv, ok := ratio_setting.GetDefaultCreateCacheRatioMap()[name]; ok {
+			createCacheRatioMap[name] = dv
+		} else {
+			delete(createCacheRatioMap, name)
+		}
+	}
+	if b, err := common.Marshal(createCacheRatioMap); err == nil {
+		if err := model.UpdateOption("CreateCacheRatio", string(b)); err != nil {
+			return err
+		}
+		_ = ratio_setting.UpdateCreateCacheRatioByJSONString(string(b))
 	}
 	return nil
 }

@@ -577,6 +577,16 @@ func GetDefaultModelPriceMap() map[string]float64 {
 	return defaultModelPrice
 }
 
+// GetDefaultCompletionRatioMap 返回内置默认补全倍率表的拷贝。
+// 用于定价覆盖「改回 0 恢复全局默认」时，把内置默认值写回全局配置。
+func GetDefaultCompletionRatioMap() map[string]float64 {
+	out := make(map[string]float64, len(defaultCompletionRatio))
+	for k, v := range defaultCompletionRatio {
+		out[k] = v
+	}
+	return out
+}
+
 func CompletionRatio2JSONString() string {
 	return completionRatioMap.MarshalJSONString()
 }
