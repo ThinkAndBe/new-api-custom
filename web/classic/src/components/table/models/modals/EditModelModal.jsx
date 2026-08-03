@@ -131,7 +131,7 @@ const EditModelModal = (props) => {
     supports_tool_call: false,
     supports_images: false,
     supports_reasoning: false,
-    // 定价覆盖（直接价格，单位：美元 / 1M tokens。0 表示未配置使用全局默认）
+    // 定价覆盖（直接价格，单位：人民币 / 1M tokens。0 表示未配置使用全局默认）
     input_price: 0,
     output_price: 0,
     cache_hit_price: 0,
@@ -223,7 +223,7 @@ const EditModelModal = (props) => {
         supports_images: !!values.supports_images,
         supports_reasoning: !!values.supports_reasoning,
         params_locked: !!paramsEdited,
-        // 定价字段（直接价格，单位：美元 / 1M tokens）
+        // 定价字段（直接价格，单位：人民币 / 1M tokens）
         input_price: Number(values.input_price) || 0,
         output_price: Number(values.output_price) || 0,
         cache_hit_price: Number(values.cache_hit_price) || 0,
@@ -556,10 +556,10 @@ const EditModelModal = (props) => {
                     />
                   </Col>
                   <Col span={24}>
-                    <Divider style={{ margin: '12px 0' }}>{t('定价设置（可选，与全局配置联动）')}</Divider>
+                    <Divider style={{ margin: '12px 0' }}>{t('定价设置（人民币，与全局配置联动）')}</Divider>
                     <Banner
                       type='info'
-                      description={t('留空/0 表示使用全局默认配置。人工修改后将覆盖全局默认，并标记为已锁定（litellm 同步不再覆盖）。')}
+                      description={t('价格为人民币（¥/1M tokens）。留空/0 表示使用全局默认配置。人工修改后将覆盖全局默认，并标记为已锁定（litellm 同步不再覆盖）。')}
                       style={{ marginBottom: 12 }}
                     />
                   </Col>
@@ -567,11 +567,11 @@ const EditModelModal = (props) => {
                   <Col span={24}>
                     <Form.InputNumber
                       field='input_price'
-                      label={t('输入价格（$/1M tokens）')}
+                      label={t('输入价格（¥/1M tokens）')}
                       placeholder={t('0 = 未配置')}
                       min={0}
                       precision={4}
-                      extraText={t('每百万 tokens 输入价格（美元），0 表示使用全局默认')}
+                      extraText={t('每百万 tokens 输入价格（人民币），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>
@@ -579,11 +579,11 @@ const EditModelModal = (props) => {
                   <Col span={24}>
                     <Form.InputNumber
                       field='output_price'
-                      label={t('输出价格（$/1M tokens）')}
+                      label={t('输出价格（¥/1M tokens）')}
                       placeholder={t('0 = 未配置')}
                       min={0}
                       precision={4}
-                      extraText={t('每百万 tokens 输出价格（美元），0 表示使用全局默认')}
+                      extraText={t('每百万 tokens 输出价格（人民币），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>
@@ -591,11 +591,11 @@ const EditModelModal = (props) => {
                   <Col span={12}>
                     <Form.InputNumber
                       field='cache_hit_price'
-                      label={t('缓存命中价格（$/1M）')}
+                      label={t('缓存命中价格（¥/1M）')}
                       placeholder={t('0 = 未配置')}
                       min={0}
                       precision={4}
-                      extraText={t('缓存命中读取价格（$/1M tokens），0 表示使用全局默认')}
+                      extraText={t('缓存命中读取价格（¥/1M tokens），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>
@@ -603,11 +603,11 @@ const EditModelModal = (props) => {
                   <Col span={12}>
                     <Form.InputNumber
                       field='cache_create_price'
-                      label={t('缓存创建价格（$/1M）')}
+                      label={t('缓存创建价格（¥/1M）')}
                       placeholder={t('0 = 未配置')}
                       min={0}
                       precision={4}
-                      extraText={t('缓存创建写入价格（$/1M tokens），0 表示使用全局默认')}
+                      extraText={t('缓存创建写入价格（¥/1M tokens），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>

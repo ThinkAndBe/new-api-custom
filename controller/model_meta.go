@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -152,22 +153,27 @@ func UpdateModelMeta(c *gin.Context) {
 
 // syncModelPricingOverrides 将模型直接价格覆盖同步到全局配置。
 // 与模型参数 params_locked 同一思路：人工编辑后覆盖全局默认，litellm/官方同步不再覆盖。
-// 价格单位：美元 / 1M tokens。0 表示未配置，恢复该维度的全局默认值。
+//
+// 价格单位：人民币 / 1M tokens。0 表示未配置，恢复该维度的全局默认。
+// 后端在写入时按 USDExchangeRate（默认 7.3）换算为美元再转 new-api 倍率，
+// 用户/管理员全程只见人民币。
 //
 // new-api 倍率约定：model_ratio=1 ↔ $2/1M 输入（QuotaPerUnit=500000，$1=50万quota，
 // 1M tokens × ratio 1 = 1M quota = $2）。其余倍率均为相对输入价的无量纲比值。
 //
 // Set-or-restore 语义：价格 > 0 写入覆盖值；价格 = 0 时把该模型从全局 map 里恢复为内置默认
-// （若内置默认也无，则写 1 或跳过，等价于走 hardcoded 兜底分支）。
+// （若内置默认也无，则删除条目，等价于走 hardcoded 兜底分支）。
 func syncModelPricingOverrides(m *model.Model) error {
 	name := m.ModelName
+	// 人民币 → 美元换算因子（用户填的是 CNY，new-api 内核按 USD 计 quota）
+	cny2usd := 1.0 / operation_setting.USDExchangeRate
+	inputPriceUSD := m.InputPrice * cny2usd
 
-	// 输入价格 -> ModelRatio（ratio = 价格($/1M) / 2）。0 恢复内置默认。
+	// 输入价格 -> ModelRatio（ratio = 美元价格($/1M) / 2）。0 恢复内置默认。
 	modelRatioMap := ratio_setting.GetModelRatioCopy()
-	if m.InputPrice > 0 {
-		modelRatioMap[name] = m.InputPrice / 2
+	if inputPriceUSD > 0 {
+		modelRatioMap[name] = inputPriceUSD / 2
 	} else {
-		// 恢复内置默认；内置无该模型则删除条目（GetModelRatio 兜底返回 0.546）
 		if dv, ok := ratio_setting.GetDefaultModelRatioMap()[name]; ok {
 			modelRatioMap[name] = dv
 		} else {
@@ -181,7 +187,7 @@ func syncModelPricingOverrides(m *model.Model) error {
 		_ = ratio_setting.UpdateModelRatioByJSONString(string(b))
 	}
 
-	// 输出价格 -> CompletionRatio（输出倍率 = 输出价格 / 输入价格）。0 恢复内置默认。
+	// 输出价格 -> CompletionRatio（输出倍率 = 输出价格 / 输入价格，同为人民币或同为美元，比值不变）。0 恢复内置默认。
 	completionRatioMap := ratio_setting.GetCompletionRatioCopy()
 	if m.OutputPrice > 0 && m.InputPrice > 0 {
 		completionRatioMap[name] = m.OutputPrice / m.InputPrice
@@ -199,7 +205,7 @@ func syncModelPricingOverrides(m *model.Model) error {
 		_ = ratio_setting.UpdateCompletionRatioByJSONString(string(b))
 	}
 
-	// 缓存命中价格 -> CacheRatio（缓存读取倍率 = 缓存命中价格 / 输入价格）。0 恢复内置默认。
+	// 缓存命中价格 -> CacheRatio（比值 = 缓存命中价格 / 输入价格，同币种，不变）。0 恢复内置默认。
 	cacheRatioMap := ratio_setting.GetCacheRatioCopy()
 	if m.CacheHitPrice > 0 && m.InputPrice > 0 {
 		cacheRatioMap[name] = m.CacheHitPrice / m.InputPrice
@@ -217,7 +223,7 @@ func syncModelPricingOverrides(m *model.Model) error {
 		_ = ratio_setting.UpdateCacheRatioByJSONString(string(b))
 	}
 
-	// 缓存创建价格 -> CreateCacheRatio（缓存创建倍率 = 缓存创建价格 / 输入价格）。0 恢复内置默认。
+	// 缓存创建价格 -> CreateCacheRatio（比值 = 缓存创建价格 / 输入价格）。0 恢复内置默认。
 	createCacheRatioMap := ratio_setting.GetCreateCacheRatioCopy()
 	if m.CacheCreatePrice > 0 && m.InputPrice > 0 {
 		createCacheRatioMap[name] = m.CacheCreatePrice / m.InputPrice
