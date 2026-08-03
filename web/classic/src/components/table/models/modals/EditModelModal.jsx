@@ -32,6 +32,7 @@ import {
   Avatar,
   Col,
   Row,
+  Divider,
 } from '@douyinfe/semi-ui';
 import { Save, X, FileText } from 'lucide-react';
 import { IconAlertTriangle, IconLink } from '@douyinfe/semi-icons';
