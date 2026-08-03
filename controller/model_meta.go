@@ -194,20 +194,6 @@ func syncModelPricingOverrides(m *model.Model) error {
 			}
 		}
 	}
-	// 缓存未命中价格 → 写入 CacheRatio（未命中时按此价格计费，覆盖全局默认 1）
-	// 注意：new-api 原逻辑未命中时直接按 model_ratio 计费，这里用 cache_ratio 区分命中/未命中
-	if m.CacheMissPrice > 0 && m.InputPrice > 0 {
-		cacheRatioMap := ratio_setting.GetCacheRatioCopy()
-		cacheRatioMap[name] = m.CacheMissPrice / m.InputPrice
-		if b, err := common.Marshal(cacheRatioMap); err == nil {
-			if err := model.UpdateOption("CacheRatio", string(b)); err != nil {
-				return err
-			}
-			if err := ratio_setting.UpdateCacheRatioByJSONString(string(b)); err != nil {
-				return err
-			}
-		}
-	}
 	// 缓存创建价格 → 写入 CreateCacheRatio（缓存创建倍率 = 缓存创建价格 / 输入价格）
 	if m.CacheCreatePrice > 0 && m.InputPrice > 0 {
 		createCacheRatioMap := ratio_setting.GetCreateCacheRatioCopy()

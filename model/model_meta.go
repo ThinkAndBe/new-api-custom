@@ -42,7 +42,6 @@ type Model struct {
 	InputPrice        float64 `json:"input_price,omitempty" gorm:"default:0"`        // 每 1M tokens 输入价格（美元）
 	OutputPrice       float64 `json:"output_price,omitempty" gorm:"default:0"`       // 每 1M tokens 输出价格（美元）
 	CacheHitPrice     float64 `json:"cache_hit_price,omitempty" gorm:"default:0"`    // 每 1M tokens 缓存命中价格（美元）
-	CacheMissPrice    float64 `json:"cache_miss_price,omitempty" gorm:"default:0"`   // 每 1M tokens 缓存未命中价格（美元）
 	CacheCreatePrice  float64 `json:"cache_create_price,omitempty" gorm:"default:0"` // 每 1M tokens 缓存创建价格（美元）
 	PricingLocked     bool    `json:"pricing_locked,omitempty" gorm:"default:false"`
 	Status       int            `json:"status" gorm:"default:1"`
@@ -97,8 +96,8 @@ func (mi *Model) Update() error {
 		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints",
 			"max_input_tokens", "max_output_tokens", "supports_tool_call", "supports_images",
 			"supports_reasoning", "params_locked",
-			"input_price", "output_price", "cache_hit_price", "cache_miss_price",
-			"cache_create_price", "pricing_locked",
+			"input_price", "output_price", "cache_hit_price", "cache_create_price",
+			"pricing_locked",
 			"status", "sync_official", "name_rule", "updated_time").
 		Updates(mi).Error
 }
