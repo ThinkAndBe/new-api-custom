@@ -366,7 +366,7 @@ pause`;
   const ready = tokenKey && effectiveModels.length > 0;
 
   return (
-    <div className='mt-[60px] px-4 pb-8' style={{ maxWidth: 1080, margin: '0 auto' }}>
+    <div className='mt-[60px] px-4 pb-8' style={{ maxWidth: 1080, margin: '60px auto 0' }}>
       <Title heading={3} style={{ marginBottom: 4 }}>
         {t('使用教程')}
       </Title>
