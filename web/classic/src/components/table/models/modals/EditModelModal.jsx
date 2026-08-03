@@ -617,8 +617,6 @@ const EditModelModal = (props) => {
                       field='pricing_locked'
                       label={t('定价已锁定')}
                       extraText={t('管理员手动修改定价后自动标记为锁定，litellm 同步不会覆盖这些值')}
-                      checkedText={t('锁定')}
-                      uncheckedText={t('未锁定')}
                     />
                   </Col>
 

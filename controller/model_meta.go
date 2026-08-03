@@ -153,12 +153,15 @@ func UpdateModelMeta(c *gin.Context) {
 // syncModelPricingOverrides 将模型直接价格覆盖同步到全局配置。
 // 与模型参数 params_locked 同一思路：人工编辑后覆盖全局默认，litellm/官方同步不再覆盖。
 // 价格单位：美元 / 1M tokens。0 表示未配置，使用全局默认。
+//
+// new-api 倍率约定：model_ratio=1 ↔ $2/1M 输入（QuotaPerUnit=500000，$1=50万quota，
+// 1M tokens × ratio 1 = 1M quota = $2）。其余倍率均为相对输入价的无量纲比值。
 func syncModelPricingOverrides(m *model.Model) error {
 	name := m.ModelName
-	// 输入价格 → 写入 ModelRatio（按量计费输入倍率 = 价格 / $0.002）
+	// 输入价格 → ModelRatio（ratio = 价格($/1M) / 2）
 	if m.InputPrice > 0 {
 		modelRatioMap := ratio_setting.GetModelRatioCopy()
-		modelRatioMap[name] = m.InputPrice / 0.002
+		modelRatioMap[name] = m.InputPrice / 2
 		if b, err := common.Marshal(modelRatioMap); err == nil {
 			if err := model.UpdateOption("ModelRatio", string(b)); err != nil {
 				return err
