@@ -17,30 +17,38 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Layout, ImagePreview } from '@douyinfe/semi-ui';
 import PricingSidebar from './PricingSidebar';
 import PricingContent from './content/PricingContent';
 import ModelDetailSideSheet from '../modal/ModelDetailSideSheet';
 import { useModelPricingData } from '../../../../hooks/model-pricing/useModelPricingData';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
+import { useMemoDeepProps } from '../../../../hooks/common/useMemoDeepProps';
 
 const PricingPage = () => {
   const pricingData = useModelPricingData();
   const { Sider, Content } = Layout;
   const isMobile = useIsMobile();
-  const [showRatio, setShowRatio] = React.useState(false);
-  const [viewMode, setViewMode] = React.useState('card');
-  const allProps = {
-    ...pricingData,
-    showRatio,
-    setShowRatio,
-    viewMode,
-    setViewMode,
-  };
+  const [showRatio, setShowRatio] = useState(false);
+  const [viewMode, setViewMode] = useState('card');
+
+  // 基于浅层深比较，确保模型数据未变化时引用稳定，避免 PricingSidebar 等被重复渲染
+  const stablePricingData = useMemoDeepProps(pricingData);
+
+  const allProps = useMemo(
+    () => ({
+      ...stablePricingData,
+      showRatio,
+      setShowRatio,
+      viewMode,
+      setViewMode,
+    }),
+    [stablePricingData, showRatio, viewMode],
+  );
 
   return (
-    <div className='bg-white'>
+    <div className='bg-white dark:bg-slate-900'>
       <Layout className='pricing-layout'>
         {!isMobile && (
           <Sider className='pricing-scroll-hide pricing-sidebar'>

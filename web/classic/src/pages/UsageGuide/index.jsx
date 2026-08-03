@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import {
   Card,
   Spin,
@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { API, showError, showInfo, showSuccess, timestamp2string } from '../../helpers';
 import { StatusContext } from '../../context/Status';
 import { UserContext } from '../../context/User';
+import StepBadge from './StepBadge';
 
 const { Title, Text } = Typography;
 
@@ -154,8 +155,11 @@ const UsageGuide = () => {
   const effectiveModels = allUserModels;
   const effectiveParamsMap = allModelParamsMap;
   // 暂不可用模型 = 完整清单 - 当前可用（仅做展示，不参与导出）
-  const userModelsSet = new Set(userModels);
-  const disabledModels = allUserModels.filter((m) => !userModelsSet.has(m));
+  const userModelsSet = useMemo(() => new Set(userModels), [userModels]);
+  const disabledModels = useMemo(
+    () => allUserModels.filter((m) => !userModelsSet.has(m)),
+    [allUserModels, userModelsSet],
+  );
 
   // 自动生成 models.json（当管理员未设置模板时的兜底）
   const autoModelsJson = useCallback(() => {
@@ -184,7 +188,7 @@ const UsageGuide = () => {
   // 用户侧看到的配置不能跟着草稿变。
   // 模板模式：管理员模板里的模型列表可能滞后（新模型/渠道禁用未同步），
   // 这里用当前完整清单补齐缺失模型并移除已下线的模型，仅保留模板里的参数。
-  const modelsJson = useCallback(() => {
+  const modelsJson = useMemo(() => {
     if (savedTemplate.trim()) {
       const replaced = savedTemplate
         .replace(/\{\{apiKey\}\}/g, tokenKey || 'YOUR_API_KEY')
@@ -225,7 +229,7 @@ const UsageGuide = () => {
   }, [savedTemplate, tokenKey, baseUrl, autoModelsJson, effectiveModels, effectiveParamsMap]);
 
   const handleDownload = useCallback(() => {
-    const json = modelsJson();
+    const json = modelsJson;
     if (!json) {
       showError(t('请先选择令牌'));
       return;
@@ -244,7 +248,7 @@ const UsageGuide = () => {
 
   // 生成自动替换脚本
   const autoScript = useCallback((type = 'workbuddy') => {
-    const json = modelsJson();
+    const json = modelsJson;
     if (!json) return '';
     const dirName = type === 'codebuddy' ? '.codebuddy' : '.workbuddy';
     const productName = type === 'codebuddy' ? 'CodeBuddy' : 'WorkBuddy';
@@ -350,15 +354,19 @@ pause`;
     }
   }, [autoModelsJson, tokenKey, baseUrl, t]);
 
-  const tokenOptions = tokens.map((tk) => ({
-    value: String(tk.id),
-    label: tk.name || `Token #${tk.id}`,
-  }));
+  const tokenOptions = useMemo(
+    () =>
+      tokens.map((tk) => ({
+        value: String(tk.id),
+        label: tk.name || `Token #${tk.id}`,
+      })),
+    [tokens],
+  );
 
   const ready = tokenKey && effectiveModels.length > 0;
 
   return (
-    <div className='mt-[60px] px-4 pb-8' style={{ maxWidth: 1080, margin: '60px auto 0' }}>
+    <div className='mt-[60px] px-4 pb-8' style={{ maxWidth: 1080, margin: '0 auto' }}>
       <Title heading={3} style={{ marginBottom: 4 }}>
         {t('使用教程')}
       </Title>
@@ -370,12 +378,7 @@ pause`;
       {userModels.length > 0 && (
         <Card bordered style={{ marginTop: 16, padding: '16px 20px', borderColor: disabledModels.length > 0 ? 'var(--semi-color-warning)' : 'var(--semi-color-success)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <div style={{
-              width: 22, height: 22, borderRadius: '50%',
-              background: 'var(--semi-color-success)',
-              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 'bold',
-            }}>✓</div>
+            <StepBadge ready size={22} />
             <Text strong>{t('可用模型')}（{userModels.length}）</Text>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -389,12 +392,7 @@ pause`;
           {disabledModels.length > 0 && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 8 }}>
-                <div style={{
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: 'var(--semi-color-warning)',
-                  color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 'bold',
-                }}>!</div>
+                <StepBadge size={22} idleBackground='var(--semi-color-warning)' content='!' />
                 <Text strong>{t('暂不可用模型')}（{disabledModels.length}）</Text>
                 <Text type='tertiary' size='small'>{t('已包含在配置中，渠道恢复后立即可用')}</Text>
               </div>
@@ -423,14 +421,7 @@ pause`;
       {/* 第一步：选择令牌（全宽） */}
       <Card bordered style={{ marginTop: 24, padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: '50%',
-            background: ready ? 'var(--semi-color-success)' : 'var(--semi-color-primary)',
-            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 'bold',
-          }}>
-            {ready ? <Check size={16} /> : '1'}
-          </div>
+          <StepBadge step='1' ready={ready} />
           <Text strong style={{ fontSize: 16 }}>{t('选择令牌')}</Text>
         </div>
 
@@ -474,14 +465,7 @@ pause`;
       {/* 第二步：一键配置（models.json） */}
       <Card bordered style={{ marginTop: 16, padding: '20px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: '50%',
-            background: ready ? 'var(--semi-color-success)' : 'var(--semi-color-fill-2)',
-            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 'bold',
-          }}>
-            {ready ? <Check size={16} /> : '2'}
-          </div>
+          <StepBadge step='2' ready={ready} idleBackground='var(--semi-color-fill-2)' />
           <Text strong style={{ fontSize: 16 }}>{t('配置文件（models.json）')}</Text>
         </div>
 
@@ -543,7 +527,7 @@ pause`;
                 whiteSpace: 'pre',
                 wordBreak: 'normal',
               }}>
-                {modelsJson()}
+                {modelsJson}
               </pre>
             </div>
 

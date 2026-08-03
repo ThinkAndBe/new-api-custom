@@ -1,9 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Banner, Button, Card, DatePicker, Spin, Table, Typography } from '@douyinfe/semi-ui';
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  memo,
+} from 'react';
+import {
+  Banner,
+  Button,
+  Card,
+  DatePicker,
+  Spin,
+  Table,
+  Typography,
+} from '@douyinfe/semi-ui';
 import { VChart } from '@visactor/react-vchart';
 import { useTranslation } from 'react-i18next';
 import { API, renderNumber, timestamp2string } from '../../helpers';
 import { downloadCSV } from '../../helpers/csv';
+import { makeRankSpec, makeTrendSpec } from './headroomChartSpecs';
 
 const { Title, Text } = Typography;
 
@@ -38,24 +53,37 @@ const computeRange = (preset) => {
 };
 
 // AggTable 月度/年度汇总表：表格 + 合计行（参考 TokenSummaryPanel 模式）。
-const AggTable = ({ title, data, periodLabel }) => {
+const AggTable = memo(({ title, data, periodLabel, loading }) => {
   const { t } = useTranslation();
-  const columns = [
-    { title: periodLabel, dataIndex: 'time' },
-    { title: t('节省 Tokens'), dataIndex: 'tokens_saved', render: renderNumber, sorter: (a, b) => a.tokens_saved - b.tokens_saved, defaultSortOrder: 'descend' },
-    { title: t('原输入 Tokens'), dataIndex: 'tokens_input', render: renderNumber, sorter: (a, b) => a.tokens_input - b.tokens_input },
-    { title: t('实际发送'), dataIndex: 'tokens_compressed', render: renderNumber, sorter: (a, b) => a.tokens_compressed - b.tokens_compressed },
-    { title: t('请求数'), dataIndex: 'request_count', render: renderNumber, sorter: (a, b) => a.request_count - b.request_count },
-    { title: t('节省率'), dataIndex: 'average_ratio', render: (v) => `${((v || 0) * 100).toFixed(1)}%`, sorter: (a, b) => a.average_ratio - b.average_ratio },
-  ];
-  const totals = (data || []).reduce((acc, r) => {
-    acc.saved += r.tokens_saved || 0;
-    acc.input += r.tokens_input || 0;
-    acc.compressed += r.tokens_compressed || 0;
-    acc.count += r.request_count || 0;
-    return acc;
-  }, { saved: 0, input: 0, compressed: 0, count: 0 });
+  const columns = useMemo(
+    () => [
+      { title: periodLabel, dataIndex: 'time' },
+      { title: t('节省 Tokens'), dataIndex: 'tokens_saved', render: renderNumber, sorter: (a, b) => a.tokens_saved - b.tokens_saved, defaultSortOrder: 'descend' },
+      { title: t('原输入 Tokens'), dataIndex: 'tokens_input', render: renderNumber, sorter: (a, b) => a.tokens_input - b.tokens_input },
+      { title: t('实际发送'), dataIndex: 'tokens_compressed', render: renderNumber, sorter: (a, b) => a.tokens_compressed - b.tokens_compressed },
+      { title: t('请求数'), dataIndex: 'request_count', render: renderNumber, sorter: (a, b) => a.request_count - b.request_count },
+      { title: t('节省率'), dataIndex: 'average_ratio', render: (v) => `${((v || 0) * 100).toFixed(1)}%`, sorter: (a, b) => a.average_ratio - b.average_ratio },
+    ],
+    [periodLabel, t],
+  );
+
+  const totals = useMemo(
+    () =>
+      (data || []).reduce(
+        (acc, r) => {
+          acc.saved += r.tokens_saved || 0;
+          acc.input += r.tokens_input || 0;
+          acc.compressed += r.tokens_compressed || 0;
+          acc.count += r.request_count || 0;
+          return acc;
+        },
+        { saved: 0, input: 0, compressed: 0, count: 0 },
+      ),
+    [data],
+  );
+
   const totalRatio = totals.input > 0 ? totals.saved / totals.input : 0;
+
   return (
     <Card className='!rounded-2xl'>
       <Title heading={5} style={{ marginBottom: 12 }}>{title}</Title>
@@ -64,6 +92,7 @@ const AggTable = ({ title, data, periodLabel }) => {
         dataSource={data}
         rowKey='time'
         size='small'
+        loading={loading}
         pagination={data && data.length > 12 ? { pageSize: 12, size: 'small' } : false }
       />
       <div className='mt-3 p-2 rounded' style={{ background: 'var(--semi-color-fill-1)' }}>
@@ -75,7 +104,9 @@ const AggTable = ({ title, data, periodLabel }) => {
       </div>
     </Card>
   );
-};
+});
+
+AggTable.displayName = 'AggTable';
 
 const HeadroomDashboard = () => {
   const { t } = useTranslation();
@@ -94,14 +125,20 @@ const HeadroomDashboard = () => {
   const [trend, setTrend] = useState([]);
   const [trendGranularity, setTrendGranularity] = useState('day');
 
-  // 月度/年度汇总
+  // 月度/年度汇总：独立于时间范围，仅挂载时请求一次
   const [monthly, setMonthly] = useState([]);
   const [yearly, setYearly] = useState([]);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+  const [yearlyLoading, setYearlyLoading] = useState(false);
 
-  // 时间范围：使用和数剧看板一致的时间戳字符串格式
+  // 时间范围：使用和数据看板一致的时间戳字符串格式
   // appliedStart/appliedEnd 是当前生效的（用于查询），pending 是选择中的
-  const [appliedStart, setAppliedStart] = useState(() => timestamp2string(computeRange('today')[0]));
-  const [appliedEnd, setAppliedEnd] = useState(() => timestamp2string(computeRange('today')[1]));
+  const [appliedStart, setAppliedStart] = useState(() =>
+    timestamp2string(computeRange('today')[0]),
+  );
+  const [appliedEnd, setAppliedEnd] = useState(() =>
+    timestamp2string(computeRange('today')[1]),
+  );
   const [pendingStart, setPendingStart] = useState(appliedStart);
   const [pendingEnd, setPendingEnd] = useState(appliedEnd);
 
@@ -119,16 +156,13 @@ const HeadroomDashboard = () => {
 
   const loadAggData = useCallback(async () => {
     const params = buildParams();
-    const [s, m, u, c, cm, tr, mo, yr] = await Promise.all([
+    const [s, m, u, c, cm, tr] = await Promise.all([
       API.get('/api/data/headroom/summary', { params }),
       API.get('/api/data/headroom/by_model', { params }),
       API.get('/api/data/headroom/by_user', { params }),
       API.get('/api/data/headroom/by_channel', { params }),
       API.get('/api/data/headroom/by_channel_model', { params }),
       API.get('/api/data/headroom/trend', { params }),
-      // 月度/年度汇总独立于时间范围，始终返回全部历史
-      API.get('/api/data/headroom/monthly'),
-      API.get('/api/data/headroom/yearly'),
     ]);
     if (s.data.success) setSummary(s.data.data || {});
     if (m.data.success) setByModel(m.data.data || []);
@@ -139,20 +173,49 @@ const HeadroomDashboard = () => {
       setTrend(tr.data.data || []);
       setTrendGranularity(tr.data.granularity || 'day');
     }
-    if (mo.data.success) setMonthly(mo.data.data || []);
-    if (yr.data.success) setYearly(yr.data.data || []);
   }, [buildParams]);
 
-  const loadRecentData = useCallback(async (page, pageSize) => {
-    const params = { ...buildParams(), page, page_size: pageSize };
-    const r = await API.get('/api/data/headroom/recent', { params });
-    if (r.data.success) {
-      setRecent(r.data.data || []);
-      setRecentTotal(r.data.total || 0);
-    }
-  }, [buildParams]);
+  const loadRecentData = useCallback(
+    async (page, pageSize) => {
+      const params = { ...buildParams(), page, page_size: pageSize };
+      const r = await API.get('/api/data/headroom/recent', { params });
+      if (r.data.success) {
+        setRecent(r.data.data || []);
+        setRecentTotal(r.data.total || 0);
+      }
+    },
+    [buildParams],
+  );
 
-  // appliedStart/appliedEnd 变化时重新加载全部数据
+  // 月度/年度统计与时间范围无关，仅挂载时请求一次
+  useEffect(() => {
+    const fetchMonthly = async () => {
+      setMonthlyLoading(true);
+      try {
+        const res = await API.get('/api/data/headroom/monthly');
+        if (res.data?.success) setMonthly(res.data.data || []);
+      } catch (e) {
+        /* 忽略月度统计失败 */
+      } finally {
+        setMonthlyLoading(false);
+      }
+    };
+    const fetchYearly = async () => {
+      setYearlyLoading(true);
+      try {
+        const res = await API.get('/api/data/headroom/yearly');
+        if (res.data?.success) setYearly(res.data.data || []);
+      } catch (e) {
+        /* 忽略年度统计失败 */
+      } finally {
+        setYearlyLoading(false);
+      }
+    };
+    fetchMonthly();
+    fetchYearly();
+  }, []);
+
+  // appliedStart/appliedEnd 变化时重新加载时间范围相关数据
   useEffect(() => {
     const loadAll = async () => {
       setLoading(true);
@@ -235,66 +298,73 @@ const HeadroomDashboard = () => {
     downloadCSV(`headroom_detail_${Date.now()}.csv`, rows);
   };
 
-  const makeRankSpec = (title, data) => ({
-    type: 'bar',
-    direction: 'horizontal',
-    data: [{ id: 'data', values: (data || []).slice(0, 15) }],
-    xField: 'tokens_saved',
-    yField: 'name',
-    seriesField: 'name',
-    legends: { visible: false },
-    title: { visible: true, text: title },
-    label: { visible: true, position: 'outside', formatMethod: (v) => renderNumber(v || 0) },
-    tooltip: {
-      mark: {
-        content: [
-          { key: (d) => d.name, value: (d) => `${renderNumber(d.tokens_saved)} tokens` },
-          { key: () => t('请求数'), value: (d) => renderNumber(d.request_count || 0) },
-        ],
-      },
-    },
-  });
+  // 预展平趋势数据，避免每次渲染新建 spec 时重复 flatMap
+  const trendFlat = useMemo(
+    () =>
+      (trend || []).flatMap((r) => [
+        {
+          time: r.time,
+          type: t('实际发送'),
+          value: r.tokens_compressed || 0,
+          request_count: r.request_count || 0,
+          average_ratio: r.average_ratio || 0,
+        },
+        {
+          time: r.time,
+          type: t('节省'),
+          value: r.tokens_saved || 0,
+          request_count: r.request_count || 0,
+          average_ratio: r.average_ratio || 0,
+        },
+      ]),
+    [trend, t],
+  );
 
-  // 历史趋势图：堆叠面积图，tokens_compressed（实际发送）+ tokens_saved（节省）= tokens_input
-  const granularityLabel = (g) => (g === 'month' ? t('按月') : g === 'week' ? t('按周') : t('按日'));
-  const makeTrendSpec = (data, granularity) => ({
-    type: 'area',
-    stack: true,
-    data: [{ id: 'trendData', values: (data || []) }],
-    xField: 'time',
-    yField: 'value',
-    seriesField: 'type',
-    legends: { visible: true, selectMode: 'single' },
-    title: { visible: true, text: `${t('历史趋势')}（${granularityLabel(granularity)}）` },
-    axes: [
-      { orient: 'left', label: { formatMethod: (v) => renderNumber(v || 0) } },
-      { orient: 'bottom', label: { autoLimit: false, autoHide: true } },
+  // VChart spec 用 useMemo 稳定引用，避免 trend 无关渲染触发图表重建
+  const modelRankSpec = useMemo(
+    () => makeRankSpec(t('按模型节省排行'), byModel, t),
+    [byModel, t],
+  );
+  const channelRankSpec = useMemo(
+    () => makeRankSpec(t('按渠道节省排行'), byChannel, t),
+    [byChannel, t],
+  );
+  const userRankSpec = useMemo(
+    () => makeRankSpec(t('按用户节省排行'), byUser, t),
+    [byUser, t],
+  );
+  const trendSpec = useMemo(
+    () => makeTrendSpec(trendFlat, trendGranularity, t),
+    [trendFlat, trendGranularity, t],
+  );
+
+  const columns = useMemo(
+    () => [
+      { title: t('时间'), dataIndex: 'created_at', render: (v) => new Date(v * 1000).toLocaleString() },
+      { title: t('用户'), dataIndex: 'username' },
+      { title: t('模型'), dataIndex: 'model_name' },
+      { title: t('渠道'), dataIndex: 'channel_name', render: (v, r) => v || `渠道#${r.channel_id}` },
+      { title: t('原输入 Tokens'), dataIndex: 'headroom_tokens_input', render: renderNumber },
+      { title: t('节省 Tokens'), dataIndex: 'headroom_tokens_saved', render: renderNumber },
+      { title: t('实际输入 Tokens'), dataIndex: 'prompt_tokens', render: renderNumber },
+      { title: t('输出 Tokens'), dataIndex: 'completion_tokens', render: renderNumber },
+      { title: t('压缩率'), dataIndex: 'headroom_ratio', render: (v) => `${((v || 0) * 100).toFixed(1)}%` },
     ],
-    area: { style: { fillOpacity: 0.25 } },
-    line: { style: { lineWidth: 2 } },
-    point: { visible: false },
-    tooltip: {
-      mark: {
-        content: [
-          { key: (d) => d.type, value: (d) => `${renderNumber(d.value)} tokens` },
-          { key: () => t('请求数'), value: (d) => renderNumber(d.request_count || 0) },
-          { key: () => t('节省率'), value: (d) => `${((d.average_ratio || 0) * 100).toFixed(1)}%` },
-        ],
-      },
-    },
-  });
+    [t],
+  );
 
-  const columns = [
-    { title: t('时间'), dataIndex: 'created_at', render: (v) => new Date(v * 1000).toLocaleString() },
-    { title: t('用户'), dataIndex: 'username' },
-    { title: t('模型'), dataIndex: 'model_name' },
-    { title: t('渠道'), dataIndex: 'channel_name', render: (v, r) => v || `渠道#${r.channel_id}` },
-    { title: t('原输入 Tokens'), dataIndex: 'headroom_tokens_input', render: renderNumber },
-    { title: t('节省 Tokens'), dataIndex: 'headroom_tokens_saved', render: renderNumber },
-    { title: t('实际输入 Tokens'), dataIndex: 'prompt_tokens', render: renderNumber },
-    { title: t('输出 Tokens'), dataIndex: 'completion_tokens', render: renderNumber },
-    { title: t('压缩率'), dataIndex: 'headroom_ratio', render: (v) => `${((v || 0) * 100).toFixed(1)}%` },
-  ];
+  const channelModelColumns = useMemo(
+    () => [
+      { title: t('渠道'), dataIndex: 'channel_name', width: 180, sorter: (a, b) => a.channel_name?.localeCompare(b.channel_name) },
+      { title: t('模型'), dataIndex: 'model_name', width: 160, sorter: (a, b) => a.model_name?.localeCompare(b.model_name) },
+      { title: t('请求数'), dataIndex: 'request_count', width: 90, sorter: (a, b) => a.request_count - b.request_count, render: renderNumber },
+      { title: t('节省率'), dataIndex: 'average_ratio', width: 90, sorter: (a, b) => a.average_ratio - b.average_ratio, defaultSortOrder: 'descend', render: (v) => <span className='text-green-600 dark:text-green-400 font-semibold'>{((v || 0) * 100).toFixed(1)}%</span> },
+      { title: t('缓存命中率'), dataIndex: 'cache_hit_rate', width: 100, sorter: (a, b) => a.cache_hit_rate - b.cache_hit_rate, render: (v) => <span className='text-blue-600 dark:text-blue-400 font-semibold'>{((v || 0) * 100).toFixed(1)}%</span> },
+      { title: t('命中 Tokens'), dataIndex: 'cache_hit_tokens', width: 120, sorter: (a, b) => a.cache_hit_tokens - b.cache_hit_tokens, render: renderNumber },
+      { title: t('节省 Tokens'), dataIndex: 'tokens_saved', width: 120, sorter: (a, b) => a.tokens_saved - b.tokens_saved, render: renderNumber },
+    ],
+    [t],
+  );
 
   // 当前生效范围的友好展示
   const currentRangeLabel = `${appliedStart || '?'} ~ ${appliedEnd || '?'}`;
@@ -356,7 +426,7 @@ const HeadroomDashboard = () => {
               <div className='mt-2 space-y-1'>
                 <div className='flex items-baseline justify-between'>
                   <Text type='tertiary' size='small'>{t('节省率')}</Text>
-                  <span className='text-xl font-bold text-green-600'>{((summary.average_ratio || 0) * 100).toFixed(1)}%</span>
+                  <span className='text-xl font-bold text-green-600 dark:text-green-400'>{((summary.average_ratio || 0) * 100).toFixed(1)}%</span>
                 </div>
                 <div className='flex items-baseline justify-between'>
                   <Text type='tertiary' size='small'>{t('节省 Tokens')}</Text>
@@ -382,7 +452,7 @@ const HeadroomDashboard = () => {
               <div className='mt-2 space-y-1'>
                 <div className='flex items-baseline justify-between'>
                   <Text type='tertiary' size='small'>{t('命中率')}</Text>
-                  <span className='text-xl font-bold text-blue-600'>{((summary.cache_hit_rate || 0) * 100).toFixed(1)}%</span>
+                  <span className='text-xl font-bold text-blue-600 dark:text-blue-400'>{((summary.cache_hit_rate || 0) * 100).toFixed(1)}%</span>
                 </div>
                 <div className='flex items-baseline justify-between'>
                   <Text type='tertiary' size='small'>{t('命中 Tokens')}</Text>
@@ -404,12 +474,12 @@ const HeadroomDashboard = () => {
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
             <Card className='!rounded-2xl'>
               <div className='h-96'>
-                <VChart spec={makeRankSpec(t('按模型节省排行'), byModel)} />
+                <VChart spec={modelRankSpec} />
               </div>
             </Card>
             <Card className='!rounded-2xl'>
               <div className='h-96'>
-                <VChart spec={makeRankSpec(t('按渠道节省排行'), byChannel)} />
+                <VChart spec={channelRankSpec} />
               </div>
             </Card>
           </div>
@@ -422,43 +492,27 @@ const HeadroomDashboard = () => {
                 rowKey='name'
                 pagination={{ pageSize: 15, showSizeChanger: true }}
                 size='small'
-                columns={[
-                  { title: t('渠道'), dataIndex: 'channel_name', width: 180, sorter: (a,b) => a.channel_name?.localeCompare(b.channel_name) },
-                  { title: t('模型'), dataIndex: 'model_name', width: 160, sorter: (a,b) => a.model_name?.localeCompare(b.model_name) },
-                  { title: t('请求数'), dataIndex: 'request_count', width: 90, sorter: (a,b) => a.request_count - b.request_count, render: renderNumber },
-                  { title: t('节省率'), dataIndex: 'average_ratio', width: 90, sorter: (a,b) => a.average_ratio - b.average_ratio, defaultSortOrder: 'descend', render: (v) => <span className='text-green-600 font-semibold'>{((v||0)*100).toFixed(1)}%</span> },
-                  { title: t('缓存命中率'), dataIndex: 'cache_hit_rate', width: 100, sorter: (a,b) => a.cache_hit_rate - b.cache_hit_rate, render: (v) => <span className='text-blue-600 font-semibold'>{((v||0)*100).toFixed(1)}%</span> },
-                  { title: t('命中 Tokens'), dataIndex: 'cache_hit_tokens', width: 120, sorter: (a,b) => a.cache_hit_tokens - b.cache_hit_tokens, render: renderNumber },
-                  { title: t('节省 Tokens'), dataIndex: 'tokens_saved', width: 120, sorter: (a,b) => a.tokens_saved - b.tokens_saved, render: renderNumber },
-                ]}
+                columns={channelModelColumns}
               />
             </Card>
           )}
 
           <Card className='!rounded-2xl' title={t('历史趋势')}>
             <div className='h-96'>
-              <VChart
-                spec={makeTrendSpec(
-                  trend.flatMap((r) => [
-                    { time: r.time, type: t('实际发送'), value: r.tokens_compressed || 0, request_count: r.request_count, average_ratio: r.average_ratio },
-                    { time: r.time, type: t('节省'), value: r.tokens_saved || 0, request_count: r.request_count, average_ratio: r.average_ratio },
-                  ]),
-                  trendGranularity
-                )}
-              />
+              <VChart spec={trendSpec} />
             </div>
           </Card>
 
           <Card className='!rounded-2xl'>
             <div className='h-96'>
-              <VChart spec={makeRankSpec(t('按用户节省排行'), byUser)} />
+              <VChart spec={userRankSpec} />
             </div>
           </Card>
 
           {/* 月度/年度汇总表 */}
           <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
-            <AggTable title={t('月度汇总')} data={monthly} periodLabel={t('月份')} />
-            <AggTable title={t('年度汇总')} data={yearly} periodLabel={t('年份')} />
+            <AggTable title={t('月度汇总')} data={monthly} periodLabel={t('月份')} loading={monthlyLoading} />
+            <AggTable title={t('年度汇总')} data={yearly} periodLabel={t('年份')} loading={yearlyLoading} />
           </div>
 
           <Card title={t('压缩记录明细')} className='!rounded-2xl'>

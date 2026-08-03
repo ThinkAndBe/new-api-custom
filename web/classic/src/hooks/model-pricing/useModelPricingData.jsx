@@ -17,7 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useContext, useRef, useMemo } from 'react';
+import {
+  useState,
+  useEffect,
+  useContext,
+  useRef,
+  useMemo,
+  useCallback,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { API, copy, showError, showInfo, showSuccess } from '../../helpers';
 import { Modal } from '@douyinfe/semi-ui';
@@ -39,8 +46,14 @@ export const useModelPricingData = () => {
   const [filterEndpointType, setFilterEndpointType] = useState('all'); // 端点类型筛选: 'all' | string
   const [filterVendor, setFilterVendor] = useState('all'); // 供应商筛选: 'all' | 'unknown' | string
   const [filterTag, setFilterTag] = useState('all'); // 模型标签筛选: 'all' | string
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSizeState] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // 切换页大小时同步重置到第一页（与卡片视图行为对齐）
+  const setPageSize = useCallback((size) => {
+    setPageSizeState(size);
+    setCurrentPage(1);
+  }, []);
   const [currency, setCurrency] = useState('USD');
   const [showWithRecharge, setShowWithRecharge] = useState(false);
   const [tokenUnit, setTokenUnit] = useState('M');
@@ -168,48 +181,64 @@ export const useModelPricingData = () => {
     filterTag,
   ]);
 
+  const handleRowSelectionChange = useCallback((keys) => {
+    setSelectedRowKeys(keys);
+  }, []);
+
   const rowSelection = useMemo(
     () => ({
       selectedRowKeys,
-      onChange: (keys) => {
-        setSelectedRowKeys(keys);
-      },
+      onChange: handleRowSelectionChange,
     }),
-    [selectedRowKeys],
+    [selectedRowKeys, handleRowSelectionChange],
   );
 
-  const displayPrice = (usdPrice) => {
-    let priceInUSD = usdPrice;
-    if (showWithRecharge) {
-      priceInUSD = (usdPrice * priceRate) / usdExchangeRate;
-    }
+  const displayPrice = useCallback(
+    (usdPrice) => {
+      let priceInUSD = usdPrice;
+      if (showWithRecharge) {
+        priceInUSD = (usdPrice * priceRate) / usdExchangeRate;
+      }
 
-    if (currency === 'CNY') {
-      return `¥${(priceInUSD * usdExchangeRate).toFixed(3)}`;
-    } else if (currency === 'CUSTOM') {
-      return `${customCurrencySymbol}${(priceInUSD * customExchangeRate).toFixed(3)}`;
-    }
-    return `$${priceInUSD.toFixed(3)}`;
-  };
+      if (currency === 'CNY') {
+        return `¥${(priceInUSD * usdExchangeRate).toFixed(3)}`;
+      } else if (currency === 'CUSTOM') {
+        return `${customCurrencySymbol}${(priceInUSD * customExchangeRate).toFixed(3)}`;
+      }
+      return `$${priceInUSD.toFixed(3)}`;
+    },
+    [
+      showWithRecharge,
+      priceRate,
+      usdExchangeRate,
+      currency,
+      customCurrencySymbol,
+      customExchangeRate,
+    ],
+  );
 
-  const setModelsFormat = (models, groupRatio, vendorMap) => {
-    for (let i = 0; i < models.length; i++) {
-      const m = models[i];
-      m.key = m.model_name;
-      m.group_ratio = groupRatio[m.model_name];
-
+  // 生成格式化后的新数组，不原地修改接口返回的数据
+  const formatModels = useCallback((rawModels, groupRatio, vendorMap) => {
+    const formatted = (rawModels || []).map((m) => {
+      const next = {
+        ...m,
+        key: m.model_name,
+        group_ratio: groupRatio[m.model_name],
+      };
       if (m.vendor_id && vendorMap[m.vendor_id]) {
         const vendor = vendorMap[m.vendor_id];
-        m.vendor_name = vendor.name;
-        m.vendor_icon = vendor.icon;
-        m.vendor_description = vendor.description;
+        next.vendor_name = vendor.name;
+        next.vendor_icon = vendor.icon;
+        next.vendor_description = vendor.description;
       }
-    }
-    models.sort((a, b) => {
+      return next;
+    });
+
+    formatted.sort((a, b) => {
       return a.quota_type - b.quota_type;
     });
 
-    models.sort((a, b) => {
+    formatted.sort((a, b) => {
       if (a.model_name.startsWith('gpt') && !b.model_name.startsWith('gpt')) {
         return -1;
       } else if (
@@ -222,102 +251,116 @@ export const useModelPricingData = () => {
       }
     });
 
-    setModels(models);
-  };
+    return formatted;
+  }, []);
 
-  const loadPricing = async () => {
+  const loadPricing = useCallback(async () => {
     setLoading(true);
-    let url = '/api/pricing';
-    const res = await API.get(url);
-    const {
-      success,
-      message,
-      data,
-      vendors,
-      group_ratio,
-      usable_group,
-      supported_endpoint,
-      auto_groups,
-    } = res.data;
-    if (success) {
-      setGroupRatio(group_ratio);
-      setUsableGroup(usable_group);
-      setSelectedGroup('all');
-      // 构建供应商 Map 方便查找
-      const vendorMap = {};
-      if (Array.isArray(vendors)) {
-        vendors.forEach((v) => {
-          vendorMap[v.id] = v;
+    try {
+      let url = '/api/pricing';
+      const res = await API.get(url);
+      const {
+        success,
+        message,
+        data,
+        vendors,
+        group_ratio,
+        usable_group,
+        supported_endpoint,
+        auto_groups,
+      } = res.data;
+      if (success) {
+        setGroupRatio(group_ratio);
+        setUsableGroup(usable_group);
+        setSelectedGroup('all');
+        // 构建供应商 Map 方便查找
+        const vendorMap = {};
+        if (Array.isArray(vendors)) {
+          vendors.forEach((v) => {
+            vendorMap[v.id] = v;
+          });
+        }
+        setVendorsMap(vendorMap);
+        setEndpointMap(supported_endpoint || {});
+        setAutoGroups(auto_groups || []);
+        setModels(formatModels(data, group_ratio, vendorMap));
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(t('模型广场数据加载失败，请稍后重试'));
+    } finally {
+      setLoading(false);
+    }
+  }, [formatModels, t]);
+
+  const refresh = useCallback(async () => {
+    await loadPricing();
+  }, [loadPricing]);
+
+  const copyText = useCallback(
+    async (text) => {
+      if (await copy(text)) {
+        showSuccess(t('已复制：') + text);
+      } else {
+        Modal.error({
+          title: t('无法复制到剪贴板，请手动复制'),
+          content: text,
         });
       }
-      setVendorsMap(vendorMap);
-      setEndpointMap(supported_endpoint || {});
-      setAutoGroups(auto_groups || []);
-      setModelsFormat(data, group_ratio, vendorMap);
-    } else {
-      showError(message);
-    }
-    setLoading(false);
-  };
+    },
+    [t],
+  );
 
-  const refresh = async () => {
-    await loadPricing();
-  };
-
-  const copyText = async (text) => {
-    if (await copy(text)) {
-      showSuccess(t('已复制：') + text);
-    } else {
-      Modal.error({ title: t('无法复制到剪贴板，请手动复制'), content: text });
-    }
-  };
-
-  const handleChange = (value) => {
+  const handleChange = useCallback((value) => {
     const newSearchValue = value ? value : '';
     setSearchValue(newSearchValue);
-  };
+  }, []);
 
-  const handleCompositionStart = () => {
+  const handleCompositionStart = useCallback(() => {
     compositionRef.current.isComposition = true;
-  };
+  }, []);
 
-  const handleCompositionEnd = (event) => {
+  const handleCompositionEnd = useCallback((event) => {
     compositionRef.current.isComposition = false;
     const value = event.target.value;
     const newSearchValue = value ? value : '';
     setSearchValue(newSearchValue);
-  };
+  }, []);
 
-  const handleGroupClick = (group) => {
-    setSelectedGroup(group);
-    setFilterGroup(group);
-    if (group === 'all') {
-      showInfo(t('已切换至最优倍率视图，每个模型使用其最低倍率分组'));
-    } else {
-      showInfo(
-        t('当前查看的分组为：{{group}}，倍率为：{{ratio}}', {
-          group: group,
-          ratio: groupRatio[group] ?? 1,
-        }),
-      );
-    }
-  };
+  const handleGroupClick = useCallback(
+    (group) => {
+      setSelectedGroup(group);
+      setFilterGroup(group);
+      if (group === 'all') {
+        showInfo(t('已切换至最优倍率视图，每个模型使用其最低倍率分组'));
+      } else {
+        showInfo(
+          t('当前查看的分组为：{{group}}，倍率为：{{ratio}}', {
+            group: group,
+            ratio: groupRatio[group] ?? 1,
+          }),
+        );
+      }
+    },
+    [groupRatio, t],
+  );
 
-  const openModelDetail = (model) => {
+  const openModelDetail = useCallback((model) => {
     setSelectedModel(model);
     setShowModelDetail(true);
-  };
+  }, []);
 
-  const closeModelDetail = () => {
+  const closeModelDetail = useCallback(() => {
     setShowModelDetail(false);
     setTimeout(() => {
       setSelectedModel(null);
     }, 300);
-  };
+  }, []);
 
   useEffect(() => {
     refresh().then();
-  }, []);
+  }, [refresh]);
 
   // 当筛选条件变化时重置到第一页
   useEffect(() => {
