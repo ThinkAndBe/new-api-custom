@@ -130,6 +130,11 @@ const EditModelModal = (props) => {
     supports_tool_call: false,
     supports_images: false,
     supports_reasoning: false,
+    // 定价覆盖（与模型参数同一规则：0/-1 表示未配置，人工编辑后锁定）
+    model_ratio: 0,
+    completion_ratio: 0,
+    quota_type: -1,
+    model_price: 0,
   });
 
   const handleCancel = () => {
@@ -157,6 +162,10 @@ const EditModelModal = (props) => {
         // 处理status/sync_official，将数字转为布尔值
         data.status = data.status === 1;
         data.sync_official = (data.sync_official ?? 1) === 1;
+        // 定价字段：quota_type 为 -1 时表单展示为 -1（未配置）
+        if (data.quota_type === undefined || data.quota_type === null) {
+          data.quota_type = -1;
+        }
         if (formApiRef.current) {
           formApiRef.current.setValues({ ...getInitValues(), ...data });
         }
@@ -201,6 +210,9 @@ const EditModelModal = (props) => {
       // 检测管理员是否手动改过模型能力参数：只要任一参数非零值或非默认 false，即视为已编辑
       const paramsEdited = values.max_input_tokens > 0 || values.max_output_tokens > 0
         || values.supports_tool_call || values.supports_images || values.supports_reasoning;
+      // 检测管理员是否手动改过定价：只要任一定价字段非默认，即视为已编辑
+      const pricingEdited = values.model_ratio > 0 || values.completion_ratio > 0
+        || values.quota_type >= 0 || values.model_price > 0;
       const submitData = {
         ...values,
         tags: Array.isArray(values.tags) ? values.tags.join(',') : values.tags,
@@ -214,6 +226,12 @@ const EditModelModal = (props) => {
         supports_images: !!values.supports_images,
         supports_reasoning: !!values.supports_reasoning,
         params_locked: !!paramsEdited,
+        // 定价字段
+        model_ratio: Number(values.model_ratio) || 0,
+        completion_ratio: Number(values.completion_ratio) || 0,
+        quota_type: values.quota_type >= 0 ? Number(values.quota_type) : -1,
+        model_price: Number(values.model_price) || 0,
+        pricing_locked: !!pricingEdited,
       };
 
       if (isEdit) {
@@ -540,6 +558,75 @@ const EditModelModal = (props) => {
                       }
                     />
                   </Col>
+                  <Col span={24}>
+                    <Divider style={{ margin: '12px 0' }}>{t('定价设置（可选，与全局配置联动）')}</Divider>
+                    <Banner
+                      type='info'
+                      description={t('留空/0 表示使用全局默认配置。人工修改后将覆盖全局默认，并标记为已锁定（litellm 同步不再覆盖）。')}
+                      style={{ marginBottom: 12 }}
+                    />
+                  </Col>
+
+                  <Col span={24}>
+                    <Form.Select
+                      field='quota_type'
+                      label={t('计费类型')}
+                      optionList={[
+                        { value: -1, label: t('未配置（使用全局默认）') },
+                        { value: 0, label: t('按量计费') },
+                        { value: 1, label: t('按次计费') },
+                      ]}
+                      extraText={t('选择计费类型后，可进一步配置对应倍率/价格')}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='model_ratio'
+                      label={t('模型倍率')}
+                      placeholder={t('0 = 未配置')}
+                      min={0}
+                      precision={3}
+                      extraText={t('按量计费时的输入倍率，0 表示使用全局默认')}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='completion_ratio'
+                      label={t('补全倍率')}
+                      placeholder={t('0 = 未配置')}
+                      min={0}
+                      precision={3}
+                      extraText={t('按量计费时的输出倍率，0 表示使用全局默认')}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+
+                  <Col span={24}>
+                    <Form.InputNumber
+                      field='model_price'
+                      label={t('按次价格（美元）')}
+                      placeholder={t('0 = 未配置')}
+                      min={0}
+                      precision={4}
+                      extraText={t('按次计费时的单次价格，0 表示使用全局默认')}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+
+                  <Col span={24}>
+                    <Form.Switch
+                      field='pricing_locked'
+                      label={t('定价已锁定')}
+                      extraText={t('管理员手动修改定价后自动标记为锁定，litellm 同步不会覆盖这些值')}
+                      checkedText={t('已锁定')}
+                      uncheckedText={t('未锁定')}
+                    />
+                  </Col>
+
                   <Col span={24}>
                     <Form.Switch
                       field='sync_official'

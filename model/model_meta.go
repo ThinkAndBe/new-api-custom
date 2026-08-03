@@ -37,6 +37,14 @@ type Model struct {
 	SupportsImages    bool `json:"supports_images,omitempty" gorm:"default:false"`
 	SupportsReasoning bool `json:"supports_reasoning,omitempty" gorm:"default:false"`
 	ParamsLocked      bool `json:"params_locked,omitempty" gorm:"default:false"`
+	// 定价覆盖字段（与 params_locked 同一思路：人工编辑后锁定，不随官方同步覆盖）
+	// 0 = 未配置/使用全局默认；非 0 = 人工覆盖值
+	ModelRatio      float64 `json:"model_ratio,omitempty" gorm:"default:0"`
+	CompletionRatio float64 `json:"completion_ratio,omitempty" gorm:"default:0"`
+	// QuotaType 覆盖：-1 = 未配置；0 = 按量计费；1 = 按次计费
+	QuotaType      int     `json:"quota_type,omitempty" gorm:"default:-1"`
+	ModelPrice     float64 `json:"model_price,omitempty" gorm:"default:0"`
+	PricingLocked  bool    `json:"pricing_locked,omitempty" gorm:"default:false"`
 	Status       int            `json:"status" gorm:"default:1"`
 	SyncOfficial int            `json:"sync_official" gorm:"default:1"`
 	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
@@ -89,6 +97,7 @@ func (mi *Model) Update() error {
 		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints",
 			"max_input_tokens", "max_output_tokens", "supports_tool_call", "supports_images",
 			"supports_reasoning", "params_locked",
+			"model_ratio", "completion_ratio", "quota_type", "model_price", "pricing_locked",
 			"status", "sync_official", "name_rule", "updated_time").
 		Updates(mi).Error
 }

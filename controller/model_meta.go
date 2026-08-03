@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"encoding/json"
 	"sort"
 	"strconv"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -135,6 +135,12 @@ func UpdateModelMeta(c *gin.Context) {
 			return
 		}
 
+		// 同步定价覆盖到全局 ratio 配置（与模型参数 params_locked 同一思路）
+		if err := syncModelPricingOverrides(&m); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+
 		if err := m.Update(); err != nil {
 			common.ApiError(c, err)
 			return
@@ -142,6 +148,52 @@ func UpdateModelMeta(c *gin.Context) {
 	}
 	model.RefreshPricing()
 	common.ApiSuccess(c, &m)
+}
+
+// syncModelPricingOverrides 将模型定价覆盖字段同步到全局 ratio 配置。
+// 与模型参数 params_locked 同一思路：人工编辑后覆盖全局默认，litellm/官方同步不再覆盖。
+func syncModelPricingOverrides(m *model.Model) error {
+	name := m.ModelName
+	// 模型倍率
+	if m.ModelRatio > 0 {
+		modelRatioMap := ratio_setting.GetModelRatioCopy()
+		modelRatioMap[name] = m.ModelRatio
+		if b, err := common.Marshal(modelRatioMap); err == nil {
+			if err := model.UpdateOption("ModelRatio", string(b)); err != nil {
+				return err
+			}
+			if err := ratio_setting.UpdateModelRatioByJSONString(string(b)); err != nil {
+				return err
+			}
+		}
+	}
+	// 补全倍率
+	if m.CompletionRatio > 0 {
+		completionRatioMap := ratio_setting.GetCompletionRatioCopy()
+		completionRatioMap[name] = m.CompletionRatio
+		if b, err := common.Marshal(completionRatioMap); err == nil {
+			if err := model.UpdateOption("CompletionRatio", string(b)); err != nil {
+				return err
+			}
+			if err := ratio_setting.UpdateCompletionRatioByJSONString(string(b)); err != nil {
+				return err
+			}
+		}
+	}
+	// 按次计费价格（quota_type=1 时生效）
+	if m.QuotaType == 1 && m.ModelPrice > 0 {
+		modelPriceMap := ratio_setting.GetModelPriceCopy()
+		modelPriceMap[name] = m.ModelPrice
+		if b, err := common.Marshal(modelPriceMap); err == nil {
+			if err := model.UpdateOption("ModelPrice", string(b)); err != nil {
+				return err
+			}
+			if err := ratio_setting.UpdateModelPriceByJSONString(string(b)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // DeleteModelMeta 删除模型
@@ -192,7 +244,7 @@ func enrichModels(models []*model.Model) {
 			mm := models[idx]
 			if mm.Endpoints == "" {
 				eps := model.GetModelSupportEndpointTypes(mm.ModelName)
-				if b, err := json.Marshal(eps); err == nil {
+				if b, err := common.Marshal(eps); err == nil {
 					mm.Endpoints = string(b)
 				}
 			}
@@ -282,7 +334,7 @@ func enrichModels(models []*model.Model) {
 			for et := range es {
 				eps = append(eps, et)
 			}
-			if b, err := json.Marshal(eps); err == nil {
+			if b, err := common.Marshal(eps); err == nil {
 				mm.Endpoints = string(b)
 			}
 		}
