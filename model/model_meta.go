@@ -37,18 +37,14 @@ type Model struct {
 	SupportsImages    bool `json:"supports_images,omitempty" gorm:"default:false"`
 	SupportsReasoning bool `json:"supports_reasoning,omitempty" gorm:"default:false"`
 	ParamsLocked      bool `json:"params_locked,omitempty" gorm:"default:false"`
-	// 定价覆盖字段（与 params_locked 同一思路：人工编辑后锁定，不随官方同步覆盖）
-	// 0 = 未配置/使用全局默认；非 0 = 人工覆盖值
-	ModelRatio      float64 `json:"model_ratio,omitempty" gorm:"default:0"`
-	CompletionRatio float64 `json:"completion_ratio,omitempty" gorm:"default:0"`
-	// QuotaType 覆盖：-1 = 未配置；0 = 按量计费；1 = 按次计费
-	QuotaType      int     `json:"quota_type,omitempty" gorm:"default:-1"`
-	ModelPrice     float64 `json:"model_price,omitempty" gorm:"default:0"`
-	// 缓存价格：命中缓存时的读取倍率，0 = 未配置（全局默认 1）
-	CacheRatio       float64 `json:"cache_ratio,omitempty" gorm:"default:0"`
-	// 缓存创建价格：写入缓存时的倍率，0 = 未配置（全局默认 1.25）
-	CreateCacheRatio float64 `json:"create_cache_ratio,omitempty" gorm:"default:0"`
-	PricingLocked    bool    `json:"pricing_locked,omitempty" gorm:"default:false"`
+	// 定价覆盖字段（直接存价格，非倍率）。0 = 未配置/使用全局默认。
+	// 与 params_locked 同一思路：人工编辑后锁定，litellm/官方同步不再覆盖。
+	InputPrice        float64 `json:"input_price,omitempty" gorm:"default:0"`        // 每 1M tokens 输入价格（美元）
+	OutputPrice       float64 `json:"output_price,omitempty" gorm:"default:0"`       // 每 1M tokens 输出价格（美元）
+	CacheHitPrice     float64 `json:"cache_hit_price,omitempty" gorm:"default:0"`    // 每 1M tokens 缓存命中价格（美元）
+	CacheMissPrice    float64 `json:"cache_miss_price,omitempty" gorm:"default:0"`   // 每 1M tokens 缓存未命中价格（美元）
+	CacheCreatePrice  float64 `json:"cache_create_price,omitempty" gorm:"default:0"` // 每 1M tokens 缓存创建价格（美元）
+	PricingLocked     bool    `json:"pricing_locked,omitempty" gorm:"default:false"`
 	Status       int            `json:"status" gorm:"default:1"`
 	SyncOfficial int            `json:"sync_official" gorm:"default:1"`
 	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
@@ -101,8 +97,8 @@ func (mi *Model) Update() error {
 		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints",
 			"max_input_tokens", "max_output_tokens", "supports_tool_call", "supports_images",
 			"supports_reasoning", "params_locked",
-			"model_ratio", "completion_ratio", "quota_type", "model_price",
-			"cache_ratio", "create_cache_ratio", "pricing_locked",
+			"input_price", "output_price", "cache_hit_price", "cache_miss_price",
+			"cache_create_price", "pricing_locked",
 			"status", "sync_official", "name_rule", "updated_time").
 		Updates(mi).Error
 }

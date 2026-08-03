@@ -150,14 +150,15 @@ func UpdateModelMeta(c *gin.Context) {
 	common.ApiSuccess(c, &m)
 }
 
-// syncModelPricingOverrides 将模型定价覆盖字段同步到全局 ratio 配置。
+// syncModelPricingOverrides 将模型直接价格覆盖同步到全局配置。
 // 与模型参数 params_locked 同一思路：人工编辑后覆盖全局默认，litellm/官方同步不再覆盖。
+// 价格单位：美元 / 1M tokens。0 表示未配置，使用全局默认。
 func syncModelPricingOverrides(m *model.Model) error {
 	name := m.ModelName
-	// 模型倍率
-	if m.ModelRatio > 0 {
+	// 输入价格 → 写入 ModelRatio（按量计费输入倍率 = 价格 / $0.002）
+	if m.InputPrice > 0 {
 		modelRatioMap := ratio_setting.GetModelRatioCopy()
-		modelRatioMap[name] = m.ModelRatio
+		modelRatioMap[name] = m.InputPrice / 0.002
 		if b, err := common.Marshal(modelRatioMap); err == nil {
 			if err := model.UpdateOption("ModelRatio", string(b)); err != nil {
 				return err
@@ -167,10 +168,10 @@ func syncModelPricingOverrides(m *model.Model) error {
 			}
 		}
 	}
-	// 补全倍率
-	if m.CompletionRatio > 0 {
+	// 输出价格 → 写入 CompletionRatio（输出倍率 = 输出价格 / 输入价格）
+	if m.OutputPrice > 0 && m.InputPrice > 0 {
 		completionRatioMap := ratio_setting.GetCompletionRatioCopy()
-		completionRatioMap[name] = m.CompletionRatio
+		completionRatioMap[name] = m.OutputPrice / m.InputPrice
 		if b, err := common.Marshal(completionRatioMap); err == nil {
 			if err := model.UpdateOption("CompletionRatio", string(b)); err != nil {
 				return err
@@ -180,23 +181,10 @@ func syncModelPricingOverrides(m *model.Model) error {
 			}
 		}
 	}
-	// 按次计费价格（quota_type=1 时生效）
-	if m.QuotaType == 1 && m.ModelPrice > 0 {
-		modelPriceMap := ratio_setting.GetModelPriceCopy()
-		modelPriceMap[name] = m.ModelPrice
-		if b, err := common.Marshal(modelPriceMap); err == nil {
-			if err := model.UpdateOption("ModelPrice", string(b)); err != nil {
-				return err
-			}
-			if err := ratio_setting.UpdateModelPriceByJSONString(string(b)); err != nil {
-				return err
-			}
-		}
-	}
-	// 缓存命中倍率（读取缓存时的价格倍率）
-	if m.CacheRatio > 0 {
+	// 缓存命中价格 → 写入 CacheRatio（缓存读取倍率 = 缓存命中价格 / 输入价格）
+	if m.CacheHitPrice > 0 && m.InputPrice > 0 {
 		cacheRatioMap := ratio_setting.GetCacheRatioCopy()
-		cacheRatioMap[name] = m.CacheRatio
+		cacheRatioMap[name] = m.CacheHitPrice / m.InputPrice
 		if b, err := common.Marshal(cacheRatioMap); err == nil {
 			if err := model.UpdateOption("CacheRatio", string(b)); err != nil {
 				return err
@@ -206,10 +194,24 @@ func syncModelPricingOverrides(m *model.Model) error {
 			}
 		}
 	}
-	// 缓存创建倍率（写入缓存时的价格倍率）
-	if m.CreateCacheRatio > 0 {
+	// 缓存未命中价格 → 写入 CacheRatio（未命中时按此价格计费，覆盖全局默认 1）
+	// 注意：new-api 原逻辑未命中时直接按 model_ratio 计费，这里用 cache_ratio 区分命中/未命中
+	if m.CacheMissPrice > 0 && m.InputPrice > 0 {
+		cacheRatioMap := ratio_setting.GetCacheRatioCopy()
+		cacheRatioMap[name] = m.CacheMissPrice / m.InputPrice
+		if b, err := common.Marshal(cacheRatioMap); err == nil {
+			if err := model.UpdateOption("CacheRatio", string(b)); err != nil {
+				return err
+			}
+			if err := ratio_setting.UpdateCacheRatioByJSONString(string(b)); err != nil {
+				return err
+			}
+		}
+	}
+	// 缓存创建价格 → 写入 CreateCacheRatio（缓存创建倍率 = 缓存创建价格 / 输入价格）
+	if m.CacheCreatePrice > 0 && m.InputPrice > 0 {
 		createCacheRatioMap := ratio_setting.GetCreateCacheRatioCopy()
-		createCacheRatioMap[name] = m.CreateCacheRatio
+		createCacheRatioMap[name] = m.CacheCreatePrice / m.InputPrice
 		if b, err := common.Marshal(createCacheRatioMap); err == nil {
 			if err := model.UpdateOption("CreateCacheRatio", string(b)); err != nil {
 				return err

@@ -131,13 +131,12 @@ const EditModelModal = (props) => {
     supports_tool_call: false,
     supports_images: false,
     supports_reasoning: false,
-    // 定价覆盖（与模型参数同一规则：0/-1 表示未配置，人工编辑后锁定）
-    model_ratio: 0,
-    completion_ratio: 0,
-    quota_type: -1,
-    model_price: 0,
-    cache_ratio: 0,
-    create_cache_ratio: 0,
+    // 定价覆盖（直接价格，单位：美元 / 1M tokens。0 表示未配置使用全局默认）
+    input_price: 0,
+    output_price: 0,
+    cache_hit_price: 0,
+    cache_miss_price: 0,
+    cache_create_price: 0,
   });
 
   const handleCancel = () => {
@@ -165,10 +164,6 @@ const EditModelModal = (props) => {
         // 处理status/sync_official，将数字转为布尔值
         data.status = data.status === 1;
         data.sync_official = (data.sync_official ?? 1) === 1;
-        // 定价字段：quota_type 为 -1 时表单展示为 -1（未配置）
-        if (data.quota_type === undefined || data.quota_type === null) {
-          data.quota_type = -1;
-        }
         if (formApiRef.current) {
           formApiRef.current.setValues({ ...getInitValues(), ...data });
         }
@@ -213,10 +208,10 @@ const EditModelModal = (props) => {
       // 检测管理员是否手动改过模型能力参数：只要任一参数非零值或非默认 false，即视为已编辑
       const paramsEdited = values.max_input_tokens > 0 || values.max_output_tokens > 0
         || values.supports_tool_call || values.supports_images || values.supports_reasoning;
-      // 检测管理员是否手动改过定价：只要任一定价字段非默认，即视为已编辑
-      const pricingEdited = values.model_ratio > 0 || values.completion_ratio > 0
-        || values.quota_type >= 0 || values.model_price > 0
-        || values.cache_ratio > 0 || values.create_cache_ratio > 0;
+      // 检测管理员是否手动改过定价：只要任一价格字段非默认，即视为已编辑
+      const pricingEdited = values.input_price > 0 || values.output_price > 0
+        || values.cache_hit_price > 0 || values.cache_miss_price > 0
+        || values.cache_create_price > 0;
       const submitData = {
         ...values,
         tags: Array.isArray(values.tags) ? values.tags.join(',') : values.tags,
@@ -230,13 +225,12 @@ const EditModelModal = (props) => {
         supports_images: !!values.supports_images,
         supports_reasoning: !!values.supports_reasoning,
         params_locked: !!paramsEdited,
-        // 定价字段
-        model_ratio: Number(values.model_ratio) || 0,
-        completion_ratio: Number(values.completion_ratio) || 0,
-        quota_type: values.quota_type >= 0 ? Number(values.quota_type) : -1,
-        model_price: Number(values.model_price) || 0,
-        cache_ratio: Number(values.cache_ratio) || 0,
-        create_cache_ratio: Number(values.create_cache_ratio) || 0,
+        // 定价字段（直接价格，单位：美元 / 1M tokens）
+        input_price: Number(values.input_price) || 0,
+        output_price: Number(values.output_price) || 0,
+        cache_hit_price: Number(values.cache_hit_price) || 0,
+        cache_miss_price: Number(values.cache_miss_price) || 0,
+        cache_create_price: Number(values.cache_create_price) || 0,
         pricing_locked: !!pricingEdited,
       };
 
@@ -574,75 +568,61 @@ const EditModelModal = (props) => {
                   </Col>
 
                   <Col span={24}>
-                    <Form.Select
-                      field='quota_type'
-                      label={t('计费类型')}
-                      optionList={[
-                        { value: -1, label: t('未配置（使用全局默认）') },
-                        { value: 0, label: t('按量计费') },
-                        { value: 1, label: t('按次计费') },
-                      ]}
-                      extraText={t('选择计费类型后，可进一步配置对应倍率/价格')}
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-
-                  <Col span={12}>
                     <Form.InputNumber
-                      field='model_ratio'
-                      label={t('模型倍率')}
+                      field='input_price'
+                      label={t('输入价格（$/1M tokens）')}
                       placeholder={t('0 = 未配置')}
                       min={0}
-                      precision={3}
-                      extraText={t('按量计费时的输入倍率，0 表示使用全局默认')}
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-
-                  <Col span={12}>
-                    <Form.InputNumber
-                      field='completion_ratio'
-                      label={t('补全倍率')}
-                      placeholder={t('0 = 未配置')}
-                      min={0}
-                      precision={3}
-                      extraText={t('按量计费时的输出倍率，0 表示使用全局默认')}
+                      precision={4}
+                      extraText={t('每百万 tokens 输入价格（美元），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>
 
                   <Col span={24}>
                     <Form.InputNumber
-                      field='model_price'
-                      label={t('按次价格（美元）')}
+                      field='output_price'
+                      label={t('输出价格（$/1M tokens）')}
                       placeholder={t('0 = 未配置')}
                       min={0}
                       precision={4}
-                      extraText={t('按次计费时的单次价格，0 表示使用全局默认')}
+                      extraText={t('每百万 tokens 输出价格（美元），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>
 
                   <Col span={12}>
                     <Form.InputNumber
-                      field='cache_ratio'
-                      label={t('缓存命中倍率')}
+                      field='cache_hit_price'
+                      label={t('缓存命中价格（$/1M）')}
                       placeholder={t('0 = 未配置')}
                       min={0}
-                      precision={3}
-                      extraText={t('命中缓存时的读取价格倍率，0 表示使用全局默认（1）')}
+                      precision={4}
+                      extraText={t('缓存命中读取价格（$/1M tokens），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>
 
                   <Col span={12}>
                     <Form.InputNumber
-                      field='create_cache_ratio'
-                      label={t('缓存创建倍率')}
+                      field='cache_miss_price'
+                      label={t('缓存未命中价格（$/1M）')}
                       placeholder={t('0 = 未配置')}
                       min={0}
-                      precision={3}
-                      extraText={t('写入缓存时的价格倍率，0 表示使用全局默认（1.25）')}
+                      precision={4}
+                      extraText={t('缓存未命中读取价格（$/1M tokens），0 表示使用全局默认（=输入价格）')}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+
+                  <Col span={24}>
+                    <Form.InputNumber
+                      field='cache_create_price'
+                      label={t('缓存创建价格（$/1M tokens）')}
+                      placeholder={t('0 = 未配置')}
+                      min={0}
+                      precision={4}
+                      extraText={t('缓存创建写入价格（$/1M tokens），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>
