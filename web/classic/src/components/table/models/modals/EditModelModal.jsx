@@ -136,6 +136,8 @@ const EditModelModal = (props) => {
     completion_ratio: 0,
     quota_type: -1,
     model_price: 0,
+    cache_ratio: 0,
+    create_cache_ratio: 0,
   });
 
   const handleCancel = () => {
@@ -213,7 +215,8 @@ const EditModelModal = (props) => {
         || values.supports_tool_call || values.supports_images || values.supports_reasoning;
       // 检测管理员是否手动改过定价：只要任一定价字段非默认，即视为已编辑
       const pricingEdited = values.model_ratio > 0 || values.completion_ratio > 0
-        || values.quota_type >= 0 || values.model_price > 0;
+        || values.quota_type >= 0 || values.model_price > 0
+        || values.cache_ratio > 0 || values.create_cache_ratio > 0;
       const submitData = {
         ...values,
         tags: Array.isArray(values.tags) ? values.tags.join(',') : values.tags,
@@ -232,6 +235,8 @@ const EditModelModal = (props) => {
         completion_ratio: Number(values.completion_ratio) || 0,
         quota_type: values.quota_type >= 0 ? Number(values.quota_type) : -1,
         model_price: Number(values.model_price) || 0,
+        cache_ratio: Number(values.cache_ratio) || 0,
+        create_cache_ratio: Number(values.create_cache_ratio) || 0,
         pricing_locked: !!pricingEdited,
       };
 
@@ -614,6 +619,30 @@ const EditModelModal = (props) => {
                       min={0}
                       precision={4}
                       extraText={t('按次计费时的单次价格，0 表示使用全局默认')}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='cache_ratio'
+                      label={t('缓存命中倍率')}
+                      placeholder={t('0 = 未配置')}
+                      min={0}
+                      precision={3}
+                      extraText={t('命中缓存时的读取价格倍率，0 表示使用全局默认（1）')}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='create_cache_ratio'
+                      label={t('缓存创建倍率')}
+                      placeholder={t('0 = 未配置')}
+                      min={0}
+                      precision={3}
+                      extraText={t('写入缓存时的价格倍率，0 表示使用全局默认（1.25）')}
                       style={{ width: '100%' }}
                     />
                   </Col>

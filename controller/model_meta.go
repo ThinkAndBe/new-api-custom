@@ -193,6 +193,32 @@ func syncModelPricingOverrides(m *model.Model) error {
 			}
 		}
 	}
+	// 缓存命中倍率（读取缓存时的价格倍率）
+	if m.CacheRatio > 0 {
+		cacheRatioMap := ratio_setting.GetCacheRatioCopy()
+		cacheRatioMap[name] = m.CacheRatio
+		if b, err := common.Marshal(cacheRatioMap); err == nil {
+			if err := model.UpdateOption("CacheRatio", string(b)); err != nil {
+				return err
+			}
+			if err := ratio_setting.UpdateCacheRatioByJSONString(string(b)); err != nil {
+				return err
+			}
+		}
+	}
+	// 缓存创建倍率（写入缓存时的价格倍率）
+	if m.CreateCacheRatio > 0 {
+		createCacheRatioMap := ratio_setting.GetCreateCacheRatioCopy()
+		createCacheRatioMap[name] = m.CreateCacheRatio
+		if b, err := common.Marshal(createCacheRatioMap); err == nil {
+			if err := model.UpdateOption("CreateCacheRatio", string(b)); err != nil {
+				return err
+			}
+			if err := ratio_setting.UpdateCreateCacheRatioByJSONString(string(b)); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 

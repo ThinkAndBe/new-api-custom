@@ -44,7 +44,11 @@ type Model struct {
 	// QuotaType 覆盖：-1 = 未配置；0 = 按量计费；1 = 按次计费
 	QuotaType      int     `json:"quota_type,omitempty" gorm:"default:-1"`
 	ModelPrice     float64 `json:"model_price,omitempty" gorm:"default:0"`
-	PricingLocked  bool    `json:"pricing_locked,omitempty" gorm:"default:false"`
+	// 缓存价格：命中缓存时的读取倍率，0 = 未配置（全局默认 1）
+	CacheRatio       float64 `json:"cache_ratio,omitempty" gorm:"default:0"`
+	// 缓存创建价格：写入缓存时的倍率，0 = 未配置（全局默认 1.25）
+	CreateCacheRatio float64 `json:"create_cache_ratio,omitempty" gorm:"default:0"`
+	PricingLocked    bool    `json:"pricing_locked,omitempty" gorm:"default:false"`
 	Status       int            `json:"status" gorm:"default:1"`
 	SyncOfficial int            `json:"sync_official" gorm:"default:1"`
 	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
@@ -97,7 +101,8 @@ func (mi *Model) Update() error {
 		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints",
 			"max_input_tokens", "max_output_tokens", "supports_tool_call", "supports_images",
 			"supports_reasoning", "params_locked",
-			"model_ratio", "completion_ratio", "quota_type", "model_price", "pricing_locked",
+			"model_ratio", "completion_ratio", "quota_type", "model_price",
+			"cache_ratio", "create_cache_ratio", "pricing_locked",
 			"status", "sync_official", "name_rule", "updated_time").
 		Updates(mi).Error
 }
