@@ -135,7 +135,6 @@ const EditModelModal = (props) => {
     input_price: 0,
     output_price: 0,
     cache_hit_price: 0,
-    cache_create_price: 0,
   });
 
   const handleCancel = () => {
@@ -209,7 +208,7 @@ const EditModelModal = (props) => {
         || values.supports_tool_call || values.supports_images || values.supports_reasoning;
       // 检测管理员是否手动改过定价：只要任一价格字段非默认，即视为已编辑
       const pricingEdited = values.input_price > 0 || values.output_price > 0
-        || values.cache_hit_price > 0 || values.cache_create_price > 0;
+        || values.cache_hit_price > 0;
       const submitData = {
         ...values,
         tags: Array.isArray(values.tags) ? values.tags.join(',') : values.tags,
@@ -227,7 +226,6 @@ const EditModelModal = (props) => {
         input_price: Number(values.input_price) || 0,
         output_price: Number(values.output_price) || 0,
         cache_hit_price: Number(values.cache_hit_price) || 0,
-        cache_create_price: Number(values.cache_create_price) || 0,
         pricing_locked: !!pricingEdited,
       };
 
@@ -596,18 +594,6 @@ const EditModelModal = (props) => {
                       min={0}
                       precision={4}
                       extraText={t('缓存命中读取价格（¥/1M tokens），0 表示使用全局默认')}
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-
-                  <Col span={12}>
-                    <Form.InputNumber
-                      field='cache_create_price'
-                      label={t('缓存创建价格（¥/1M）')}
-                      placeholder={t('0 = 未配置')}
-                      min={0}
-                      precision={4}
-                      extraText={t('缓存创建写入价格（¥/1M tokens），0 表示使用全局默认')}
                       style={{ width: '100%' }}
                     />
                   </Col>

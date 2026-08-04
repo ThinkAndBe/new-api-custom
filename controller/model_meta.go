@@ -216,10 +216,11 @@ func syncModelPricingOverrides(m *model.Model) error {
 		_ = ratio_setting.UpdateCacheRatioByJSONString(string(b))
 	}
 
-	// 缓存创建价格 -> CreateCacheRatio（比值 = 缓存创建价格 / 输入价格）。0 恢复内置默认。
+	// 缓存创建价格 = 输入价格（缓存未命中时按输入价计费，创建缓存也按输入价）
+	// 写入 CreateCacheRatio = 1（即与输入价相同）
 	createCacheRatioMap := ratio_setting.GetCreateCacheRatioCopy()
-	if m.CacheCreatePrice > 0 && m.InputPrice > 0 {
-		createCacheRatioMap[name] = m.CacheCreatePrice / m.InputPrice
+	if m.InputPrice > 0 {
+		createCacheRatioMap[name] = 1
 	} else {
 		if dv, ok := ratio_setting.GetDefaultCreateCacheRatioMap()[name]; ok {
 			createCacheRatioMap[name] = dv
