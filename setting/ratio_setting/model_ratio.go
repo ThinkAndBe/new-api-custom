@@ -8,9 +8,10 @@ import (
 )
 
 // from songquanpeng/one-api
+// 计费内核已改为人民币基准：ratio 1 = ¥0.002/1K = ¥2/1M
 const (
-	USD2RMB = 7.3 // 暂定 1 USD = 7.3 RMB
-	USD     = 500 // $0.002 = 1 -> $1 = 500
+	USD2RMB = 7.3 // 历史保留：1 USD = 7.3 RMB（仅用于 models.dev 价格转换）
+	USD     = 500 // ratio 1 = 0.002/1K（500 是 QuotaPerUnit 的倒数的 1K 倍数）
 	RMB     = USD / USD2RMB
 )
 

@@ -508,15 +508,14 @@ func convertModelsDevToMap(reader io.Reader) (map[string]any, error) {
 	modelRatioMap := make(map[string]any)
 	completionRatioMap := make(map[string]any)
 	cacheRatioMap := make(map[string]any)
-	rmbCorrection := operation_setting.OfficialRatioRMBCorrection
 	for modelName, candidate := range selected {
 		if candidate.Input == 0 {
 			modelRatioMap[modelName] = 0.0
 			continue
 		}
-		// models.dev 价格是 USD/1M tokens，转换为 NEW API ratio（1 ratio = $0.002/1K = $2/1M）
-		// 再乘以 RMB 修正系数，使价格接近国内 RMB 官方定价
-		modelRatio := candidate.Input * float64(ratio_setting.USD) / modelsDevInputCostRatioBase * rmbCorrection
+		// models.dev 价格是 USD/1M tokens，转换为 new-api ratio（ratio 1 = ¥2/1M，即 ¥0.002/1K）
+		// 计费内核已改为人民币基准，不再做 RMB 修正
+		modelRatio := candidate.Input * float64(ratio_setting.USD) / modelsDevInputCostRatioBase
 		modelRatioMap[modelName] = roundRatioValueSync(modelRatio)
 		if candidate.Output != nil {
 			completionRatio := *candidate.Output / candidate.Input

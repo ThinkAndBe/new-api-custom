@@ -1086,21 +1086,13 @@ export function renderQuotaWithAmount(amount) {
  * @returns {Object} - { symbol, rate, type }
  */
 export function getCurrencyConfig() {
-  const quotaDisplayType = localStorage.getItem('quota_display_type') || 'USD';
+  const quotaDisplayType = localStorage.getItem('quota_display_type') || 'CNY';
   const statusStr = localStorage.getItem('status');
 
-  let symbol = '$';
+  let symbol = '¥';
   let rate = 1;
 
-  if (quotaDisplayType === 'CNY') {
-    symbol = '¥';
-    try {
-      if (statusStr) {
-        const s = JSON.parse(statusStr);
-        rate = s?.usd_exchange_rate || 7;
-      }
-    } catch (e) {}
-  } else if (quotaDisplayType === 'CUSTOM') {
+  if (quotaDisplayType === 'CUSTOM') {
     try {
       if (statusStr) {
         const s = JSON.parse(statusStr);
@@ -1109,13 +1101,14 @@ export function getCurrencyConfig() {
       }
     } catch (e) {}
   }
+  // CNY 及兜底：rate=1，金额本身已是人民币口径
 
   return { symbol, rate, type: quotaDisplayType };
 }
 
 /**
- * 将美元金额转换为当前选择的货币
- * @param {number} usdAmount - 美元金额
+ * 将金额格式化为当前选择的货币（人民币基准下传入值已是人民币口径）
+ * @param {number} amount - 金额（人民币基准）
  * @param {number} digits - 小数位数
  * @returns {string} - 格式化后的货币字符串
  */
@@ -1127,38 +1120,22 @@ export function convertUSDToCurrency(usdAmount, digits = 2) {
 
 export function renderQuota(quota, digits = 2) {
   let quotaPerUnit = localStorage.getItem('quota_per_unit');
-  const quotaDisplayType = localStorage.getItem('quota_display_type') || 'USD';
+  const quotaDisplayType = localStorage.getItem('quota_display_type') || 'CNY';
   quotaPerUnit = parseFloat(quotaPerUnit);
   if (quotaDisplayType === 'TOKENS') {
     return renderNumber(quota);
   }
-  const resultUSD = quota / quotaPerUnit;
-  let symbol = '$';
-  let value = resultUSD;
-  if (quotaDisplayType === 'CNY') {
+  // 计费内核已改为人民币基准：quota / QuotaPerUnit 直接得到人民币金额
+  const value = quota / quotaPerUnit;
+  let symbol = '¥';
+  if (quotaDisplayType === 'CUSTOM') {
     const statusStr = localStorage.getItem('status');
-    let usdRate = 1;
     try {
       if (statusStr) {
         const s = JSON.parse(statusStr);
-        usdRate = s?.usd_exchange_rate || 1;
+        symbol = s?.custom_currency_symbol || '¤';
       }
     } catch (e) {}
-    value = resultUSD * usdRate;
-    symbol = '¥';
-  } else if (quotaDisplayType === 'CUSTOM') {
-    const statusStr = localStorage.getItem('status');
-    let symbolCustom = '¤';
-    let rate = 1;
-    try {
-      if (statusStr) {
-        const s = JSON.parse(statusStr);
-        symbolCustom = s?.custom_currency_symbol || symbolCustom;
-        rate = s?.custom_currency_exchange_rate || rate;
-      }
-    } catch (e) {}
-    value = resultUSD * rate;
-    symbol = symbolCustom;
   }
   const fixedResult = value.toFixed(digits);
   if (parseFloat(fixedResult) === 0 && quota > 0 && value > 0) {

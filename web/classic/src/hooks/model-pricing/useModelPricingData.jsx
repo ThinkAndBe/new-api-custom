@@ -193,28 +193,20 @@ export const useModelPricingData = () => {
     [selectedRowKeys, handleRowSelectionChange],
   );
 
+  // 计费内核已改为人民币基准：传入的 usdPrice 实际就是人民币口径价格
+  // （ratio × 2 = ¥/1M），不再做汇率换算
   const displayPrice = useCallback(
     (usdPrice) => {
-      let priceInUSD = usdPrice;
+      let price = usdPrice;
       if (showWithRecharge) {
-        priceInUSD = (usdPrice * priceRate) / usdExchangeRate;
+        price = usdPrice * priceRate;
       }
-
-      if (currency === 'CNY') {
-        return `¥${(priceInUSD * usdExchangeRate).toFixed(3)}`;
-      } else if (currency === 'CUSTOM') {
-        return `${customCurrencySymbol}${(priceInUSD * customExchangeRate).toFixed(3)}`;
+      if (currency === 'CUSTOM') {
+        return `${customCurrencySymbol}${(price * customExchangeRate).toFixed(3)}`;
       }
-      return `$${priceInUSD.toFixed(3)}`;
+      return `¥${price.toFixed(3)}`;
     },
-    [
-      showWithRecharge,
-      priceRate,
-      usdExchangeRate,
-      currency,
-      customCurrencySymbol,
-      customExchangeRate,
-    ],
+    [showWithRecharge, priceRate, currency, customCurrencySymbol, customExchangeRate],
   );
 
   // 生成格式化后的新数组，不原地修改接口返回的数据
