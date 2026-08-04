@@ -81,6 +81,22 @@ func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *d
 	return usage.ClaudeCacheCreation5mTokens > 0 || usage.ClaudeCacheCreation1hTokens > 0
 }
 
+// promptExcludesCache 判断上游的 prompt_tokens 是否已经扣除了缓存命中 tokens。
+// 大多数 OpenAI 兼容渠道（OpenAI/Zhipu/Moonshot/Qwen）的 prompt_tokens 包含缓存命中部分，
+// 计费时需要减去缓存再按 cache_ratio 单独计费。
+// 但 DeepSeek、Gemini 以及部分自建 llama.cpp/vLLM 后端的 prompt_tokens 不含缓存命中，
+// 计费时不能再减，否则会双重扣除导致少计费。
+func promptExcludesCache(relayInfo *relaycommon.RelayInfo) bool {
+	if relayInfo == nil || relayInfo.ChannelMeta == nil {
+		return false
+	}
+	switch relayInfo.ChannelMeta.ChannelType {
+	case constant.ChannelTypeDeepSeek, constant.ChannelTypeGemini:
+		return true
+	default:
+		return false
+	}
+}
 func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, summary *textQuotaSummary) decimal.Decimal {
 	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio)
 	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
@@ -238,10 +254,13 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	var audioInputQuota decimal.Decimal
 	if !relayInfo.PriceData.UsePrice {
 		baseTokens := dPromptTokens
+		// 是否需要在计费时从 prompt_tokens 里扣除缓存 tokens
+		// Claude 语义、legacy claude 衍生、以及 prompt 本身已排除缓存的渠道都不需要再减
+		excludesCache := summary.IsClaudeUsageSemantic || legacyClaudeDerived || promptExcludesCache(relayInfo)
 
 		var cachedTokensWithRatio decimal.Decimal
 		if !dCacheTokens.IsZero() {
-			if !summary.IsClaudeUsageSemantic && !legacyClaudeDerived {
+			if !excludesCache {
 				baseTokens = baseTokens.Sub(dCacheTokens)
 			}
 			cachedTokensWithRatio = dCacheTokens.Mul(dCacheRatio)
@@ -250,7 +269,7 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		var cachedCreationTokensWithRatio decimal.Decimal
 		hasSplitCacheCreationTokens := summary.CacheCreationTokens5m > 0 || summary.CacheCreationTokens1h > 0
 		if !dCachedCreationTokens.IsZero() || hasSplitCacheCreationTokens {
-			if !summary.IsClaudeUsageSemantic && !legacyClaudeDerived {
+			if !excludesCache {
 				baseTokens = baseTokens.Sub(dCachedCreationTokens)
 				cachedCreationTokensWithRatio = dCachedCreationTokens.Mul(dCacheCreationRatio)
 			} else {
