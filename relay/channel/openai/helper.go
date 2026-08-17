@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -165,13 +166,47 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 		helper.Done(c)
 
 	case types.RelayFormatClaude:
+		// 与 HandleStreamFormat 保持一致：转换器以 SendResponseCount 判断首块，
+		// 这里处理的最后一块同样需要计数，否则上游只有少量数据块时
+		// 最后一块会被再次当作首块处理，重复输出 message_start。
+		info.SendResponseCount++
+
 		var streamResponse dto.ChatCompletionsStreamResponse
-		if err := common.Unmarshal(common.StringToByteSlice(lastStreamData), &streamResponse); err != nil {
+		if lastStreamData == "" {
+			// 上游没有返回任何流数据时，也要合成终止块，避免客户端收到未闭合的响应
+			streamResponse = *helper.GenerateStopResponse(responseId, createAt, model, constant.FinishReasonStop)
+		} else if err := common.Unmarshal(common.StringToByteSlice(lastStreamData), &streamResponse); err != nil {
 			common.SysLog("error unmarshalling stream response: " + err.Error())
 			return
 		}
 
+		if usage == nil {
+			// Claude 的 message_delta 终止事件必须携带 usage，
+			// 上游未提供 usage 时用零值兜底，避免终止事件缺失
+			usage = &dto.Usage{}
+		}
 		info.ClaudeConvertInfo.Usage = usage
+
+		// 部分上游（如 doubao-agent-plan）直接发 [DONE] 而不输出 finish_reason 块。
+		// 若转换器尚未收到过 finish 块（Done 为 false），在这里补一个 finish_reason 和 usage，
+		// 否则 Claude 流缺少 message_delta/message_stop，客户端（如 Claude Code/zcode）
+		// 会报 empty_model_response。
+		if !info.ClaudeConvertInfo.Done {
+			hasFinish := lo.SomeBy(streamResponse.Choices, func(choice dto.ChatCompletionsStreamResponseChoice) bool {
+				return choice.FinishReason != nil && *choice.FinishReason != ""
+			})
+			if !hasFinish {
+				stopReason := constant.FinishReasonStop
+				if len(streamResponse.Choices) == 0 {
+					streamResponse.Choices = append(streamResponse.Choices, dto.ChatCompletionsStreamResponseChoice{FinishReason: &stopReason})
+				} else {
+					streamResponse.Choices[0].FinishReason = &stopReason
+				}
+				// 转换器在 finish 块没有 usage 时会等待后续 usage-only 块再关闭；
+				// 此处流已结束且不会再有后续块，必须让该块自带 usage 才能发出终止事件
+				streamResponse.Usage = info.ClaudeConvertInfo.Usage
+			}
+		}
 
 		claudeResponses := service.StreamResponseOpenAI2Claude(&streamResponse, info)
 		for _, resp := range claudeResponses {
