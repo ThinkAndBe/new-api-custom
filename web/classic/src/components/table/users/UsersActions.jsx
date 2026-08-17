@@ -19,17 +19,34 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import { Button } from '@douyinfe/semi-ui';
+import { IconUpload, IconDownload, IconUserAdd } from '@douyinfe/semi-icons';
 
-const UsersActions = ({ setShowAddUser, t }) => {
-  // Add new user
-  const handleAddUser = () => {
-    setShowAddUser(true);
-  };
-
+const UsersActions = ({ setShowAddUser, setShowImportUser, exportUsers, t }) => {
   return (
     <div className='flex gap-2 w-full md:w-auto order-2 md:order-1'>
-      <Button className='w-full md:w-auto' onClick={handleAddUser} size='small'>
+      <Button
+        className='w-full md:w-auto'
+        icon={<IconUserAdd />}
+        onClick={() => setShowAddUser(true)}
+        size='small'
+      >
         {t('添加用户')}
+      </Button>
+      <Button
+        className='w-full md:w-auto'
+        icon={<IconUpload />}
+        onClick={() => setShowImportUser(true)}
+        size='small'
+      >
+        {t('导入用户')}
+      </Button>
+      <Button
+        className='w-full md:w-auto'
+        icon={<IconDownload />}
+        onClick={exportUsers}
+        size='small'
+      >
+        {t('导出用户')}
       </Button>
     </div>
   );

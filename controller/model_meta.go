@@ -102,6 +102,7 @@ func CreateModelMeta(c *gin.Context) {
 		return
 	}
 	model.RefreshPricing()
+	model.InvalidateRegisteredModelCache()
 	common.ApiSuccess(c, &m)
 }
 
@@ -147,6 +148,7 @@ func UpdateModelMeta(c *gin.Context) {
 		}
 	}
 	model.RefreshPricing()
+	model.InvalidateRegisteredModelCache()
 	common.ApiSuccess(c, &m)
 }
 
@@ -250,6 +252,7 @@ func DeleteModelMeta(c *gin.Context) {
 		return
 	}
 	model.RefreshPricing()
+	model.InvalidateRegisteredModelCache()
 	common.ApiSuccess(c, nil)
 }
 

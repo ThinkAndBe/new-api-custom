@@ -319,6 +319,10 @@ func updatePricing() {
 
 	pricingMap = make([]Pricing, 0)
 	for model, groups := range modelGroupsMap {
+		// 模型白名单：未在模型管理注册（无精确名也无规则匹配）的模型不进入模型广场
+		if !IsModelRegistered(model) {
+			continue
+		}
 		pricing := Pricing{
 			ModelName:              model,
 			EnableGroup:            groups.Items(),

@@ -11,8 +11,8 @@ description: 视觉理解技能。当用户发送图片、截图、照片、图�
 
 - API 地址：`https://tokenhub.erke.com:3000/v1/chat/completions`（OpenAI 兼容格式）
 - 模型名：`glm-4.6v`
-- 令牌：`GLM46V_API_KEY_PLACEHOLDER`
-- 认证：`Authorization: Bearer GLM46V_API_KEY_PLACEHOLDER`
+- 令牌：从管理员处获取识图专用令牌（环境变量 `GLM46V_API_KEY`）
+- 认证：`Authorization: Bearer $GLM46V_API_KEY`
 
 ## 调用流程
 
@@ -34,7 +34,7 @@ base64 -w 0 图片路径.png > /tmp/img.b64
 
 ```bash
 curl -s https://tokenhub.erke.com:3000/v1/chat/completions \
-  -H "Authorization: Bearer GLM46V_API_KEY_PLACEHOLDER" \
+  -H "Authorization: Bearer $GLM46V_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "glm-4.6v",

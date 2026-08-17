@@ -144,54 +144,12 @@ func lookupLitellmEntry(litellmParams map[string]litellmModelEntry, modelName st
 	return litellmModelEntry{}, false
 }
 
-// ensureEnabledModelsRegistered 把系统中已启用但 models 表未登记的模型注册为占位行。
-// 已登记的模型不受影响。注册失败仅记录日志，不阻塞后续参数更新。
-// 返回新登记的模型数量。
-func ensureEnabledModelsRegistered() int {
-	enabled := model.GetEnabledModels()
-	if len(enabled) == 0 {
-		return 0
-	}
-	var existing []string
-	if err := model.DB.Model(&model.Model{}).Where("model_name IN ?", enabled).Pluck("model_name", &existing).Error; err != nil {
-		common.SysError("ensureEnabledModelsRegistered 查询已有模型失败: " + err.Error())
-		return 0
-	}
-	existingSet := make(map[string]struct{}, len(existing))
-	for _, name := range existing {
-		existingSet[name] = struct{}{}
-	}
-	created := 0
-	for _, name := range enabled {
-		if _, ok := existingSet[name]; ok {
-			continue
-		}
-		// 占位行：能力参数留 0/false，等待 litellm 刷新或管理员手动填写
-		row := &model.Model{ModelName: name}
-		if err := model.DB.Where(model.Model{ModelName: name}).FirstOrCreate(row).Error; err != nil {
-			common.SysError("ensureEnabledModelsRegistered 登记 " + name + " 失败: " + err.Error())
-			continue
-		}
-		if row.Id != 0 {
-			created++
-		}
-	}
-	if created > 0 {
-		common.SysLog(fmt.Sprintf("已自动登记 %d 个未注册的启用模型（占位行），参数将等待 litellm 刷新或人工填写", created))
-	}
-	return created
-}
-
 // SyncModelParamsFromLitellm 管理员接口：从 litellm 拉取模型参数，更新本库 models 表。
-// - 系统中已启用但未注册的模型：先在 models 表登记占位行，保证 litellm 有数据时参数能落库。
+// 模型白名单语义：不再自动登记未注册模型——模型管理由「同步官方模型」+手动添加控制，
+// 未注册的模型用「缺失模型」工具（GET /api/models/missing）发现后手动补。
 // - 仅更新 ParamsLocked=false 的行（已人工编辑的模型跳过，避免覆盖）。
 // POST /api/models/sync_params
 func SyncModelParamsFromLitellm(c *gin.Context) {
-	// 0) 先把已启用但 models 表未登记的模型注册进来（占位行），
-	//    否则这些模型永远查不到参数，使用教程导出全是 0。
-	//    登记失败的模型后续步骤跳过，不影响其他模型更新。
-	ensureEnabledModelsRegistered()
-
 	litellmParams, err := fetchLitellmModelParams()
 	if err != nil {
 		common.ApiErrorMsg(c, "拉取 litellm 参数失败: "+err.Error())

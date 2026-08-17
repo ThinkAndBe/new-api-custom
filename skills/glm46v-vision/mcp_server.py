@@ -15,7 +15,7 @@ glm-4.6v 视觉理解 MCP Server（stdio 模式）
       "args": ["<本文件路径>/mcp_server.py"],
       "env": {
         "GLM46V_API_URL": "https://tokenhub.erke.com:3000/v1/chat/completions",
-        "GLM46V_API_KEY": "GLM46V_API_KEY_PLACEHOLDER"
+        "GLM46V_API_KEY": "<在这里填入管理员发放的识图专用令牌>"
       }
     }
   }
@@ -35,9 +35,10 @@ from mcp.server.fastmcp import FastMCP
 API_URL = os.environ.get(
     "GLM46V_API_URL", "https://tokenhub.erke.com:3000/v1/chat/completions"
 )
-API_KEY = os.environ.get(
-    "GLM46V_API_KEY", "GLM46V_API_KEY_PLACEHOLDER"
-)
+API_KEY = os.environ.get("GLM46V_API_KEY", "")
+if not API_KEY:
+    print("错误：未设置 GLM46V_API_KEY 环境变量。请在 MCP 配置的 env 中填入识图专用令牌。", file=sys.stderr)
+    sys.exit(1)
 MODEL = os.environ.get("GLM46V_MODEL", "glm-4.6v")
 MAX_TOKENS = int(os.environ.get("GLM46V_MAX_TOKENS", "1024"))
 

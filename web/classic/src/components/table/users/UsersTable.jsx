@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useMemo, useState } from 'react';
-import { Empty, Modal } from '@douyinfe/semi-ui';
+import { Button, Empty, InputNumber, Modal, Select, Space } from '@douyinfe/semi-ui';
 import CardTable from '../../common/ui/CardTable';
 import {
   IllustrationNoResult,
@@ -48,9 +48,12 @@ const UsersTable = (usersData) => {
     setEditingUser,
     setShowEditUser,
     manageUser,
+    manageUserBatch,
     refresh,
     resetUserPasskey,
     resetUserTwoFA,
+    selectedRowKeys,
+    setSelectedRowKeys,
     t,
   } = usersData;
 
@@ -216,11 +219,98 @@ const UsersTable = (usersData) => {
       : columns;
   }, [compactMode, columns]);
 
+  const rowSelection = useMemo(
+    () => ({
+      selectedRowKeys,
+      onChange: setSelectedRowKeys,
+    }),
+    [selectedRowKeys, setSelectedRowKeys],
+  );
+
+  // ---- 批量操作 ----
+  const confirmBatch = (action, titleKey, contentKey) => {
+    Modal.confirm({
+      title: t(titleKey, { count: selectedRowKeys.length }),
+      content: t(contentKey, { count: selectedRowKeys.length }),
+      okText: t('确定'),
+      cancelText: t('取消'),
+      okButtonProps: action === 'delete' ? { type: 'danger' } : undefined,
+      onOk: () => manageUserBatch(selectedRowKeys, action),
+    });
+  };
+
+  const showBatchQuotaModal = () => {
+    let mode = 'add';
+    let amount = 0;
+    Modal.confirm({
+      title: t('批量调整额度（已选 {{count}} 个用户）', {
+        count: selectedRowKeys.length,
+      }),
+      content: (
+        <div className='flex flex-col gap-3 pt-2'>
+          <Select
+            defaultValue='add'
+            onChange={(v) => (mode = v)}
+            style={{ width: '100%' }}
+            optionList={[
+              { value: 'add', label: t('增加额度') },
+              { value: 'subtract', label: t('减少额度') },
+              { value: 'override', label: t('设为（覆盖）') },
+            ]}
+          />
+          <InputNumber
+            defaultValue={0}
+            min={0}
+            precision={2}
+            onChange={(v) => (amount = v || 0)}
+            suffix={t('元')}
+            style={{ width: '100%' }}
+          />
+        </div>
+      ),
+      okText: t('确定'),
+      cancelText: t('取消'),
+      onOk: async () => {
+        // 人民币 → quota（¥1 = 50万 quota）
+        const quota = Math.round((amount || 0) * 500000);
+        await manageUserBatch(selectedRowKeys, 'add_quota', quota, mode);
+      },
+    });
+  };
+
   return (
     <>
+      {selectedRowKeys.length > 0 && (
+        <div
+          className='flex flex-wrap items-center gap-2 mb-2 p-2 rounded-lg'
+          style={{ background: 'var(--semi-color-fill-0)' }}
+        >
+          <span className='text-sm font-medium'>
+            {t('已选 {{count}} 个用户', { count: selectedRowKeys.length })}
+          </span>
+          <Space>
+            <Button size='small' onClick={() => confirmBatch('enable', '批量启用用户', '将启用所选的 {{count}} 个用户。')}>
+              {t('批量启用')}
+            </Button>
+            <Button size='small' onClick={() => confirmBatch('disable', '批量禁用用户', '将禁用所选的 {{count}} 个用户，禁用后其令牌立即失效。')}>
+              {t('批量禁用')}
+            </Button>
+            <Button size='small' type='danger' theme='light' onClick={() => confirmBatch('delete', '批量注销用户', '将注销所选的 {{count}} 个用户（软删除，可恢复）。')}>
+              {t('批量注销')}
+            </Button>
+            <Button size='small' onClick={showBatchQuotaModal}>
+              {t('批量调额度')}
+            </Button>
+            <Button size='small' theme='borderless' onClick={() => setSelectedRowKeys([])}>
+              {t('取消选择')}
+            </Button>
+          </Space>
+        </div>
+      )}
       <CardTable
         columns={tableColumns}
         dataSource={users}
+        rowSelection={rowSelection}
         scroll={compactMode ? undefined : { x: 'max-content' }}
         pagination={{
           currentPage: activePage,

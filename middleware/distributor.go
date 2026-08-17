@@ -82,6 +82,11 @@ func Distribute() func(c *gin.Context) {
 					abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorModelNameRequired))
 					return
 				}
+				// 模型白名单：未在模型管理注册的模型拒绝调用
+				if !model.IsModelRegistered(modelRequest.Model) {
+					abortWithOpenAiMessage(c, http.StatusNotFound, i18n.T(c, i18n.MsgDistributorModelNotRegistered, map[string]any{"Model": modelRequest.Model}))
+					return
+				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 				// check path is /pg/chat/completions

@@ -734,6 +734,8 @@ func GetUserModels(c *gin.Context) {
 			}
 		}
 	}
+	// 模型白名单：仅返回模型管理里已注册的模型
+	models = model.FilterRegisteredModels(models)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -785,6 +787,12 @@ func GetUserModelsMeta(c *gin.Context) {
 		}
 		for _, g := range groupModels {
 			modelSet[g] = struct{}{}
+		}
+	}
+	// 模型白名单：仅保留模型管理里已注册的模型
+	for name := range modelSet {
+		if !model.IsModelRegistered(name) {
+			delete(modelSet, name)
 		}
 	}
 	if len(modelSet) == 0 {
@@ -875,6 +883,12 @@ func GetUserModelsRecovery(c *gin.Context) {
 			if _, ok := enabledSet[m]; !ok {
 				disabledSet[m] = struct{}{}
 			}
+		}
+	}
+	// 模型白名单：未注册的模型不算「暂不可用」，直接不展示
+	for m := range disabledSet {
+		if !model.IsModelRegistered(m) {
+			delete(disabledSet, m)
 		}
 	}
 	if len(disabledSet) == 0 {

@@ -20,6 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showSuccess } from '../../helpers';
+import { exportFromAPI } from '../../helpers/csv';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 
@@ -35,10 +36,12 @@ export const useUsersData = () => {
   const [searching, setSearching] = useState(false);
   const [groupOptions, setGroupOptions] = useState([]);
   const [userCount, setUserCount] = useState(0);
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
 
   // Modal states
   const [showAddUser, setShowAddUser] = useState(false);
   const [showEditUser, setShowEditUser] = useState(false);
+  const [showImportUser, setShowImportUser] = useState(false);
   const [editingUser, setEditingUser] = useState({
     id: undefined,
   });
@@ -47,6 +50,8 @@ export const useUsersData = () => {
   const formInitValues = {
     searchKeyword: '',
     searchGroup: '',
+    searchRole: undefined,
+    searchStatus: undefined,
   };
 
   // Form API reference
@@ -58,6 +63,8 @@ export const useUsersData = () => {
     return {
       searchKeyword: formValues.searchKeyword || '',
       searchGroup: formValues.searchGroup || '',
+      searchRole: formValues.searchRole ?? '',
+      searchStatus: formValues.searchStatus ?? '',
     };
   };
 
@@ -85,7 +92,7 @@ export const useUsersData = () => {
     setLoading(false);
   };
 
-  // Search users with keyword and group
+  // Search users with keyword/group/role/status
   const searchUsers = async (
     startIdx,
     pageSize,
@@ -93,21 +100,34 @@ export const useUsersData = () => {
     searchGroup = null,
   ) => {
     // If no parameters passed, get values from form
+    let searchRole, searchStatus;
     if (searchKeyword === null || searchGroup === null) {
       const formValues = getFormValues();
       searchKeyword = formValues.searchKeyword;
       searchGroup = formValues.searchGroup;
     }
+    ({ searchRole, searchStatus } = getFormValues());
 
-    if (searchKeyword === '' && searchGroup === '') {
-      // If keyword is blank, load files instead
+    const noFilter =
+      searchKeyword === '' &&
+      searchGroup === '' &&
+      searchRole === '' &&
+      searchStatus === '';
+    if (noFilter) {
+      // If all filters blank, load users instead
       await loadUsers(startIdx, pageSize);
       return;
     }
     setSearching(true);
-    const res = await API.get(
-      `/api/user/search?keyword=${searchKeyword}&group=${searchGroup}&p=${startIdx}&page_size=${pageSize}`,
-    );
+    const params = new URLSearchParams({
+      keyword: searchKeyword,
+      group: searchGroup,
+      p: startIdx,
+      page_size: pageSize,
+    });
+    if (searchRole !== '') params.set('role', searchRole);
+    if (searchStatus !== '') params.set('status', searchStatus);
+    const res = await API.get(`/api/user/search?${params.toString()}`);
     const { success, message, data } = res.data;
     if (success) {
       const newPageData = data.items;
@@ -118,6 +138,48 @@ export const useUsersData = () => {
       showError(message);
     }
     setSearching(false);
+  };
+
+  // 批量管理（启用/禁用/注销/调额度）
+  const manageUserBatch = async (ids, action, value, mode) => {
+    if (!ids || ids.length === 0) return;
+    setLoading(true);
+    try {
+      const payload = { ids, action };
+      if (value !== undefined) payload.value = value;
+      if (mode !== undefined) payload.mode = mode;
+      const res = await API.post('/api/user/manage_batch', payload);
+      const { success, message, data } = res.data;
+      if (success) {
+        const errCount = data.total - data.success_count;
+        showSuccess(
+          t('批量操作完成：成功 {{success}} 个{{extra}}', {
+            success: data.success_count,
+            extra: errCount > 0 ? `，失败 ${errCount} 个` : '',
+          }),
+        );
+        setSelectedRowKeys([]);
+        await refresh();
+      } else {
+        showError(message);
+      }
+    } catch (e) {
+      showError(e?.response?.data?.message || t('操作失败，请重试'));
+    }
+    setLoading(false);
+  };
+
+  // 按当前筛选导出用户 CSV
+  const exportUsers = async () => {
+    const { searchKeyword, searchGroup, searchRole, searchStatus } =
+      getFormValues();
+    const params = new URLSearchParams();
+    if (searchKeyword) params.set('keyword', searchKeyword);
+    if (searchGroup) params.set('group', searchGroup);
+    if (searchRole !== '') params.set('role', searchRole);
+    if (searchStatus !== '') params.set('status', searchStatus);
+    const qs = params.toString();
+    await exportFromAPI(`/api/user/export${qs ? '?' + qs : ''}`, 'users');
   };
 
   // Manage user operations (promote, demote, enable, disable, delete)
@@ -191,8 +253,14 @@ export const useUsersData = () => {
   // Handle page change
   const handlePageChange = (page) => {
     setActivePage(page);
-    const { searchKeyword, searchGroup } = getFormValues();
-    if (searchKeyword === '' && searchGroup === '') {
+    const { searchKeyword, searchGroup, searchRole, searchStatus } =
+      getFormValues();
+    if (
+      searchKeyword === '' &&
+      searchGroup === '' &&
+      searchRole === '' &&
+      searchStatus === ''
+    ) {
       loadUsers(page, pageSize).then();
     } else {
       searchUsers(page, pageSize, searchKeyword, searchGroup).then();
@@ -226,8 +294,14 @@ export const useUsersData = () => {
 
   // Refresh data
   const refresh = async (page = activePage) => {
-    const { searchKeyword, searchGroup } = getFormValues();
-    if (searchKeyword === '' && searchGroup === '') {
+    const { searchKeyword, searchGroup, searchRole, searchStatus } =
+      getFormValues();
+    if (
+      searchKeyword === '' &&
+      searchGroup === '' &&
+      searchRole === '' &&
+      searchStatus === ''
+    ) {
       await loadUsers(page, pageSize);
     } else {
       await searchUsers(page, pageSize, searchKeyword, searchGroup);
@@ -264,6 +338,10 @@ export const useUsersData = () => {
     });
   };
 
+  const closeImportUser = () => {
+    setShowImportUser(false);
+  };
+
   // Initialize data on component mount
   useEffect(() => {
     loadUsers(0, pageSize)
@@ -283,13 +361,17 @@ export const useUsersData = () => {
     userCount,
     searching,
     groupOptions,
+    selectedRowKeys,
+    setSelectedRowKeys,
 
     // Modal state
     showAddUser,
     showEditUser,
+    showImportUser,
     editingUser,
     setShowAddUser,
     setShowEditUser,
+    setShowImportUser,
     setEditingUser,
 
     // Form state
@@ -305,6 +387,8 @@ export const useUsersData = () => {
     loadUsers,
     searchUsers,
     manageUser,
+    manageUserBatch,
+    exportUsers,
     resetUserPasskey,
     resetUserTwoFA,
     handlePageChange,
@@ -313,6 +397,7 @@ export const useUsersData = () => {
     refresh,
     closeAddUser,
     closeEditUser,
+    closeImportUser,
     getFormValues,
 
     // Translation

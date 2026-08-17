@@ -1082,6 +1082,25 @@ func GetUserGroup(id int, fromDB bool) (group string, err error) {
 	return group, nil
 }
 
+// UpdateUserSetting 持久化用户偏好设置并同步 Redis 缓存。
+func UpdateUserSetting(id int, setting dto.UserSetting) error {
+	settingBytes, err := common.Marshal(setting)
+	if err != nil {
+		return err
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Update("setting", string(settingBytes)).Error; err != nil {
+		return err
+	}
+	if common.RedisEnabled {
+		gopool.Go(func() {
+			if err := updateUserSettingCache(id, string(settingBytes)); err != nil {
+				common.SysLog("failed to update user setting cache: " + err.Error())
+			}
+		})
+	}
+	return nil
+}
+
 // GetUserSetting gets setting from Redis first, falls back to DB if needed
 func GetUserSetting(id int, fromDB bool) (settingMap dto.UserSetting, err error) {
 	var setting string

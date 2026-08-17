@@ -3,6 +3,8 @@ package model
 import (
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 
@@ -102,6 +104,93 @@ func (mi *Model) Update() error {
 
 func (mi *Model) Delete() error {
 	return DB.Delete(mi).Error
+}
+
+// ---- 模型白名单：仅模型管理里配置的模型对用户可见/可调用 ----
+
+var (
+	registeredModelCache     map[string]struct{} // 精确名集合（status=1）
+	registeredRuleCache      []Model             // 非精确规则行（prefix/suffix/contains, status=1）
+	registeredModelCacheLock sync.RWMutex
+	registeredModelCacheAt   time.Time
+)
+
+const registeredModelCacheTTL = 60 * time.Second
+
+// refreshRegisteredModelCache 重建注册模型缓存。仅精确名走 map；
+// 规则行保留原始对象按 NameRule 匹配。
+func refreshRegisteredModelCache() {
+	var rows []Model
+	DB.Where("status = ?", 1).Find(&rows)
+	exact := make(map[string]struct{}, len(rows))
+	rules := make([]Model, 0)
+	for _, r := range rows {
+		if r.NameRule == NameRuleExact {
+			exact[r.ModelName] = struct{}{}
+		} else {
+			rules = append(rules, r)
+		}
+	}
+	registeredModelCacheLock.Lock()
+	registeredModelCache = exact
+	registeredRuleCache = rules
+	registeredModelCacheAt = time.Now()
+	registeredModelCacheLock.Unlock()
+}
+
+// InvalidateRegisteredModelCache 模型管理增删改后调用，立即失效缓存。
+func InvalidateRegisteredModelCache() {
+	registeredModelCacheLock.Lock()
+	registeredModelCacheAt = time.Time{}
+	registeredModelCacheLock.Unlock()
+}
+
+// IsModelRegistered 判断模型是否已在模型管理注册（精确名或规则匹配）。
+// 白名单语义：未注册的模型对用户隐藏且调用被拦截。
+func IsModelRegistered(name string) bool {
+	if name == "" {
+		return false
+	}
+	registeredModelCacheLock.RLock()
+	if time.Since(registeredModelCacheAt) > registeredModelCacheTTL {
+		registeredModelCacheLock.RUnlock()
+		refreshRegisteredModelCache()
+		registeredModelCacheLock.RLock()
+	}
+	if _, ok := registeredModelCache[name]; ok {
+		registeredModelCacheLock.RUnlock()
+		return true
+	}
+	rules := registeredRuleCache
+	registeredModelCacheLock.RUnlock()
+	for _, r := range rules {
+		switch r.NameRule {
+		case NameRulePrefix:
+			if strings.HasPrefix(name, r.ModelName) {
+				return true
+			}
+		case NameRuleSuffix:
+			if strings.HasSuffix(name, r.ModelName) {
+				return true
+			}
+		case NameRuleContains:
+			if strings.Contains(name, r.ModelName) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// FilterRegisteredModels 过滤掉未注册模型，保持原顺序。
+func FilterRegisteredModels(models []string) []string {
+	out := make([]string, 0, len(models))
+	for _, m := range models {
+		if IsModelRegistered(m) {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func GetVendorModelCounts() (map[int64]int64, error) {
