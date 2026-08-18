@@ -855,7 +855,21 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 	}
 
 	if info.RelayFormat == types.RelayFormatClaude {
-		//
+		// 上游未发送 message_delta/message_stop 就断开流时（claudeInfo.Done 为 false），
+		// 补发终止事件，避免客户端（如 Claude Code/zcode）报 empty_model_response
+		if !claudeInfo.Done && info.ReceivedResponseCount > 0 {
+			stopReason := "end_turn"
+			deltaResp := dto.ClaudeResponse{
+				Type:  "message_delta",
+				Usage: &dto.ClaudeUsage{InputTokens: claudeInfo.Usage.PromptTokens, OutputTokens: claudeInfo.Usage.CompletionTokens},
+				Delta: &dto.ClaudeMediaMessage{StopReason: &stopReason},
+			}
+			if deltaData, err := common.Marshal(deltaResp); err == nil {
+				helper.ClaudeChunkData(c, deltaResp, string(deltaData))
+			}
+			stopResp := dto.ClaudeResponse{Type: "message_stop"}
+			helper.ClaudeChunkData(c, stopResp, `{"type":"message_stop"}`)
+		}
 	} else if info.RelayFormat == types.RelayFormatOpenAI {
 		if info.ShouldIncludeUsage {
 			openAIUsage := buildOpenAIStyleUsageFromClaudeUsage(claudeInfo.Usage)
