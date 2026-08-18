@@ -194,6 +194,9 @@ func main() {
 
 	// Initialize HTTP server
 	server := gin.New()
+	if err := server.SetTrustedProxies(common.TrustedProxyCIDRs); err != nil {
+		common.FatalLog("failed to set trusted proxies: " + err.Error())
+	}
 	server.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
 		common.SysLog(fmt.Sprintf("panic detected: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -207,6 +210,7 @@ func main() {
 	//server.Use(gzip.Gzip(gzip.DefaultCompression))
 	server.Use(middleware.RequestId())
 	server.Use(middleware.Version())
+	server.Use(middleware.SecurityHeaders())
 	server.Use(middleware.I18n())
 	middleware.SetUpLogger(server)
 	// Initialize session store
@@ -245,6 +249,9 @@ func main() {
 
 		// API 服务器（精简路由，不含 Web 和管理接口）
 		apiServer := gin.New()
+		if err := apiServer.SetTrustedProxies(common.TrustedProxyCIDRs); err != nil {
+			common.FatalLog("failed to set trusted proxies: " + err.Error())
+		}
 		apiServer.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
 			common.SysLog(fmt.Sprintf("panic detected: %v", err))
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -256,6 +263,7 @@ func main() {
 		}))
 		apiServer.Use(middleware.RequestId())
 		apiServer.Use(middleware.Version())
+		apiServer.Use(middleware.SecurityHeaders())
 		apiServer.Use(middleware.I18n())
 		middleware.SetUpLogger(apiServer)
 		apiServer.Use(sessions.Sessions("session", store))
@@ -263,6 +271,9 @@ func main() {
 
 		// Web 服务器（完整路由）
 		webServer := gin.New()
+		if err := webServer.SetTrustedProxies(common.TrustedProxyCIDRs); err != nil {
+			common.FatalLog("failed to set trusted proxies: " + err.Error())
+		}
 		webServer.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
 			common.SysLog(fmt.Sprintf("panic detected: %v", err))
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -274,6 +285,7 @@ func main() {
 		}))
 		webServer.Use(middleware.RequestId())
 		webServer.Use(middleware.Version())
+		webServer.Use(middleware.SecurityHeaders())
 		webServer.Use(middleware.I18n())
 		middleware.SetUpLogger(webServer)
 		webServer.Use(sessions.Sessions("session", store))
