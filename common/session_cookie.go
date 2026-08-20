@@ -14,15 +14,21 @@ func InitSessionCookieSettings() error {
 	SessionCookieSecure = false
 	SessionCookieTrustedURLs = nil
 
-	if secureRaw == "" || strings.EqualFold(secureRaw, "false") {
+	if !strings.EqualFold(secureRaw, "true") && !strings.EqualFold(secureRaw, "false") && secureRaw != "" {
+		return fmt.Errorf("SESSION_COOKIE_SECURE must be true or false")
+	}
+
+	if secureRaw == "" {
+		// 未显式配置：设置了可信 HTTPS 入口即自动启用 Secure cookie（部署在
+		// HTTPS 反代之后的安全默认值），否则保持关闭以兼容纯 HTTP 内网部署。
+		if trustedURLsRaw == "" {
+			return nil
+		}
+	} else if strings.EqualFold(secureRaw, "false") {
 		if trustedURLsRaw != "" {
 			return fmt.Errorf("SESSION_COOKIE_TRUSTED_URL requires SESSION_COOKIE_SECURE=true")
 		}
 		return nil
-	}
-
-	if !strings.EqualFold(secureRaw, "true") {
-		return fmt.Errorf("SESSION_COOKIE_SECURE must be true or false")
 	}
 
 	if trustedURLsRaw == "" {

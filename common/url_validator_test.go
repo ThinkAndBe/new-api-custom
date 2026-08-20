@@ -151,10 +151,13 @@ func TestInitSessionCookieSettingsRequiresBothEnvVars(t *testing.T) {
 
 	t.Run("trusted url without secure", func(t *testing.T) {
 		resetSessionCookieSettingsAfterTest(t)
+		// 未显式设置 SESSION_COOKIE_SECURE 时，TRUSTED_URL 会自动启用 Secure cookie
+		// （HTTPS 反代部署的安全默认值），不再视为配置错误
 		t.Setenv("SESSION_COOKIE_SECURE", "")
 		t.Setenv("SESSION_COOKIE_TRUSTED_URL", "https://example.com")
 
-		require.Error(t, InitSessionCookieSettings())
+		require.NoError(t, InitSessionCookieSettings())
+		assert.True(t, SessionCookieSecure)
 	})
 }
 
