@@ -1,7 +1,6 @@
 package common
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/constant"
@@ -110,7 +109,7 @@ func TestValidateRedirectURL(t *testing.T) {
 					t.Errorf("ValidateRedirectURL(%q) expected error containing %q, got nil", tt.url, tt.errContains)
 					return
 				}
-				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+				if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
 					t.Errorf("ValidateRedirectURL(%q) error = %q, want error containing %q", tt.url, err.Error(), tt.errContains)
 				}
 			} else {
@@ -151,13 +150,10 @@ func TestInitSessionCookieSettingsRequiresBothEnvVars(t *testing.T) {
 
 	t.Run("trusted url without secure", func(t *testing.T) {
 		resetSessionCookieSettingsAfterTest(t)
-		// 未显式设置 SESSION_COOKIE_SECURE 时，TRUSTED_URL 会自动启用 Secure cookie
-		// （HTTPS 反代部署的安全默认值），不再视为配置错误
 		t.Setenv("SESSION_COOKIE_SECURE", "")
 		t.Setenv("SESSION_COOKIE_TRUSTED_URL", "https://example.com")
 
-		require.NoError(t, InitSessionCookieSettings())
-		assert.True(t, SessionCookieSecure)
+		require.Error(t, InitSessionCookieSettings())
 	})
 }
 
