@@ -325,9 +325,30 @@ func ChannelListModels(c *gin.Context) {
 }
 
 func DashboardListModels(c *gin.Context) {
+	// 渠道编辑的模型选择器走这里。只返回模型管理里已注册（status=1）的模型，
+	// 内置的老旧模型目录不再出现在选项里；模型管理为空时回退全量，避免无法新建渠道。
+	var registeredRows []model.Model
+	model.DB.Where("status = ?", 1).Order("model_name").Find(&registeredRows)
+	if len(registeredRows) == 0 {
+		c.JSON(200, gin.H{
+			"success": true,
+			"data":    openAIModels,
+		})
+		return
+	}
+	created := 1626777600
+	allModels := make([]dto.OpenAIModels, 0, len(registeredRows))
+	for _, r := range registeredRows {
+		allModels = append(allModels, dto.OpenAIModels{
+			Id:      r.ModelName,
+			Object:  "model",
+			Created: created,
+			OwnedBy: "registered",
+		})
+	}
 	c.JSON(200, gin.H{
 		"success": true,
-		"data":    channelId2Models,
+		"data":    allModels,
 	})
 }
 
