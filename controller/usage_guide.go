@@ -2,6 +2,7 @@ package controller
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -57,18 +58,20 @@ func genShortCode() (string, error) {
 
 // CreateGuideShortCode POST /api/usage/guide_code （UserAuth）
 // 为当前用户选定的令牌生成一次性短码，5 分钟有效。
+// token_id 兼容字符串（前端 Select 的 value 是 String(tk.id)）。
 func CreateGuideShortCode(c *gin.Context) {
 	userId := c.GetInt("id")
 	var req struct {
-		TokenId int    `json:"token_id"`
-		Product string `json:"product"`
+		TokenId json.Number `json:"token_id"`
+		Product string      `json:"product"`
 	}
 	_ = c.ShouldBindJSON(&req)
-	if req.TokenId <= 0 {
+	tokenId, err := strconv.Atoi(req.TokenId.String())
+	if err != nil || tokenId <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "token_id required"})
 		return
 	}
-	if _, err := model.GetTokenByIds(req.TokenId, userId); err != nil {
+	if _, err := model.GetTokenByIds(tokenId, userId); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "token not found"})
 		return
 	}
@@ -102,7 +105,7 @@ func CreateGuideShortCode(c *gin.Context) {
 	}
 	guideShortCodes.Store(code, &guideShortCode{
 		userId:    userId,
-		tokenId:   req.TokenId,
+		tokenId:   tokenId,
 		product:   product,
 		expiresAt: now.Add(guideShortCodeTTL),
 	})
