@@ -8,6 +8,8 @@ ERKE AI 一键配置工具：**原生 Windows 界面**（Win32 控件，非浏�
 - exe 本身**不含任何密钥**；配置内容由服务端 `/api/usage/guide_config` 按
   链接里的 token 实时生成（模型白名单过滤、参数齐全）
 - 模型更新后重新运行一次工具即可刷新配置
+- Windows 11 风格：DWM 圆角 + 暗色标题栏/客户区跟随系统（亮暗双模式）、
+  Segoe UI Variable 字体（`win11style.go`，纯 syscall 无额外依赖）
 
 ## 构建
 
