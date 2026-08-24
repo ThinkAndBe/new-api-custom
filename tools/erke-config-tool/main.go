@@ -33,13 +33,10 @@ var serverBase = "https://tokenhub.erke.com"
 type appUI struct {
 	mw          *walk.MainWindow
 	codeEdit    *walk.LineEdit
-	linkEdit    *walk.LineEdit
 	rbWork      *walk.RadioButton
 	rbCode      *walk.RadioButton
 	applyBtn    *walk.PushButton
 	statusLabel *walk.TextLabel
-	advCB       *walk.CheckBox
-	linkRow     *walk.Composite
 }
 
 func main() {
@@ -52,8 +49,8 @@ func main() {
 	err := MainWindow{
 		AssignTo: &ui.mw,
 		Title:    "ERKE AI 配置工具",
-		MinSize:  Size{Width: 420, Height: 300},
-		Size:     Size{Width: 460, Height: 330},
+		MinSize:  Size{Width: 420, Height: 280},
+		Size:     Size{Width: 460, Height: 300},
 		Layout:   VBox{Margins: Margins{Left: 20, Top: 18, Right: 20, Bottom: 14}, Spacing: 10},
 		Children: []Widget{
 			Label{Text: "配置码（在使用教程页点「生成配置码」获得）"},
@@ -99,27 +96,7 @@ func main() {
 				Text:      "填好配置码后点上方按钮",
 				TextColor: walk.Color(0x808080),
 			},
-			VSpacer{Size: 4},
-			CheckBox{
-				AssignTo: &ui.advCB,
-				Text:    "高级：直接粘贴配置链接",
-				OnClicked: func() {
-					ui.linkRow.SetVisible(ui.advCB.Checked())
-					if ui.advCB.Checked() {
-						ui.mw.SetSize(walk.Size{Width: 460, Height: 410})
-					} else {
-						ui.mw.SetSize(walk.Size{Width: 460, Height: 330})
-					}
-				},
-			},
-			Composite{
-				AssignTo: &ui.linkRow,
-				Layout:   VBox{Margins: Margins{}},
-				Visible:  false,
-				Children: []Widget{
-					LineEdit{AssignTo: &ui.linkEdit, CueBanner: "https://.../api/usage/guide_config?..."},
-				},
-			},
+			VSpacer{},
 		},
 	}.Create()
 	if err != nil {
@@ -159,17 +136,12 @@ func (ui *appUI) apply() {
 	})
 
 	product := ui.product()
-	var target string
-	if link := strings.TrimSpace(ui.linkEdit.Text()); link != "" {
-		target = link
-	} else {
-		code := strings.TrimSpace(ui.codeEdit.Text())
-		if !isBareCode(code) {
-			ui.setStatus("请输入 6 位配置码（在教程页生成）", false)
-			return
-		}
-		target = code
+	code := strings.TrimSpace(ui.codeEdit.Text())
+	if !isBareCode(code) {
+		ui.setStatus("请输入 6 位配置码（在教程页生成）", false)
+		return
 	}
+	target := code
 
 	cfg, err := fetchAndBuild(target, product)
 	if err != nil {

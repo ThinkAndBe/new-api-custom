@@ -43,4 +43,4 @@ go build -trimpath -ldflags "-s -w -H windowsgui -X main.serverBase=https://toke
 3. 把 6 位码填进工具 → 点「一键配置」→ ✅ 完成（教程页码字号可点击复制）
 4. 重启 WorkBuddy / CodeBuddy 生效
 
-高级折叠项里保留直接粘贴完整链接的方式（guide_config?...&key=...）。
+高级链接粘贴入口已移除，仅保留配置码方式。

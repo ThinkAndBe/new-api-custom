@@ -14,7 +14,7 @@ import {
   Collapsible,
   Modal,
 } from '@douyinfe/semi-ui';
-import { Download, Terminal, Check, Copy, Save, ChevronDown, ChevronUp, MousePointerClick, Keyboard } from 'lucide-react';
+import { Download, Copy, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showInfo, showSuccess, timestamp2string } from '../../helpers';
 import { StatusContext } from '../../context/Status';
@@ -228,87 +228,6 @@ const UsageGuide = () => {
     }
     return autoModelsJson();
   }, [savedTemplate, tokenKey, baseUrl, autoModelsJson, effectiveModels, effectiveParamsMap]);
-
-  const handleDownload = useCallback(() => {
-    const json = modelsJson;
-    if (!json) {
-      showError(t('请先选择令牌'));
-      return;
-    }
-    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'models.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showSuccess(t('配置文件已下载'));
-  }, [modelsJson, t]);
-
-  // 生成自动替换脚本
-  const autoScript = useCallback((type = 'workbuddy') => {
-    const json = modelsJson;
-    if (!json) return '';
-    const dirName = type === 'codebuddy' ? '.codebuddy' : '.workbuddy';
-    const productName = type === 'codebuddy' ? 'CodeBuddy' : 'WorkBuddy';
-
-    const psScript = `$dir = Join-Path $env:USERPROFILE '${dirName}'
-if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-$json = @'
-${json}
-'@
-$utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllText((Join-Path $dir 'models.json'), $json, $utf8NoBom)
-Write-Host ''
-Write-Host '✅ 配置已写入: ' (Join-Path $dir 'models.json') -ForegroundColor Green
-Write-Host '📊 共 ${effectiveModels.length} 个模型'
-Write-Host '🔗 API: ${baseUrl}/v1'
-Write-Host ''
-Write-Host '重启 ${productName} 即可生效'`;
-
-    const utf16le = [];
-    for (let i = 0; i < psScript.length; i++) {
-      const c = psScript.charCodeAt(i);
-      utf16le.push(c & 0xff);
-      utf16le.push((c >> 8) & 0xff);
-    }
-    const b64 = btoa(String.fromCharCode(...utf16le));
-
-    return `@echo off
-powershell -ExecutionPolicy Bypass -EncodedCommand ${b64}
-pause`;
-  }, [modelsJson, effectiveModels.length, baseUrl]);
-
-  const handleDownloadScript = useCallback((type = 'workbuddy') => {
-    const script = autoScript(type);
-    if (!script) {
-      showError(t('请先选择令牌'));
-      return;
-    }
-    const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `setup-${type}.bat`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showSuccess(t('脚本已下载'));
-  }, [autoScript, t]);
-
-  const handleCopyScript = useCallback((type = 'workbuddy') => {
-    const script = autoScript(type);
-    if (!script) {
-      showError(t('请先选择令牌'));
-      return;
-    }
-    navigator.clipboard.writeText(script).then(() => {
-      showSuccess(t('脚本已复制到剪贴板'));
-    });
-  }, [autoScript, t]);
 
   // 「配置码」模式：点按钮 → 后端生成 6 位一次性短码（5 分钟有效）→ 用户在配置工具里输入即完成
   const [codeModal, setCodeModal] = useState({ open: false, code: '', product: 'workbuddy', loading: false, expiresAt: 0 });
@@ -549,30 +468,6 @@ pause`;
               </Text>
             </Card>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <Button
-                type='tertiary'
-                icon={<Download size={14} />}
-                onClick={() => handleDownloadScript('workbuddy')}
-              >
-                {t('WorkBuddy 一键配置(.bat)')}
-              </Button>
-              <Button
-                type='tertiary'
-                icon={<Download size={14} />}
-                onClick={() => handleDownloadScript('codebuddy')}
-              >
-                {t('CodeBuddy 一键配置(.bat)')}
-              </Button>
-              <Button
-                type='tertiary'
-                icon={<Download size={14} />}
-                onClick={handleDownload}
-              >
-                {t('下载 models.json')}
-              </Button>
-            </div>
-
             {/* 配置预览 */}
             <div style={{ marginTop: 16 }}>
               <Text type='tertiary' size='small'>{t('配置预览')}：</Text>
@@ -592,12 +487,6 @@ pause`;
                 {modelsJson}
               </pre>
             </div>
-
-            <Banner
-              type='info'
-              description={t('推荐使用上方「复制命令」方式；也可下载 .bat 双击运行，或手动下载 models.json 放入对应目录。')}
-              style={{ marginTop: 12 }}
-            />
           </div>
         )}
       </Card>
