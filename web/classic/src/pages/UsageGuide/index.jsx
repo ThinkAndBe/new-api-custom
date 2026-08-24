@@ -609,6 +609,17 @@ pause`;
         footer={
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
             <Button
+              icon={<Copy size={14} />}
+              disabled={!codeModal.code || codeModal.loading}
+              onClick={() => {
+                navigator.clipboard.writeText(codeModal.code).then(() => {
+                  showSuccess(t('配置码已复制'));
+                });
+              }}
+            >
+              {t('复制配置码')}
+            </Button>
+            <Button
               type='primary'
               onClick={() => handleGenerateCode(codeModal.product)}
               disabled={codeModal.loading}
@@ -631,16 +642,27 @@ pause`;
           {codeModal.loading ? (
             <Spin size='large' />
           ) : (
-            <div style={{
-              fontFamily: 'monospace',
-              fontSize: 44,
-              fontWeight: 700,
-              letterSpacing: 12,
-              padding: '12px 0 8px',
-              color: 'var(--semi-color-primary)',
-            }}>
-              {codeModal.code}
-            </div>
+            <Tooltip content={t('点击复制')} position='top'>
+              <div
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: 44,
+                  fontWeight: 700,
+                  letterSpacing: 12,
+                  padding: '12px 0 8px',
+                  color: 'var(--semi-color-primary)',
+                  cursor: 'pointer',
+                  userSelect: 'all',
+                }}
+                onClick={() => {
+                  navigator.clipboard.writeText(codeModal.code).then(() => {
+                    showSuccess(t('配置码已复制'));
+                  });
+                }}
+              >
+                {codeModal.code}
+              </div>
+            </Tooltip>
           )}
           <Text type='tertiary' size='small'>
             {codeCountdown > 0

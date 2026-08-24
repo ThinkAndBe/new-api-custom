@@ -1,137 +1,223 @@
 //go:build windows
 
-// ERKE AI 配置工具（erke-config-tool）
+// ERKE AI 配置工具 v2 —— 原生 Windows 界面（Win32 控件，非浏览器窗口）。
 //
-// 双击运行：弹出网页 UI（本地随机端口），用户粘贴配置链接 → 选 WorkBuddy/CodeBuddy
-// → 一键配置 → 工具从服务器拉取 models.json 内容写入对应目录并提示完成。
-// 无命令行窗口、无需安装依赖（单文件 exe）。
+// 界面：6 位配置码输入 → 选 WorkBuddy/CodeBuddy → 一键配置 → 状态提示。
+// 配置码在使用教程页「生成配置码」获得（5 分钟有效，一次性）。
 //
-// 配置链接格式（管理台「使用教程」页生成，含用户密钥参数）：
-//   https://<server>/api/usage/guide_config?token_id=N&product=workbuddy&key=sk-xxx
+// 构建（需 MinGW gcc；首次需生成一次资源 syso）：
+//   go run github.com/akavel/rsrc -manifest app.manifest -o rsrc_windows_amd64.syso
+//   CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -H windowsgui -X main.serverBase=https://tokenhub.erke.com" -o erke-config-tool.exe
 package main
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	neturl "net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
+
+	"github.com/lxn/walk"
+	. "github.com/lxn/walk/declarative"
 )
 
-const version = "1.1"
+const version = "2.0"
 
-// serverBase 由构建时注入（-ldflags "-X main.serverBase=https://tokenhub.erke.com"），
-// 也可留空并在首次运行时让用户在高级选项里填写。
+// serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com"
+
+type appUI struct {
+	mw          *walk.MainWindow
+	codeEdit    *walk.LineEdit
+	linkEdit    *walk.LineEdit
+	rbWork      *walk.RadioButton
+	rbCode      *walk.RadioButton
+	applyBtn    *walk.PushButton
+	statusLabel *walk.TextLabel
+	advCB       *walk.CheckBox
+	linkRow     *walk.Composite
+}
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
 		fmt.Println("erke-config-tool", version)
 		return
 	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ui := &appUI{}
+
+	err := MainWindow{
+		AssignTo: &ui.mw,
+		Title:    "ERKE AI 配置工具",
+		MinSize:  Size{Width: 420, Height: 300},
+		Size:     Size{Width: 460, Height: 330},
+		Layout:   VBox{Margins: Margins{Left: 20, Top: 18, Right: 20, Bottom: 14}, Spacing: 10},
+		Children: []Widget{
+			Label{Text: "配置码（在使用教程页点「生成配置码」获得）"},
+			LineEdit{
+				AssignTo:  &ui.codeEdit,
+				CueBanner: "6 位配置码",
+				MaxLength: 6,
+				Font:      Font{Family: "Consolas", PointSize: 16},
+				OnTextChanged: func() {
+					txt := strings.ToUpper(ui.codeEdit.Text())
+					txt = strings.Map(func(r rune) rune {
+						if (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') {
+							return r
+						}
+						return -1
+					}, txt)
+					if txt != ui.codeEdit.Text() {
+						ui.codeEdit.SetText(txt)
+					}
+				},
+			},
+			Composite{
+				Layout: HBox{Margins: Margins{}},
+				Children: []Widget{
+					RadioButtonGroup{
+						Buttons: []RadioButton{
+							{AssignTo: &ui.rbWork, Text: "WorkBuddy", Value: 1},
+							{AssignTo: &ui.rbCode, Text: "CodeBuddy", Value: 2},
+						},
+					},
+				},
+			},
+			PushButton{
+				AssignTo: &ui.applyBtn,
+				Text:    "一键配置",
+				MinSize: Size{Height: 42},
+				OnClicked: func() {
+					go ui.apply()
+				},
+			},
+			TextLabel{
+				AssignTo:  &ui.statusLabel,
+				Text:      "填好配置码后点上方按钮",
+				TextColor: walk.Color(0x808080),
+			},
+			VSpacer{Size: 4},
+			CheckBox{
+				AssignTo: &ui.advCB,
+				Text:    "高级：直接粘贴配置链接",
+				OnClicked: func() {
+					ui.linkRow.SetVisible(ui.advCB.Checked())
+					if ui.advCB.Checked() {
+						ui.mw.SetSize(walk.Size{Width: 460, Height: 410})
+					} else {
+						ui.mw.SetSize(walk.Size{Width: 460, Height: 330})
+					}
+				},
+			},
+			Composite{
+				AssignTo: &ui.linkRow,
+				Layout:   VBox{Margins: Margins{}},
+				Visible:  false,
+				Children: []Widget{
+					LineEdit{AssignTo: &ui.linkEdit, CueBanner: "https://.../api/usage/guide_config?..."},
+				},
+			},
+		},
+	}.Create()
 	if err != nil {
-		fatalMsg("无法启动本地服务: " + err.Error())
+		walk.MsgBox(nil, "ERKE 配置工具", "界面创建失败: "+err.Error(), walk.MsgBoxIconError)
 		return
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	go serve(ln)
-	openBrowser(fmt.Sprintf("http://127.0.0.1:%d", port))
-	// 保持进程运行（浏览器即界面；关闭页面后进程随浏览器空闲退出策略见 /shutdown）
-	select {}
+	ui.rbWork.SetChecked(true)
+	ui.mw.Run()
 }
 
-func serve(ln net.Listener) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", handleIndex)
-	mux.HandleFunc("/apply", handleApply)
-	mux.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
-		go func() { os.Exit(0) }()
+func (ui *appUI) product() string {
+	if ui.rbCode.Checked() {
+		return "codebuddy"
+	}
+	return "workbuddy"
+}
+
+func (ui *appUI) setStatus(text string, ok bool) {
+	ui.mw.Synchronize(func() {
+		ui.statusLabel.SetText(text)
+		if ok {
+			ui.statusLabel.SetTextColor(walk.Color(0x008000))
+		} else {
+			ui.statusLabel.SetTextColor(walk.Color(0xB00000))
+		}
 	})
-	http.Serve(ln, mux)
 }
 
-func handleIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(indexHTML))
-}
+func (ui *appUI) apply() {
+	ui.mw.Synchronize(func() {
+		ui.applyBtn.SetEnabled(false)
+		ui.applyBtn.SetText("配置中…")
+	})
+	defer ui.mw.Synchronize(func() {
+		ui.applyBtn.SetEnabled(true)
+		ui.applyBtn.SetText("一键配置")
+	})
 
-type applyReq struct {
-	URL     string `json:"url"`
-	Product string `json:"product"`
-	Server  string `json:"server"`
-}
+	product := ui.product()
+	var target string
+	if link := strings.TrimSpace(ui.linkEdit.Text()); link != "" {
+		target = link
+	} else {
+		code := strings.TrimSpace(ui.codeEdit.Text())
+		if !isBareCode(code) {
+			ui.setStatus("请输入 6 位配置码（在教程页生成）", false)
+			return
+		}
+		target = code
+	}
 
-type applyResp struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Models  int    `json:"models"`
-	Path    string `json:"path"`
-}
-
-func handleApply(w http.ResponseWriter, r *http.Request) {
-	var req applyReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, applyResp{Message: "请求格式错误"})
+	cfg, err := fetchAndBuild(target, product)
+	if err != nil {
+		ui.setStatus(err.Error(), false)
 		return
 	}
-	url := strings.TrimSpace(req.URL)
-	if url == "" {
-		writeJSON(w, applyResp{Message: "请输入 6 位配置码（在使用教程页点「生成配置码」获得）"})
+	path, err := writeModelsFile(product, cfg)
+	if err != nil {
+		ui.setStatus("写入文件失败: "+err.Error(), false)
 		return
 	}
-	// 用户可能把 6 位配置码粘到「高级」链接框里：裸 6 位字母数字视为配置码
-	if isBareCode(url) {
-		url = "/redeem?code=" + neturl.QueryEscape(url)
+	productName := "WorkBuddy"
+	if product == "codebuddy" {
+		productName = "CodeBuddy"
 	}
-	// 相对路径 /redeem?code=xxx → 拼接服务器地址
-	if strings.HasPrefix(url, "/redeem") {
+	ui.setStatus(fmt.Sprintf("✅ 配置完成！共 %d 个模型\r\n已写入 %s\r\n请重启 %s 生效", len(cfg.Models), path, productName), true)
+}
+
+// fetchAndBuild 拉取配置：支持 6 位码 / /redeem 相对路径 / 完整链接（可带 key）。
+func fetchAndBuild(target, product string) (*usageConfig, error) {
+	if isBareCode(target) {
+		target = "/redeem?code=" + neturl.QueryEscape(target)
+	}
+	if strings.HasPrefix(target, "/redeem") {
 		code := ""
-		if u, err := neturl.Parse(url); err == nil {
+		if u, err := neturl.Parse(target); err == nil {
 			code = u.Query().Get("code")
 		}
 		if code == "" {
-			writeJSON(w, applyResp{Message: "配置码为空"})
-			return
+			return nil, fmt.Errorf("配置码为空")
 		}
-		server := strings.TrimSpace(req.Server)
+		server := resolveServer()
 		if server == "" {
-			server = serverBase
+			return nil, fmt.Errorf("工具未配置服务器地址")
 		}
-		if server == "" {
-			writeJSON(w, applyResp{Message: "工具未配置服务器地址，请使用「高级：粘贴配置链接」方式"})
-			return
-		}
-		url = strings.TrimSuffix(server, "/") + "/api/usage/guide_redeem?code=" + neturl.QueryEscape(code)
+		target = strings.TrimSuffix(server, "/") + "/api/usage/guide_redeem?code=" + neturl.QueryEscape(code)
 	}
-	product := req.Product
-	if product != "workbuddy" && product != "codebuddy" {
-		product = "workbuddy"
+	if !strings.Contains(target, "://") {
+		return nil, fmt.Errorf("请输入 6 位配置码，或粘贴完整链接（https:// 开头）")
 	}
-	// 拉取配置。链接可带 key 参数（使用教程页生成时附带用户令牌），
-	// 也可以不带——由服务端改为一次性签名链接时同样直接请求。
-	if !strings.Contains(url, "://") && !strings.HasPrefix(url, "http") {
-		writeJSON(w, applyResp{Message: "请输入 6 位配置码，或在「高级」里粘贴完整链接（https:// 开头）"})
-		return
-	}
+
 	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, _ := http.NewRequest("GET", url, nil)
-	if u, err := neturl.Parse(url); err == nil {
+	httpReq, _ := http.NewRequest("GET", target, nil)
+	if u, err := neturl.Parse(target); err == nil {
 		if k := u.Query().Get("key"); k != "" {
 			httpReq.Header.Set("Authorization", "Bearer "+k)
 		}
-	}
-	// 附带产品参数（服务端仅记录用途，不参与内容生成）
-	if httpReq != nil {
-		q := httpReq.URL.Query()
+		q := u.Query()
 		if q.Get("product") == "" {
 			q.Set("product", product)
 			httpReq.URL.RawQuery = q.Encode()
@@ -139,75 +225,78 @@ func handleApply(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		writeJSON(w, applyResp{Message: "拉取配置失败: " + err.Error()})
-		return
+		return nil, fmt.Errorf("拉取配置失败: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
+
 	var apiResp struct {
 		Success bool `json:"success"`
 		Data    struct {
-			Models []map[string]any `json:"models"`
+			Models []usageModel `json:"models"`
 		} `json:"data"`
 		Message string `json:"message"`
 	}
 	if err := json.Unmarshal(body, &apiResp); err != nil || !apiResp.Success {
-		writeJSON(w, applyResp{Message: "配置链接无效或已过期，请回使用教程页重新复制"})
-		return
+		if apiResp.Message != "" {
+			return nil, fmt.Errorf("%s", apiResp.Message)
+		}
+		return nil, fmt.Errorf("配置码无效或已过期，请回教程页重新生成")
 	}
-	// 写入目标文件
+	return &usageConfig{Models: apiResp.Data.Models}, nil
+}
+
+type usageModel struct {
+	Id                string `json:"id"`
+	Name              string `json:"name"`
+	Provider          string `json:"provider"`
+	URL               string `json:"url"`
+	APIKey            string `json:"apiKey"`
+	MaxInputTokens    int    `json:"maxInputTokens"`
+	MaxOutputTokens   int    `json:"maxOutputTokens"`
+	SupportsToolCall  bool   `json:"supportsToolCall"`
+	SupportsImages    bool   `json:"supportsImages"`
+	SupportsReasoning bool   `json:"supportsReasoning"`
+}
+
+type usageConfig struct {
+	Models []usageModel `json:"models"`
+}
+
+func writeModelsFile(product string, cfg *usageConfig) (string, error) {
 	dirName := ".workbuddy"
-	productName := "WorkBuddy"
 	if product == "codebuddy" {
 		dirName = ".codebuddy"
-		productName = "CodeBuddy"
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		writeJSON(w, applyResp{Message: "无法定位用户目录: " + err.Error()})
-		return
+		return "", err
 	}
 	dir := filepath.Join(home, dirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		writeJSON(w, applyResp{Message: "创建目录失败: " + err.Error()})
-		return
+		return "", err
 	}
 	target := filepath.Join(dir, "models.json")
-	cfg := map[string]any{"models": apiResp.Data.Models}
-	out, _ := json.MarshalIndent(cfg, "", "  ")
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return "", err
+	}
 	if err := os.WriteFile(target, out, 0o644); err != nil {
-		writeJSON(w, applyResp{Message: "写入文件失败: " + err.Error()})
-		return
+		return "", err
 	}
-	writeJSON(w, applyResp{
-		Success: true,
-		Message: fmt.Sprintf("✅ 配置完成！共 %d 个模型，已写入 %s。请重启 %s 生效。", len(apiResp.Data.Models), target, productName),
-		Models:  len(apiResp.Data.Models),
-		Path:    target,
-	})
+	return target, nil
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	json.NewEncoder(w).Encode(v)
-}
-
-func openBrowser(url string) {
-	switch runtime.GOOS {
-	case "windows":
-		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		exec.Command("open", url).Start()
-	default:
-		exec.Command("xdg-open", url).Start()
+// resolveServer 返回服务器地址：环境变量 ERKE_CONFIG_SERVER 优先（便于测试），
+// 否则用构建时注入的 serverBase。
+func resolveServer() string {
+	if v := strings.TrimSpace(os.Getenv("ERKE_CONFIG_SERVER")); v != "" {
+		return v
 	}
+	return strings.TrimSpace(serverBase)
 }
 
-func fatalMsg(msg string) {
-	exec.Command("rundll32", "user32.dll,MessageBox", "0", msg, "ERKE 配置工具", "16").Start()
-}
-
-// isBareCode 判断是否为裸 6 位配置码（0-9 A-Z，不含 / : 等路径字符）
+// isBareCode 判断是否为裸 6 位配置码（0-9 A-Z）
 func isBareCode(s string) bool {
 	if len(s) != 6 {
 		return false
