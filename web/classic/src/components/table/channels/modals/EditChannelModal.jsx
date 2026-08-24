@@ -1404,17 +1404,8 @@ data.upstream_model_update_last_detected_models = [];
       }
     });
 
-    inputs.models.forEach((model) => {
-      const v = (model || '').trim();
-      if (!modelMap.has(v)) {
-        modelMap.set(v, {
-          key: v,
-          label: v,
-          value: v,
-        });
-      }
-    });
-
+    // 渠道自身已配置但未注册进模型管理的模型不再合并进选项：
+    // 下拉只显示模型管理里注册的模型（旧模型仍会以标签形式显示在已选值里，可手动移除）。
     const categories = getModelCategories(t);
     const optionsWithIcon = Array.from(modelMap.values()).map((opt) => {
       const modelName = opt.value;
