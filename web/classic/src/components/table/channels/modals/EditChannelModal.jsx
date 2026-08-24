@@ -3728,31 +3728,11 @@ data.upstream_model_update_last_detected_models = [];
                       }}
                       extraText={
                         <Space>
-                          <Button
-                            size='small'
-                            type='primary'
-                            onClick={() =>
-                              handleInputChange('models', basicModels)
-                            }
-                          >
-                            {t('填入相关模型')}
-                          </Button>
-                          {MODEL_FETCHABLE_CHANNEL_TYPES.has(inputs.type) && (
-                            <Button
-                              size='small'
-                              type='tertiary'
-                              onClick={() => fetchUpstreamModelList('models')}
-                            >
-                              {t('获取模型列表')}
-                            </Button>
-                          )}
                           <Dropdown
                             trigger='click'
                             position='bottomRight'
                             menu={[
-                              { node: 'item', name: t('填入所有模型'), onClick: () => handleInputChange('models', fullModels) },
                               ...(inputs.type === 4 && isEdit ? [{ node: 'item', name: t('Ollama 模型管理'), onClick: () => setOllamaModalVisible(true) }] : []),
-                              { node: 'divider' },
                               { node: 'item', name: t('复制所有模型'), onClick: () => {
                                 if (inputs.models.length === 0) { showInfo(t('没有模型可以复制')); return; }
                                 try { copy(inputs.models.join(',')); showSuccess(t('模型列表已复制到剪贴板')); } catch (error) { showError(t('复制失败')); }
