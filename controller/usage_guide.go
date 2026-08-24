@@ -3,6 +3,8 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -34,7 +36,32 @@ type usageGuideModel struct {
 	SupportsReasoning bool   `json:"supportsReasoning"`
 }
 
-// GetUsageGuideConfig 下发当前用户的 models.json 配置内容。
+// DownloadUsageGuideConfigTool 下发 erke-config-tool.exe 配置工具。
+// exe 由管理员放置于工作目录 config-tool/erke-config-tool.exe
+// （容器部署挂载到容器内 /app/config-tool/；源码见 tools/erke-config-tool）。
+// GET /api/usage/config_tool （无需登录：工具本身不含任何密钥）
+func DownloadUsageGuideConfigTool(c *gin.Context) {
+	candidates := []string{
+		filepath.Join("config-tool", "erke-config-tool.exe"),
+		filepath.Join("/data", "config-tool", "erke-config-tool.exe"),
+	}
+	exePath := ""
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			exePath = p
+			break
+		}
+	}
+	if exePath == "" {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "config tool not deployed",
+		})
+		return
+	}
+	c.Header("Content-Disposition", `attachment; filename="erke-config-tool.exe"`)
+	c.File(exePath)
+}
 // 鉴权：Authorization Bearer <sk-token>（TokenAuthReadOnly，用户自己的令牌）。
 // GET /api/usage/guide_config?token_id=
 //

@@ -298,8 +298,11 @@ func SetApiRouter(router *gin.Engine) {
 			{
 				tokenUsageRoute.GET("/", controller.GetTokenUsage)
 			}
-			// 使用教程「复制命令」模式的配置下发（PowerShell irm|iex 拉取）
-			usageRoute.GET("/guide_config", middleware.TokenAuthReadOnly(), controller.GetUsageGuideConfig)
+			// 使用教程「复制命令/配置工具」模式的配置下发（PowerShell irm|iex / erke-config-tool.exe 拉取）
+			// AllowQueryKey 在前：支持 ?key=sk-xxx 直传（exe 场景）；ReadOnly 在后做统一校验
+			usageRoute.GET("/guide_config", middleware.TokenAuthAllowQueryKey(), middleware.TokenAuthReadOnly(), controller.GetUsageGuideConfig)
+			// 配置工具 exe 下载（公开：工具不含密钥）
+			usageRoute.GET("/config_tool", controller.DownloadUsageGuideConfigTool)
 		}
 
 		redemptionRoute := apiRouter.Group("/redemption")

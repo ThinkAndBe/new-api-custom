@@ -318,6 +318,23 @@ pause`;
     return `irm "${url}" | iex`;
   }, [baseUrl, tokenKey, selectedTokenId]);
 
+  // 「配置工具」模式链接：带 key 参数，粘贴进 erke-config-tool.exe 即可拉取
+  const toolLink = useCallback((type = 'workbuddy') => {
+    if (!tokenKey) return '';
+    return `${baseUrl}/api/usage/guide_config?token_id=${selectedTokenId}&product=${type}&key=${tokenKey}`;
+  }, [baseUrl, tokenKey, selectedTokenId]);
+
+  const handleCopyToolLink = useCallback((type = 'workbuddy') => {
+    const link = toolLink(type);
+    if (!link) {
+      showError(t('请先选择令牌'));
+      return;
+    }
+    navigator.clipboard.writeText(link).then(() => {
+      showSuccess(t('链接已复制，请粘贴到配置工具里'));
+    });
+  }, [toolLink, t]);
+
   // 引导弹窗打开状态（复制命令后展示傻瓜化三步指引）
   const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [guideModalProduct, setGuideModalProduct] = useState('workbuddy');
@@ -505,14 +522,37 @@ pause`;
                 style={{ marginBottom: 12 }}
               />
             )}
-            {/* 推荐方式：复制一条命令到 PowerShell 运行 */}
+            {/* 推荐方式：配置工具（exe）或复制命令 */}
             <Card bordered style={{ borderColor: 'var(--semi-color-success)', background: 'var(--semi-color-success-light-default)', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <StepBadge ready size={20} />
-                <Text strong>{t('推荐：复制命令自动配置')}</Text>
+                <Text strong>{t('推荐：一键配置')}</Text>
+              </div>
+              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 10 }}>
+                {t('方式 A：下载配置工具（.exe，双击打开）→ 复制对应链接 → 在工具里粘贴并点「一键配置」')}
+              </Text>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                <Button
+                  size='small'
+                  type='primary'
+                  icon={<Download size={14} />}
+                  onClick={() => window.open('/api/usage/config_tool', '_blank')}
+                >
+                  {t('下载配置工具')}
+                </Button>
+                {['workbuddy', 'codebuddy'].map((type) => (
+                  <Button
+                    key={type}
+                    size='small'
+                    icon={<Copy size={12} />}
+                    onClick={() => handleCopyToolLink(type)}
+                  >
+                    {t('复制')} {type === 'workbuddy' ? 'WorkBuddy' : 'CodeBuddy'} {t('链接')}
+                  </Button>
+                ))}
               </div>
               <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 8 }}>
-                {t('① 复制命令 → ② 按 Win+R 输入 powershell 回车 → ③ 粘贴命令回车，自动写入配置')}
+                {t('方式 B：复制命令 → 按 Win+R 输入 powershell 回车 → 粘贴命令回车')}
               </Text>
               {['workbuddy', 'codebuddy'].map((type) => (
                 <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
