@@ -12,8 +12,9 @@ import {
   TextArea,
   Tooltip,
   Collapsible,
+  Modal,
 } from '@douyinfe/semi-ui';
-import { Download, Terminal, Check, Copy, Save, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, Terminal, Check, Copy, Save, ChevronDown, ChevronUp, MousePointerClick, Keyboard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { API, showError, showInfo, showSuccess, timestamp2string } from '../../helpers';
 import { StatusContext } from '../../context/Status';
@@ -317,6 +318,10 @@ pause`;
     return `irm "${url}" | iex`;
   }, [baseUrl, tokenKey, selectedTokenId]);
 
+  // 引导弹窗打开状态（复制命令后展示傻瓜化三步指引）
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [guideModalProduct, setGuideModalProduct] = useState('workbuddy');
+
   const handleCopyCommand = useCallback((type = 'workbuddy') => {
     const cmd = oneLineCommand(type);
     if (!cmd) {
@@ -324,7 +329,8 @@ pause`;
       return;
     }
     navigator.clipboard.writeText(cmd).then(() => {
-      showSuccess(t('命令已复制，请按 Win+R 输入 powershell 后粘贴运行'));
+      setGuideModalProduct(type);
+      setGuideModalOpen(true);
     });
   }, [oneLineCommand, t]);
 
@@ -588,6 +594,67 @@ pause`;
           </div>
         )}
       </Card>
+
+      {/* 复制命令后的傻瓜化三步指引弹窗 */}
+      <Modal
+        visible={guideModalOpen}
+        onCancel={() => setGuideModalOpen(false)}
+        footer={
+          <Button type='primary' onClick={() => setGuideModalOpen(false)}>
+            {t('我已完成配置')}
+          </Button>
+        }
+        title={t('命令已复制，按下面 3 步操作')}
+        width={520}
+        size='medium'
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 4 }}>
+          {[
+            {
+              icon: <Check size={18} />,
+              title: t('第 1 步：命令已复制好'),
+              desc: guideModalProduct === 'workbuddy'
+                ? t('配置 WorkBuddy 的命令已经在你的剪贴板里，不用动它')
+                : t('配置 CodeBuddy 的命令已经在你的剪贴板里，不用动它'),
+            },
+            {
+              icon: <Keyboard size={18} />,
+              title: t('第 2 步：打开 PowerShell'),
+              desc: t('按键盘 Win + R（Win 键在左下角 Ctrl 旁边），弹出的框里输入 powershell，按回车'),
+            },
+            {
+              icon: <MousePointerClick size={18} />,
+              title: t('第 3 步：粘贴并回车'),
+              desc: t('在打开的蓝色窗口里点鼠标右键（自动粘贴），再按回车，看到 ✅ 提示即完成'),
+            },
+          ].map((step, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{
+                width: 34,
+                height: 34,
+                borderRadius: '50%',
+                background: 'var(--semi-color-primary-light-default)',
+                color: 'var(--semi-color-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                {step.icon}
+              </div>
+              <div>
+                <Text strong style={{ display: 'block', marginBottom: 2 }}>{step.title}</Text>
+                <Text type='tertiary' size='small'>{step.desc}</Text>
+              </div>
+            </div>
+          ))}
+          <Banner
+            type='info'
+            closeIcon={null}
+            description={t('配置完成后重启 WorkBuddy / CodeBuddy 生效。之后模型有变化，重新复制一次命令运行即可更新。')}
+          />
+        </div>
+      </Modal>
 
 
       {/* 管理员：模板编辑（默认收起，移到页面底部不干扰用户视图） */}
