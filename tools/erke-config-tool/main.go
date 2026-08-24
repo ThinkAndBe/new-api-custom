@@ -26,16 +26,26 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "2.0"
+const version = "2.1"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com"
 
+// Hero 渐变用色（walk.Color 为 0x00BBGGRR）
+const (
+	heroColorFrom = 0xF6823B // #3B82F6 蓝
+	heroColorTo   = 0xF65C8B // #8B5CF6 紫
+	heroTextMain  = 0xFFFFFF
+	heroTextSub   = 0xFFE7E0 // #E0E7FF 淡紫白
+)
+
 type appUI struct {
 	mw            *walk.MainWindow
+	body          *walk.Composite
 	titleLabel    *walk.Label
 	subtitleLabel *walk.Label
 	codeLabel     *walk.Label
+	targetLabel   *walk.Label
 	codeEdit      *walk.LineEdit
 	rbWork        *walk.RadioButton
 	rbCode        *walk.RadioButton
@@ -54,84 +64,94 @@ func main() {
 	err := MainWindow{
 		AssignTo: &ui.mw,
 		Title:    "ERKE AI 配置工具",
-		MinSize:  Size{Width: 420, Height: 320},
-		Size:     Size{Width: 480, Height: 380},
-		Layout:   VBox{Margins: Margins{Left: 28, Top: 22, Right: 28, Bottom: 18}, Spacing: 12},
+		MinSize:  Size{Width: 420, Height: 340},
+		Size:     Size{Width: 480, Height: 400},
+		Layout:   VBox{Margins: Margins{}, Spacing: 0},
 		Children: []Widget{
-			// 标题区
-			Composite{
-				Layout: VBox{Margins: Margins{}},
+			// Hero 渐变头部（通栏）
+			GradientComposite{
+				Color1: walk.Color(heroColorFrom),
+				Color2: walk.Color(heroColorTo),
+				Layout: VBox{Margins: Margins{Left: 28, Top: 22, Right: 28, Bottom: 18}, Spacing: 4},
 				Children: []Widget{
-					Label{AssignTo: &ui.titleLabel, Text: "ERKE AI 配置工具", Font: Font{Family: "Segoe UI Variable Display", PointSize: 15}},
+					Label{
+						AssignTo:  &ui.titleLabel,
+						Text:      "ERKE AI 配置工具",
+						TextColor: heroTextMain,
+						Font:      Font{Family: "Segoe UI Variable Display", PointSize: 16},
+					},
 					Label{
 						AssignTo:  &ui.subtitleLabel,
-						Text:      "在使用教程页点「生成配置码」，把 6 位码填到下面",
-						TextColor: walk.Color(0x6B6B6B),
+						Text:      "v" + version + " · 在使用教程页点「生成配置码」，填到下面即可",
+						TextColor: heroTextSub,
 						Font:      Font{Family: "Segoe UI Variable Text", PointSize: 8},
 					},
 				},
 			},
-			// 配置码输入区
+			// 正文
 			Composite{
-				Layout: VBox{Margins: Margins{Top: 6, Bottom: 2}},
+				AssignTo:   &ui.body,
+				Background: SolidColorBrush{Color: 0xFFFFFF},
+				Layout:     VBox{Margins: Margins{Left: 28, Top: 20, Right: 28, Bottom: 18}, Spacing: 12},
 				Children: []Widget{
-					Label{AssignTo: &ui.codeLabel, Text: "配置码", Font: Font{Family: "Segoe UI Variable Text", PointSize: 9}},
-					LineEdit{
-						AssignTo:  &ui.codeEdit,
-						CueBanner: "000000",
-						MaxLength: 6,
-						Font:      Font{Family: "Consolas", PointSize: 15},
-						OnTextChanged: func() {
-							txt := strings.ToUpper(ui.codeEdit.Text())
-							txt = strings.Map(func(r rune) rune {
-								if (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') {
-									return r
-								}
-								return -1
-							}, txt)
-							if txt != ui.codeEdit.Text() {
-								ui.codeEdit.SetText(txt)
-							}
+					// 配置码输入区
+					Composite{
+						Layout: VBox{Margins: Margins{}},
+						Children: []Widget{
+							Label{AssignTo: &ui.codeLabel, Text: "配置码", TextColor: walk.Color(0x444444), Font: Font{Family: "Segoe UI Variable Text", PointSize: 9}},
+							LineEdit{
+								AssignTo:  &ui.codeEdit,
+								CueBanner: "000000",
+								MaxLength: 6,
+								Font:      Font{Family: "Consolas", PointSize: 15},
+								OnTextChanged: func() {
+									txt := strings.ToUpper(ui.codeEdit.Text())
+									txt = strings.Map(func(r rune) rune {
+										if (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') {
+											return r
+										}
+										return -1
+									}, txt)
+									if txt != ui.codeEdit.Text() {
+										ui.codeEdit.SetText(txt)
+									}
+								},
+							},
 						},
 					},
-				},
-			},
-			// 客户端选择
-			Composite{
-				Layout: HBox{Margins: Margins{Top: 2}},
-				Children: []Widget{
-					Label{Text: "配置到：", TextColor: walk.Color(0x6B6B6B)},
-					RadioButtonGroup{
-						Buttons: []RadioButton{
-							{AssignTo: &ui.rbWork, Text: "WorkBuddy", Value: 1},
-							{AssignTo: &ui.rbCode, Text: "CodeBuddy", Value: 2},
+					// 客户端选择
+					Composite{
+						Layout: HBox{Margins: Margins{}},
+						Children: []Widget{
+							Label{AssignTo: &ui.targetLabel, Text: "配置到：", TextColor: walk.Color(0x6B6B6B)},
+							RadioButtonGroup{
+								Buttons: []RadioButton{
+									{AssignTo: &ui.rbWork, Text: "WorkBuddy", Value: 1},
+									{AssignTo: &ui.rbCode, Text: "CodeBuddy", Value: 2},
+								},
+							},
 						},
 					},
-				},
-			},
-			// 主按钮
-			PushButton{
-				AssignTo: &ui.applyBtn,
-				Text:     "一键配置",
-				MinSize:  Size{Height: 46},
-				Font:     Font{Family: "Segoe UI Variable Display", PointSize: 11},
-				OnClicked: func() {
-					go ui.apply()
-				},
-			},
-			// 状态区（卡片感：上边距留白 + 小字）
-			Composite{
-				Layout: VBox{Margins: Margins{Top: 8}},
-				Children: []Widget{
+					// 主按钮
+					PushButton{
+						AssignTo: &ui.applyBtn,
+						Text:     "一键配置",
+						MinSize:  Size{Height: 48},
+						Font:     Font{Family: "Segoe UI Variable Display", PointSize: 11},
+						OnClicked: func() {
+							go ui.apply()
+						},
+					},
+					// 状态区
 					TextLabel{
 						AssignTo:  &ui.statusLabel,
 						Text:      "填好配置码后点上方按钮",
 						TextColor: walk.Color(0x8A8A8A),
 						Font:      Font{Family: "Segoe UI Variable Text", PointSize: 9},
 					},
+					VSpacer{},
 				},
 			},
-			VSpacer{},
 		},
 	}.Create()
 	if err != nil {
@@ -147,16 +167,16 @@ func main() {
 	ui.mw.Run()
 }
 
-// applyDarkTheme 客户端区域暗色适配：窗口底色、标签文字、控件视觉样式。
+// applyDarkTheme 客户端区域暗色适配：正文底色、标签文字、控件视觉样式。
+// Hero 渐变头部深浅色共用，不变。
 func (ui *appUI) applyDarkTheme() {
 	if bg, err := walk.NewSolidColorBrush(walk.Color(0x202020)); err == nil {
 		ui.mw.SetBackground(bg)
+		ui.body.SetBackground(bg)
 	}
 	lightText := walk.Color(0xF0F0F0)
-	midText := walk.Color(0x9B9B9B)
-	ui.titleLabel.SetTextColor(lightText)
-	ui.subtitleLabel.SetTextColor(midText)
 	ui.codeLabel.SetTextColor(walk.Color(0xC8C8C8))
+	ui.targetLabel.SetTextColor(walk.Color(0x9B9B9B))
 	ui.codeEdit.SetTextColor(lightText)
 	if bg, err := walk.NewSolidColorBrush(walk.Color(0x2B2B2B)); err == nil {
 		ui.codeEdit.SetBackground(bg)

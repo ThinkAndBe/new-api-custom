@@ -194,6 +194,8 @@ func DownloadUsageGuideConfigTool(c *gin.Context) {
 		return
 	}
 	c.Header("Content-Disposition", `attachment; filename="erke-config-tool.exe"`)
+	// 工具更新较频繁，禁止浏览器/代理缓存旧版本
+	c.Header("Cache-Control", "no-store")
 	c.File(exePath)
 }
 // 鉴权：Authorization Bearer <sk-token>（TokenAuthReadOnly，用户自己的令牌）。
