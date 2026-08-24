@@ -88,7 +88,11 @@ func handleApply(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, applyResp{Message: "请输入 6 位配置码（在使用教程页点「生成配置码」获得）"})
 		return
 	}
-	// 相对路径 /redeem?code=xxx → 由工具直接本地处理短码兑换
+	// 用户可能把 6 位配置码粘到「高级」链接框里：裸 6 位字母数字视为配置码
+	if isBareCode(url) {
+		url = "/redeem?code=" + neturl.QueryEscape(url)
+	}
+	// 相对路径 /redeem?code=xxx → 拼接服务器地址
 	if strings.HasPrefix(url, "/redeem") {
 		code := ""
 		if u, err := neturl.Parse(url); err == nil {
@@ -114,6 +118,10 @@ func handleApply(w http.ResponseWriter, r *http.Request) {
 	}
 	// 拉取配置。链接可带 key 参数（使用教程页生成时附带用户令牌），
 	// 也可以不带——由服务端改为一次性签名链接时同样直接请求。
+	if !strings.Contains(url, "://") && !strings.HasPrefix(url, "http") {
+		writeJSON(w, applyResp{Message: "请输入 6 位配置码，或在「高级」里粘贴完整链接（https:// 开头）"})
+		return
+	}
 	client := &http.Client{Timeout: 30 * time.Second}
 	httpReq, _ := http.NewRequest("GET", url, nil)
 	if u, err := neturl.Parse(url); err == nil {
@@ -122,12 +130,12 @@ func handleApply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// 附带产品参数（服务端仅记录用途，不参与内容生成）
-	if !strings.Contains(url, "product=") {
-		sep := "?"
-		if strings.Contains(url, "?") {
-			sep = "&"
+	if httpReq != nil {
+		q := httpReq.URL.Query()
+		if q.Get("product") == "" {
+			q.Set("product", product)
+			httpReq.URL.RawQuery = q.Encode()
 		}
-		httpReq.URL.RawQuery += sep + "product=" + product
 	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -197,4 +205,17 @@ func openBrowser(url string) {
 
 func fatalMsg(msg string) {
 	exec.Command("rundll32", "user32.dll,MessageBox", "0", msg, "ERKE 配置工具", "16").Start()
+}
+
+// isBareCode 判断是否为裸 6 位配置码（0-9 A-Z，不含 / : 等路径字符）
+func isBareCode(s string) bool {
+	if len(s) != 6 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z')) {
+			return false
+		}
+	}
+	return true
 }
