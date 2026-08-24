@@ -309,6 +309,25 @@ pause`;
     });
   }, [autoScript, t]);
 
+  // 「复制命令」模式：PowerShell 单行命令（irm 配置接口 | iex），
+  // 用户复制 → Win+R 粘贴 powershell 回车 → 再粘贴命令回车即完成，无需下载 bat。
+  const oneLineCommand = useCallback((type = 'workbuddy') => {
+    if (!tokenKey) return '';
+    const url = `${baseUrl}/api/usage/guide_config?token_id=${selectedTokenId}&product=${type}`;
+    return `irm "${url}" | iex`;
+  }, [baseUrl, tokenKey, selectedTokenId]);
+
+  const handleCopyCommand = useCallback((type = 'workbuddy') => {
+    const cmd = oneLineCommand(type);
+    if (!cmd) {
+      showError(t('请先选择令牌'));
+      return;
+    }
+    navigator.clipboard.writeText(cmd).then(() => {
+      showSuccess(t('命令已复制，请按 Win+R 输入 powershell 后粘贴运行'));
+    });
+  }, [oneLineCommand, t]);
+
   // 管理员保存模板
   const handleSaveTemplate = useCallback(async () => {
     // 验证 JSON 格式
@@ -480,27 +499,57 @@ pause`;
                 style={{ marginBottom: 12 }}
               />
             )}
+            {/* 推荐方式：复制一条命令到 PowerShell 运行 */}
+            <Card bordered style={{ borderColor: 'var(--semi-color-success)', background: 'var(--semi-color-success-light-default)', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <StepBadge ready size={20} />
+                <Text strong>{t('推荐：复制命令自动配置')}</Text>
+              </div>
+              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 8 }}>
+                {t('① 复制命令 → ② 按 Win+R 输入 powershell 回车 → ③ 粘贴命令回车，自动写入配置')}
+              </Text>
+              {['workbuddy', 'codebuddy'].map((type) => (
+                <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Tag size='small' color='blue'>{type === 'workbuddy' ? 'WorkBuddy' : 'CodeBuddy'}</Tag>
+                  <code style={{
+                    flex: 1,
+                    padding: '4px 10px',
+                    background: 'var(--semi-color-fill-1)',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {oneLineCommand(type)}
+                  </code>
+                  <Button
+                    size='small'
+                    type='primary'
+                    icon={<Copy size={12} />}
+                    onClick={() => handleCopyCommand(type)}
+                  >
+                    {t('复制命令')}
+                  </Button>
+                </div>
+              ))}
+            </Card>
+
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               <Button
-                type='primary'
+                type='tertiary'
                 icon={<Download size={14} />}
                 onClick={() => handleDownloadScript('workbuddy')}
               >
-                {t('WorkBuddy 一键配置')}
-              </Button>
-              <Button
-                type='primary'
-                icon={<Download size={14} />}
-                onClick={() => handleDownloadScript('codebuddy')}
-              >
-                {t('CodeBuddy 一键配置')}
+                {t('WorkBuddy 一键配置(.bat)')}
               </Button>
               <Button
                 type='tertiary'
-                icon={<Terminal size={14} />}
-                onClick={() => handleCopyScript('workbuddy')}
+                icon={<Download size={14} />}
+                onClick={() => handleDownloadScript('codebuddy')}
               >
-                {t('复制脚本')}
+                {t('CodeBuddy 一键配置(.bat)')}
               </Button>
               <Button
                 type='tertiary'
@@ -533,7 +582,7 @@ pause`;
 
             <Banner
               type='info'
-              description={t('下载 .bat 脚本后双击运行即可自动配置。也可手动下载 models.json 放入对应目录。')}
+              description={t('推荐使用上方「复制命令」方式；也可下载 .bat 双击运行，或手动下载 models.json 放入对应目录。')}
               style={{ marginTop: 12 }}
             />
           </div>

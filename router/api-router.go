@@ -298,6 +298,8 @@ func SetApiRouter(router *gin.Engine) {
 			{
 				tokenUsageRoute.GET("/", controller.GetTokenUsage)
 			}
+			// 使用教程「复制命令」模式的配置下发（PowerShell irm|iex 拉取）
+			usageRoute.GET("/guide_config", middleware.TokenAuthReadOnly(), controller.GetUsageGuideConfig)
 		}
 
 		redemptionRoute := apiRouter.Group("/redemption")
