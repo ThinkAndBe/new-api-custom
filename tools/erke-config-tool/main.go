@@ -25,7 +25,11 @@ import (
 	"time"
 )
 
-const version = "1.0"
+const version = "1.1"
+
+// serverBase 由构建时注入（-ldflags "-X main.serverBase=https://tokenhub.erke.com"），
+// 也可留空并在首次运行时让用户在高级选项里填写。
+var serverBase = "https://tokenhub.erke.com"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
@@ -63,6 +67,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 type applyReq struct {
 	URL     string `json:"url"`
 	Product string `json:"product"`
+	Server  string `json:"server"`
 }
 
 type applyResp struct {
@@ -80,8 +85,28 @@ func handleApply(w http.ResponseWriter, r *http.Request) {
 	}
 	url := strings.TrimSpace(req.URL)
 	if url == "" {
-		writeJSON(w, applyResp{Message: "请先粘贴配置链接（在使用教程页点「复制命令」旁边的「复制链接」）"})
+		writeJSON(w, applyResp{Message: "请输入 6 位配置码（在使用教程页点「生成配置码」获得）"})
 		return
+	}
+	// 相对路径 /redeem?code=xxx → 由工具直接本地处理短码兑换
+	if strings.HasPrefix(url, "/redeem") {
+		code := ""
+		if u, err := neturl.Parse(url); err == nil {
+			code = u.Query().Get("code")
+		}
+		if code == "" {
+			writeJSON(w, applyResp{Message: "配置码为空"})
+			return
+		}
+		server := strings.TrimSpace(req.Server)
+		if server == "" {
+			server = serverBase
+		}
+		if server == "" {
+			writeJSON(w, applyResp{Message: "工具未配置服务器地址，请使用「高级：粘贴配置链接」方式"})
+			return
+		}
+		url = strings.TrimSuffix(server, "/") + "/api/usage/guide_redeem?code=" + neturl.QueryEscape(code)
 	}
 	product := req.Product
 	if product != "workbuddy" && product != "codebuddy" {

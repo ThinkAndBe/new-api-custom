@@ -1,12 +1,16 @@
 package controller
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -15,6 +19,133 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// ---- 配置短码：使用教程「一键配置」的最简交互 ----
+// 教程页点按钮生成 6 位短码（5 分钟有效，内存存储），
+// 用户在 erke-config-tool.exe 里只输短码 + 点「一键配置」即完成。
+// 兑换后立即失效（一次性），码内不落地任何明文密钥。
+
+type guideShortCode struct {
+	userId    int
+	tokenId   int
+	product   string
+	expiresAt time.Time
+	used      bool
+}
+
+const guideShortCodeTTL = 5 * time.Minute
+
+var (
+	guideShortCodes   sync.Map // code -> *guideShortCode
+	guideShortCodeMu  sync.Mutex
+)
+
+func genShortCode() (string, error) {
+	const digits = "0123456789"
+	const letters = "ABCDEFGHJKMNPQRSTUVWXYZ" // 去掉易混淆的 I/L/O
+	out := make([]byte, 6)
+	for i := range out {
+		pool := digits + letters
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(pool))))
+		if err != nil {
+			return "", err
+		}
+		out[i] = pool[n.Int64()]
+	}
+	return string(out), nil
+}
+
+// CreateGuideShortCode POST /api/usage/guide_code （UserAuth）
+// 为当前用户选定的令牌生成一次性短码，5 分钟有效。
+func CreateGuideShortCode(c *gin.Context) {
+	userId := c.GetInt("id")
+	var req struct {
+		TokenId int    `json:"token_id"`
+		Product string `json:"product"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	if req.TokenId <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "token_id required"})
+		return
+	}
+	if _, err := model.GetTokenByIds(req.TokenId, userId); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "token not found"})
+		return
+	}
+	product := req.Product
+	if product != "workbuddy" && product != "codebuddy" {
+		product = "workbuddy"
+	}
+
+	// 清理过期码 + 限制单用户未用码数量（防刷）
+	now := time.Now()
+	count := 0
+	guideShortCodes.Range(func(k, v any) bool {
+		if sc, ok := v.(*guideShortCode); ok {
+			if sc.expiresAt.Before(now) || sc.used {
+				guideShortCodes.Delete(k)
+			} else if sc.userId == userId {
+				count++
+			}
+		}
+		return true
+	})
+	if count >= 5 {
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "message": "too many active codes, wait or use existing one"})
+		return
+	}
+
+	code, err := genShortCode()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	guideShortCodes.Store(code, &guideShortCode{
+		userId:    userId,
+		tokenId:   req.TokenId,
+		product:   product,
+		expiresAt: now.Add(guideShortCodeTTL),
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"code":       code,
+		"expires_in": int(guideShortCodeTTL.Seconds()),
+	})
+}
+
+// RedeemGuideShortCode GET /api/usage/guide_redeem?code=XXXXXX （公开 + 限流）
+// exe 用短码换取完整 models.json 配置；短码一次性，兑换即失效。
+func RedeemGuideShortCode(c *gin.Context) {
+	code := strings.ToUpper(strings.TrimSpace(c.Query("code")))
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "code required"})
+		return
+	}
+	v, ok := guideShortCodes.Load(code)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "配置码无效或已过期，请回到使用教程页重新生成"})
+		return
+	}
+	sc := v.(*guideShortCode)
+	guideShortCodeMu.Lock()
+	if sc.used || sc.expiresAt.Before(time.Now()) {
+		guideShortCodes.Delete(code)
+		guideShortCodeMu.Unlock()
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "配置码无效或已过期，请回到使用教程页重新生成"})
+		return
+	}
+	sc.used = true
+	guideShortCodes.Delete(code) // 一次性
+	guideShortCodeMu.Unlock()
+
+	// 复用 GetUsageGuideConfig 的生成逻辑（以短码持有者身份）
+	c.Set("id", sc.userId)
+	q := c.Request.URL.Query()
+	q.Set("token_id", strconv.Itoa(sc.tokenId))
+	c.Request.URL.RawQuery = q.Encode()
+	GetUsageGuideConfig(c)
+}
 
 // usageGuideConfig 使用教程「复制命令」模式的数据下发。
 // 前端生成 PowerShell 单行命令：irm {url} | iex，脚本从这里取配置并写入

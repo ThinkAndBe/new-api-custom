@@ -310,46 +310,40 @@ pause`;
     });
   }, [autoScript, t]);
 
-  // 「复制命令」模式：PowerShell 单行命令（irm 配置接口 | iex），
-  // 用户复制 → Win+R 粘贴 powershell 回车 → 再粘贴命令回车即完成，无需下载 bat。
-  const oneLineCommand = useCallback((type = 'workbuddy') => {
-    if (!tokenKey) return '';
-    const url = `${baseUrl}/api/usage/guide_config?token_id=${selectedTokenId}&product=${type}`;
-    return `irm "${url}" | iex`;
-  }, [baseUrl, tokenKey, selectedTokenId]);
+  // 「配置码」模式：点按钮 → 后端生成 6 位一次性短码（5 分钟有效）→ 用户在配置工具里输入即完成
+  const [codeModal, setCodeModal] = useState({ open: false, code: '', product: 'workbuddy', loading: false, expiresAt: 0 });
+  const [codeCountdown, setCodeCountdown] = useState(0);
 
-  // 「配置工具」模式链接：带 key 参数，粘贴进 erke-config-tool.exe 即可拉取
-  const toolLink = useCallback((type = 'workbuddy') => {
-    if (!tokenKey) return '';
-    return `${baseUrl}/api/usage/guide_config?token_id=${selectedTokenId}&product=${type}&key=${tokenKey}`;
-  }, [baseUrl, tokenKey, selectedTokenId]);
+  useEffect(() => {
+    if (!codeModal.open || !codeModal.expiresAt) return;
+    const timer = setInterval(() => {
+      const left = Math.max(0, Math.floor((codeModal.expiresAt - Date.now()) / 1000));
+      setCodeCountdown(left);
+      if (left <= 0) clearInterval(timer);
+    }, 1000);
+    setCodeCountdown(Math.max(0, Math.floor((codeModal.expiresAt - Date.now()) / 1000)));
+    return () => clearInterval(timer);
+  }, [codeModal.open, codeModal.expiresAt]);
 
-  const handleCopyToolLink = useCallback((type = 'workbuddy') => {
-    const link = toolLink(type);
-    if (!link) {
+  const handleGenerateCode = useCallback(async (type = 'workbuddy') => {
+    if (!selectedTokenId) {
       showError(t('请先选择令牌'));
       return;
     }
-    navigator.clipboard.writeText(link).then(() => {
-      showSuccess(t('链接已复制，请粘贴到配置工具里'));
-    });
-  }, [toolLink, t]);
-
-  // 引导弹窗打开状态（复制命令后展示傻瓜化三步指引）
-  const [guideModalOpen, setGuideModalOpen] = useState(false);
-  const [guideModalProduct, setGuideModalProduct] = useState('workbuddy');
-
-  const handleCopyCommand = useCallback((type = 'workbuddy') => {
-    const cmd = oneLineCommand(type);
-    if (!cmd) {
-      showError(t('请先选择令牌'));
-      return;
+    setCodeModal({ open: true, code: '', product: type, loading: true, expiresAt: 0 });
+    try {
+      const res = await API.post('/api/usage/guide_code', { token_id: selectedTokenId, product: type });
+      if (res.data.success && res.data.code) {
+        setCodeModal((m) => ({ ...m, code: res.data.code, loading: false, expiresAt: Date.now() + (res.data.expires_in || 300) * 1000 }));
+      } else {
+        showError(res.data.message || t('生成失败'));
+        setCodeModal((m) => ({ ...m, loading: false }));
+      }
+    } catch (e) {
+      showError(t('生成失败'));
+      setCodeModal((m) => ({ ...m, loading: false }));
     }
-    navigator.clipboard.writeText(cmd).then(() => {
-      setGuideModalProduct(type);
-      setGuideModalOpen(true);
-    });
-  }, [oneLineCommand, t]);
+  }, [selectedTokenId, t]);
 
   // 管理员保存模板
   const handleSaveTemplate = useCallback(async () => {
@@ -522,19 +516,18 @@ pause`;
                 style={{ marginBottom: 12 }}
               />
             )}
-            {/* 推荐方式：配置工具（exe）或复制命令 */}
+            {/* 推荐方式：配置码 + 配置工具 */}
             <Card bordered style={{ borderColor: 'var(--semi-color-success)', background: 'var(--semi-color-success-light-default)', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <StepBadge ready size={20} />
-                <Text strong>{t('推荐：一键配置')}</Text>
+                <Text strong>{t('推荐：一键配置（两步）')}</Text>
               </div>
               <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 10 }}>
-                {t('方式 A：下载配置工具（.exe，双击打开）→ 复制对应链接 → 在工具里粘贴并点「一键配置」')}
+                {t('① 下载配置工具（.exe，双击打开，只需一次）　② 点下面按钮生成配置码，填进工具里点「一键配置」')}
               </Text>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
                 <Button
                   size='small'
-                  type='primary'
                   icon={<Download size={14} />}
                   onClick={() => window.open('/api/usage/config_tool', '_blank')}
                 >
@@ -544,42 +537,16 @@ pause`;
                   <Button
                     key={type}
                     size='small'
-                    icon={<Copy size={12} />}
-                    onClick={() => handleCopyToolLink(type)}
+                    type='primary'
+                    onClick={() => handleGenerateCode(type)}
                   >
-                    {t('复制')} {type === 'workbuddy' ? 'WorkBuddy' : 'CodeBuddy'} {t('链接')}
+                    {t('生成')} {type === 'workbuddy' ? 'WorkBuddy' : 'CodeBuddy'} {t('配置码')}
                   </Button>
                 ))}
               </div>
-              <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 8 }}>
-                {t('方式 B：复制命令 → 按 Win+R 输入 powershell 回车 → 粘贴命令回车')}
+              <Text type='tertiary' size='small'>
+                {t('配置码 6 位数字，5 分钟内有效；两台客户端各生成一个即可')}
               </Text>
-              {['workbuddy', 'codebuddy'].map((type) => (
-                <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <Tag size='small' color='blue'>{type === 'workbuddy' ? 'WorkBuddy' : 'CodeBuddy'}</Tag>
-                  <code style={{
-                    flex: 1,
-                    padding: '4px 10px',
-                    background: 'var(--semi-color-fill-1)',
-                    borderRadius: 6,
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {oneLineCommand(type)}
-                  </code>
-                  <Button
-                    size='small'
-                    type='primary'
-                    icon={<Copy size={12} />}
-                    onClick={() => handleCopyCommand(type)}
-                  >
-                    {t('复制命令')}
-                  </Button>
-                </div>
-              ))}
             </Card>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -635,63 +602,56 @@ pause`;
         )}
       </Card>
 
-      {/* 复制命令后的傻瓜化三步指引弹窗 */}
+      {/* 配置码弹窗：大号展示 6 位码 + 倒计时 */}
       <Modal
-        visible={guideModalOpen}
-        onCancel={() => setGuideModalOpen(false)}
+        visible={codeModal.open}
+        onCancel={() => setCodeModal((m) => ({ ...m, open: false }))}
         footer={
-          <Button type='primary' onClick={() => setGuideModalOpen(false)}>
-            {t('我已完成配置')}
-          </Button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <Button
+              type='primary'
+              onClick={() => handleGenerateCode(codeModal.product)}
+              disabled={codeModal.loading}
+            >
+              {t('刷新配置码')}
+            </Button>
+            <Button onClick={() => setCodeModal((m) => ({ ...m, open: false }))}>
+              {t('完成')}
+            </Button>
+          </div>
         }
-        title={t('命令已复制，按下面 3 步操作')}
-        width={520}
-        size='medium'
+        title={t('配置码已生成')}
+        width={420}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 4 }}>
-          {[
-            {
-              icon: <Check size={18} />,
-              title: t('第 1 步：命令已复制好'),
-              desc: guideModalProduct === 'workbuddy'
-                ? t('配置 WorkBuddy 的命令已经在你的剪贴板里，不用动它')
-                : t('配置 CodeBuddy 的命令已经在你的剪贴板里，不用动它'),
-            },
-            {
-              icon: <Keyboard size={18} />,
-              title: t('第 2 步：打开 PowerShell'),
-              desc: t('按键盘 Win + R（Win 键在左下角 Ctrl 旁边），弹出的框里输入 powershell，按回车'),
-            },
-            {
-              icon: <MousePointerClick size={18} />,
-              title: t('第 3 步：粘贴并回车'),
-              desc: t('在打开的蓝色窗口里点鼠标右键（自动粘贴），再按回车，看到 ✅ 提示即完成'),
-            },
-          ].map((step, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <div style={{
-                width: 34,
-                height: 34,
-                borderRadius: '50%',
-                background: 'var(--semi-color-primary-light-default)',
-                color: 'var(--semi-color-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}>
-                {step.icon}
-              </div>
-              <div>
-                <Text strong style={{ display: 'block', marginBottom: 2 }}>{step.title}</Text>
-                <Text type='tertiary' size='small'>{step.desc}</Text>
-              </div>
+        <div style={{ textAlign: 'center', paddingTop: 8 }}>
+          <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 8 }}>
+            {t('把这个码填进 ERKE 配置工具，点「一键配置」即可')}（
+            {codeModal.product === 'workbuddy' ? 'WorkBuddy' : 'CodeBuddy'}）
+          </Text>
+          {codeModal.loading ? (
+            <Spin size='large' />
+          ) : (
+            <div style={{
+              fontFamily: 'monospace',
+              fontSize: 44,
+              fontWeight: 700,
+              letterSpacing: 12,
+              padding: '12px 0 8px',
+              color: 'var(--semi-color-primary)',
+            }}>
+              {codeModal.code}
             </div>
-          ))}
+          )}
+          <Text type='tertiary' size='small'>
+            {codeCountdown > 0
+              ? t('有效期剩余') + ' ' + Math.floor(codeCountdown / 60) + ':' + String(codeCountdown % 60).padStart(2, '0')
+              : t('已过期，请点击下方刷新')}
+          </Text>
           <Banner
             type='info'
             closeIcon={null}
-            description={t('配置完成后重启 WorkBuddy / CodeBuddy 生效。之后模型有变化，重新复制一次命令运行即可更新。')}
+            style={{ marginTop: 14, textAlign: 'left' }}
+            description={t('配置码一次性使用（兑换后立即失效），5 分钟内有效。配置完成后重启对应客户端生效。')}
           />
         </div>
       </Modal>

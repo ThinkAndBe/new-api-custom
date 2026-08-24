@@ -303,6 +303,9 @@ func SetApiRouter(router *gin.Engine) {
 			usageRoute.GET("/guide_config", middleware.TokenAuthAllowQueryKey(), middleware.TokenAuthReadOnly(), controller.GetUsageGuideConfig)
 			// 配置工具 exe 下载（公开：工具不含密钥）
 			usageRoute.GET("/config_tool", controller.DownloadUsageGuideConfigTool)
+			// 短码一键配置：教程页生成一次性 6 位码（需登录），exe 里输入即完成（公开 + 限流）
+			usageRoute.POST("/guide_code", middleware.UserAuth(), controller.CreateGuideShortCode)
+			usageRoute.GET("/guide_redeem", middleware.CriticalRateLimit(), controller.RedeemGuideShortCode)
 		}
 
 		redemptionRoute := apiRouter.Group("/redemption")

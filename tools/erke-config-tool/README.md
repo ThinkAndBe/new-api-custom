@@ -23,9 +23,18 @@ go build -trimpath -ldflags "-s -w -H windowsgui" -o erke-config-tool.exe
 （docker 部署挂载到容器 `/app/config-tool/`，或数据卷 `/data/config-tool/`），
 使用教程页的「下载配置工具」按钮即可下发。
 
-## 用户流程
+## 构建（注入服务器地址）
 
-1. 管理台「使用教程」→ 选令牌 → 点「下载配置工具」→ 双击运行
-2. 页面上点「复制 WorkBuddy 链接」（或 CodeBuddy）
-3. 在工具界面粘贴链接 → 点「一键配置」→ 看到 ✅ 即完成
+```bash
+cd tools/erke-config-tool
+go build -trimpath -ldflags "-s -w -H windowsgui -X main.serverBase=https://tokenhub.erke.com" -o erke-config-tool.exe
+```
+
+## 用户流程（短码模式，最简）
+
+1. 教程页点「下载配置工具」→ 双击运行（仅首次需要下载）
+2. 教程页点「生成 WorkBuddy/CodeBuddy 配置码」→ 弹窗显示 6 位码（5 分钟有效，一次性）
+3. 把 6 位码填进工具 → 点「一键配置」→ ✅ 完成
 4. 重启 WorkBuddy / CodeBuddy 生效
+
+高级折叠项里保留直接粘贴完整链接的方式（guide_config?...&key=...）。
