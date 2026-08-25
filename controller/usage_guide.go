@@ -172,13 +172,15 @@ type usageGuideModel struct {
 
 // DownloadUsageGuideConfigTool 下发 erke-config-tool.exe 配置工具。
 // exe 已随仓库提交在 config-tool/erke-config-tool.exe（git add -f 例外于
-// .gitignore 的 *.exe），Docker 构建 COPY . . 自动带入镜像；也可手动放到
-// /data/config-tool/ 覆盖。源码见 tools/erke-config-tool。
+// .gitignore 的 *.exe），Dockerfile 把它烤进镜像 /config-tool/（不受
+// ./data:/data 挂载遮蔽）；/data/config-tool/ 供不重建镜像时手动覆盖。
+// 源码见 tools/erke-config-tool。
 // GET /api/usage/config_tool （无需登录：工具本身不含任何密钥）
 func DownloadUsageGuideConfigTool(c *gin.Context) {
 	candidates := []string{
-		filepath.Join("config-tool", "erke-config-tool.exe"),
 		filepath.Join("/data", "config-tool", "erke-config-tool.exe"),
+		filepath.Join("/config-tool", "erke-config-tool.exe"),
+		filepath.Join("config-tool", "erke-config-tool.exe"),
 	}
 	exePath := ""
 	for _, p := range candidates {
