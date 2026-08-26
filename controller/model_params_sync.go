@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -14,8 +15,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// litellm 模型元数据 JSON URL（社区维护，每周更新）
-const litellmModelParamsURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+// litellm 模型元数据 JSON 源（社区维护，每周更新）。
+// 主源 raw.githubusercontent.com 在国内服务器常 TLS 超时，按顺序回退 jsdelivr
+// 系镜像；亦可用环境变量 LITELM_PARAMS_URL 前插自定义源（如内网代理）。
+var litellmModelParamsURLs = []string{
+	"https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+	"https://cdn.jsdelivr.net/gh/BerriAI/litellm@main/model_prices_and_context_window.json",
+	"https://fastly.jsdelivr.net/gh/BerriAI/litellm@main/model_prices_and_context_window.json",
+	"https://gcore.jsdelivr.net/gh/BerriAI/litellm@main/model_prices_and_context_window.json",
+}
+
+func litellmParamsURLs() []string {
+	if u := strings.TrimSpace(os.Getenv("LITELM_PARAMS_URL")); u != "" {
+		return append([]string{u}, litellmModelParamsURLs...)
+	}
+	return litellmModelParamsURLs
+}
 
 // litellmModelEntry 对应 litellm 的 model_prices_and_context_window.json 中每个模型的子对象。
 // 只取我们关心的字段，其余忽略。
@@ -27,8 +42,8 @@ type litellmModelEntry struct {
 	MaxTokens               json.RawMessage `json:"max_tokens,omitempty"`
 	SupportsFunctionCalling json.RawMessage `json:"supports_function_calling,omitempty"` // litellm 实际字段名
 	SupportsVision          json.RawMessage `json:"supports_vision,omitempty"`
-	SupportsReasoning       json.RawMessage `json:"supports_reasoning,omitempty"`        // litellm 直接有 reasoning
-	SupportsResponseSchema  json.RawMessage `json:"supports_response_schema,omitempty"`  // 兜底推理能力
+	SupportsReasoning       json.RawMessage `json:"supports_reasoning,omitempty"`       // litellm 直接有 reasoning
+	SupportsResponseSchema  json.RawMessage `json:"supports_response_schema,omitempty"` // 兜底推理能力
 }
 
 // rawToInt 安全地把任何 JSON 原始值（数字或字符串数字）解析为 int。
@@ -72,12 +87,29 @@ func rawToBool(raw json.RawMessage) (bool, bool) {
 }
 
 // fetchLitellmModelParams 拉取并解析 litellm 模型参数 JSON。
-// 返回的 map 键是模型名（如 "gpt-4o"），值是对应参数。
+// 逐源尝试 litellmParamsURLs()，任一源成功即返回；全部失败时返回最后一个错误。
 func fetchLitellmModelParams() (map[string]litellmModelEntry, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	var lastErr error = fmt.Errorf("litellm 数据源列表为空")
+	for _, url := range litellmParamsURLs() {
+		entries, err := fetchLitellmFrom(url)
+		if err == nil && len(entries) > 0 {
+			return entries, nil
+		}
+		if err == nil {
+			err = fmt.Errorf("返回空数据")
+		}
+		lastErr = fmt.Errorf("%s: %v", url, err)
+		common.SysLog("litellm 参数源拉取失败，尝试下一个: " + lastErr.Error())
+	}
+	return nil, lastErr
+}
+
+// fetchLitellmFrom 从单个 URL 拉取并解析 litellm 参数 JSON。
+func fetchLitellmFrom(url string) (map[string]litellmModelEntry, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", litellmModelParamsURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %v", err)
 	}
@@ -98,7 +130,10 @@ func fetchLitellmModelParams() (map[string]litellmModelEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %v", err)
 	}
+	return parseLitellmParams(body)
+}
 
+func parseLitellmParams(body []byte) (map[string]litellmModelEntry, error) {
 	// litellm JSON 是 {"model_name": {...}, "sample_spec": {...}, ...}
 	// 用 map 直接反序列化，忽略非对象条目
 	var raw map[string]litellmModelEntry
@@ -121,6 +156,7 @@ func fetchLitellmModelParams() (map[string]litellmModelEntry, error) {
 //  1. 精确匹配模型名（如 "gpt-4o"）
 //  2. 厂商前缀匹配（如 "zhipu/glm-5.2" 以 "/glm-5.2" 结尾）
 //  3. 版本号规范化匹配（litellm 常把 5.2 写作 5p2，如 "glm-5p2"）
+//
 // 返回命中的条目；多个候选时优先精确，再取第一个前缀命中。
 func lookupLitellmEntry(litellmParams map[string]litellmModelEntry, modelName string) (litellmModelEntry, bool) {
 	if entry, ok := litellmParams[modelName]; ok {
@@ -217,10 +253,10 @@ func SyncModelParamsFromLitellm(c *gin.Context) {
 		"success": true,
 		"message": fmt.Sprintf("已更新 %d 个模型参数", updated),
 		"data": gin.H{
-			"updated":            updated,
-			"skipped_locked":     skippedLocked,
-			"not_found":          notFoundInLitellm,
-			"total":              len(models),
+			"updated":             updated,
+			"skipped_locked":      skippedLocked,
+			"not_found":           notFoundInLitellm,
+			"total":               len(models),
 			"litellm_model_count": len(litellmParams),
 		},
 	})
@@ -228,17 +264,17 @@ func SyncModelParamsFromLitellm(c *gin.Context) {
 
 // modelParamsDiffItem 预览单个模型的参数变更
 type modelParamsDiffItem struct {
-	ModelId          int    `json:"model_id"`
-	ModelName        string `json:"model_name"`
-	ParamsLocked     bool   `json:"params_locked"`
-	WillUpdate       bool   `json:"will_update"`
-	CurrentMaxIn     int    `json:"current_max_input_tokens"`
-	CurrentMaxOut    int    `json:"current_max_output_tokens"`
-	NewMaxIn         int    `json:"new_max_input_tokens"`
-	NewMaxOut        int    `json:"new_max_output_tokens"`
-	NewTools         bool   `json:"new_supports_tool_call"`
-	NewVision        bool   `json:"new_supports_images"`
-	NewReasoning     bool   `json:"new_supports_reasoning"`
+	ModelId       int    `json:"model_id"`
+	ModelName     string `json:"model_name"`
+	ParamsLocked  bool   `json:"params_locked"`
+	WillUpdate    bool   `json:"will_update"`
+	CurrentMaxIn  int    `json:"current_max_input_tokens"`
+	CurrentMaxOut int    `json:"current_max_output_tokens"`
+	NewMaxIn      int    `json:"new_max_input_tokens"`
+	NewMaxOut     int    `json:"new_max_output_tokens"`
+	NewTools      bool   `json:"new_supports_tool_call"`
+	NewVision     bool   `json:"new_supports_images"`
+	NewReasoning  bool   `json:"new_supports_reasoning"`
 }
 
 // PreviewModelParamsDiff 管理员接口：预览 litellm 同步将带来的变更（不写库）。
@@ -262,10 +298,10 @@ func PreviewModelParamsDiff(c *gin.Context) {
 
 	for _, m := range models {
 		item := modelParamsDiffItem{
-			ModelId:      m.Id,
-			ModelName:    m.ModelName,
-			ParamsLocked: m.ParamsLocked,
-			CurrentMaxIn: m.MaxInputTokens,
+			ModelId:       m.Id,
+			ModelName:     m.ModelName,
+			ParamsLocked:  m.ParamsLocked,
+			CurrentMaxIn:  m.MaxInputTokens,
 			CurrentMaxOut: m.MaxOutputTokens,
 		}
 		if m.ParamsLocked {

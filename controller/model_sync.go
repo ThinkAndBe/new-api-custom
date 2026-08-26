@@ -323,8 +323,14 @@ func SyncUpstreamModels(c *gin.Context) {
 	}()
 	wg.Wait()
 	if fetchErr != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取上游模型失败: " + fetchErr.Error(), "locale": req.Locale, "source_urls": gin.H{"models_url": modelsURL, "vendors_url": vendorsURL}})
-		return
+		if len(missing) == 0 {
+			// 没有缺失模型可创建，且上游不可达：无事可做才报错
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取上游模型失败: " + fetchErr.Error(), "locale": req.Locale, "source_urls": gin.H{"models_url": modelsURL, "vendors_url": vendorsURL}})
+			return
+		}
+		// 上游目录不可达时降级：缺失模型（含渠道新增模型）仍会创建仅含模型名的
+		// 占位记录，保证「渠道新增模型 → 进入模型管理」不因外网中断而断链。
+		common.SysLog("同步官方模型：上游目录拉取失败，降级为仅创建占位模型: " + fetchErr.Error())
 	}
 
 	// 建立映射
@@ -535,8 +541,9 @@ func SyncUpstreamPreview(c *gin.Context) {
 	}()
 	wg.Wait()
 	if fetchErr != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "获取上游模型失败: " + fetchErr.Error(), "locale": locale, "source_urls": gin.H{"models_url": modelsURL, "vendors_url": vendorsURL}})
-		return
+		// 上游目录不可达时降级为预览：全部缺失模型按「无上游信息」占位展示，
+		// 同步时仅创建仅含模型名的记录（modelByName 为空 → 全部走占位分支）
+		common.SysLog("同步官方模型预览：上游目录拉取失败，降级为占位预览: " + fetchErr.Error())
 	}
 
 	vendorByName := make(map[string]upstreamVendor)
