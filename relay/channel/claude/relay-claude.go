@@ -589,6 +589,27 @@ type ClaudeResponseInfo struct {
 	ResponseText strings.Builder
 	Usage        *dto.Usage
 	Done         bool
+	// 流式内容块跟踪：start 记录、stop 移除；断流时用于补发 content_block_stop
+	OpenBlocks map[int]bool
+	// HasTextContent 表示流中出现过非 thinking 的文本块（text/tool_use）
+	HasTextContent bool
+}
+
+// OpenBlockIndexes 返回仍未关闭的内容块下标（升序）。
+func (info *ClaudeResponseInfo) OpenBlockIndexes() []int {
+	if len(info.OpenBlocks) == 0 {
+		return nil
+	}
+	idx := make([]int, 0, len(info.OpenBlocks))
+	for k := range info.OpenBlocks {
+		idx = append(idx, k)
+	}
+	for i := 1; i < len(idx); i++ {
+		for j := i; j > 0 && idx[j] < idx[j-1]; j-- {
+			idx[j], idx[j-1] = idx[j-1], idx[j]
+		}
+	}
+	return idx
 }
 
 func cacheCreationTokensForOpenAIUsage(usage *dto.Usage) int {
@@ -773,6 +794,20 @@ func FormatClaudeResponseInfo(claudeResponse *dto.ClaudeResponse, oaiResponse *d
 		// 判断是否完整
 		claudeInfo.Done = true
 	} else if claudeResponse.Type == "content_block_start" {
+		if claudeInfo.OpenBlocks == nil {
+			claudeInfo.OpenBlocks = make(map[int]bool)
+		}
+		if claudeResponse.Index != nil {
+			claudeInfo.OpenBlocks[*claudeResponse.Index] = true
+		}
+		if claudeResponse.ContentBlock != nil &&
+			(claudeResponse.ContentBlock.Type == "text" || claudeResponse.ContentBlock.Type == "tool_use") {
+			claudeInfo.HasTextContent = true
+		}
+	} else if claudeResponse.Type == "content_block_stop" {
+		if claudeResponse.Index != nil {
+			delete(claudeInfo.OpenBlocks, *claudeResponse.Index)
+		}
 	} else {
 		return false
 	}
@@ -856,9 +891,29 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 
 	if info.RelayFormat == types.RelayFormatClaude {
 		// 上游未发送 message_delta/message_stop 就断开流时（claudeInfo.Done 为 false），
-		// 补发终止事件，避免客户端（如 Claude Code/zcode）报 empty_model_response
+		// 补发终止事件，避免客户端（如 Claude Code/zcode）报 empty_model_response。
+		// 典型场景：火山 doubao 深度思考模型偶发「thinking 输出后上游静默断流」，
+		// 此时流里有大量 thinking_delta 但没有任何 text，客户端若拿不到终止事件，
+		// 会因 finish_reason 异常 + usage 缺失判定为空响应。
 		if !claudeInfo.Done && info.ReceivedResponseCount > 0 {
+			// 补齐未关闭的 content_block（thinking-only 截断时 index=0 的块还开着）
+			for _, blockIdx := range claudeInfo.OpenBlockIndexes() {
+				stopBlock := dto.ClaudeResponse{
+					Type:  "content_block_stop",
+					Index: common.GetPointer(blockIdx),
+				}
+				if stopData, err := common.Marshal(stopBlock); err == nil {
+					helper.ClaudeChunkData(c, stopBlock, string(stopData))
+				}
+			}
 			stopReason := "end_turn"
+			// 已产出 thinking 但没有任何 text/tool 的情况标 max_tokens：
+			// 客户端对 stop!=stop 的空 text 有专门的空响应告警路径，标 max_tokens
+			// 可让上层按「被截断」重试而不是当作可疑空响应。
+			hasText := claudeInfo.ResponseText.Len() > 0 && claudeInfo.HasTextContent
+			if !hasText {
+				stopReason = "max_tokens"
+			}
 			deltaResp := dto.ClaudeResponse{
 				Type:  "message_delta",
 				Usage: &dto.ClaudeUsage{InputTokens: claudeInfo.Usage.PromptTokens, OutputTokens: claudeInfo.Usage.CompletionTokens},
@@ -869,6 +924,8 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 			}
 			stopResp := dto.ClaudeResponse{Type: "message_stop"}
 			helper.ClaudeChunkData(c, stopResp, `{"type":"message_stop"}`)
+			common.SysLog(fmt.Sprintf("claude stream terminated without message_stop: model=%s received=%d textLen=%d, synthesized stop events (stop_reason=%s)",
+				info.UpstreamModelName, info.ReceivedResponseCount, claudeInfo.ResponseText.Len(), stopReason))
 		}
 	} else if info.RelayFormat == types.RelayFormatOpenAI {
 		if info.ShouldIncludeUsage {
