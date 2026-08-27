@@ -263,6 +263,12 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 		}
 	}
 
+	// 渠道保存（新建/编辑/上游自动更新）后，把新配置的模型自动注册进模型管理
+	// （占位 + 默认参数，幂等），管理员可用「刷新参数」从七牛目录补全。
+	if registered := EnsureModelsRegistered(tx, models_); len(registered) > 0 {
+		common.SysLog("渠道 " + channel.Name + " 新增模型已自动注册到模型管理: " + strings.Join(registered, ", "))
+	}
+
 	// 如果是新创建的事务，需要提交
 	if isNewTx {
 		return tx.Commit().Error

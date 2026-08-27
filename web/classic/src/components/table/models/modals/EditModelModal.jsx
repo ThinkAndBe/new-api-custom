@@ -557,7 +557,7 @@ const EditModelModal = (props) => {
                     <Divider style={{ margin: '12px 0' }}>{t('定价设置（人民币，与全局配置联动）')}</Divider>
                     <Banner
                       type='info'
-                      description={t('价格为人民币（¥/1M tokens）。留空/0 表示使用全局默认配置。人工修改后将覆盖全局默认，并标记为已锁定（litellm 同步不再覆盖）。')}
+                      description={t('价格为人民币（¥/1M tokens）。留空/0 表示使用全局默认配置。人工修改后将覆盖全局默认，并标记为已锁定（七牛同步不再覆盖）。')}
                       style={{ marginBottom: 12 }}
                     />
                   </Col>
@@ -602,7 +602,7 @@ const EditModelModal = (props) => {
                     <Form.Switch
                       field='pricing_locked'
                       label={t('定价已锁定')}
-                      extraText={t('管理员手动修改定价后自动标记为锁定，litellm 同步不会覆盖这些值')}
+                      extraText={t('管理员手动修改定价后自动标记为锁定，七牛同步不会覆盖这些值')}
                     />
                   </Col>
 
@@ -634,7 +634,7 @@ const EditModelModal = (props) => {
                   <div>
                     <Text className='text-lg font-medium'>{t('模型参数')}</Text>
                     <div className='text-xs text-gray-600'>
-                      {t('用于使用教程页面导出的客户端配置 (models.json)。来源：litellm 刷新 + 管理员维护。人工编辑后将锁定，litellm 刷新时不会覆盖。可用「刷新模型参数」按钮从 litellm 拉取上游最新值。')}
+                      {t('用于使用教程页面导出的客户端配置 (models.json)。来源：七牛模型目录刷新 + 管理员维护。人工编辑后将锁定，七牛刷新时不会覆盖。可用「刷新参数」按钮从七牛目录拉取最新值（目录没有的按 100 万输入/12.8 万输出默认值）。')}
                     </div>
                   </div>
                 </div>

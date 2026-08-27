@@ -31,8 +31,8 @@ type Model struct {
 	Tags         string         `json:"tags,omitempty" gorm:"type:varchar(255)"`
 	VendorID     int            `json:"vendor_id,omitempty" gorm:"index"`
 	Endpoints    string         `json:"endpoints,omitempty" gorm:"type:text"`
-	// 模型能力参数（用于客户端配置导出/使用教程）。来源：管理员维护 + litellm 刷新。
-	// ParamsLocked=true 表示已被人工编辑，litellm 刷新时跳过（避免覆盖人工微调）。
+	// 模型能力参数（用于客户端配置导出/使用教程）。来源：管理员维护 + 七牛目录刷新。
+	// ParamsLocked=true 表示已被人工编辑，七牛刷新时跳过（避免覆盖人工微调）。
 	MaxInputTokens    int  `json:"max_input_tokens,omitempty" gorm:"default:0"`
 	MaxOutputTokens   int  `json:"max_output_tokens,omitempty" gorm:"default:0"`
 	SupportsToolCall  bool `json:"supports_tool_call,omitempty" gorm:"default:false"`
@@ -40,7 +40,7 @@ type Model struct {
 	SupportsReasoning bool `json:"supports_reasoning,omitempty" gorm:"default:false"`
 	ParamsLocked      bool `json:"params_locked,omitempty" gorm:"default:false"`
 	// 定价覆盖字段（直接存价格，非倍率）。0 = 未配置/使用全局默认。
-	// 与 params_locked 同一思路：人工编辑后锁定，litellm/官方同步不再覆盖。
+	// 与 params_locked 同一思路：人工编辑后锁定，七牛同步不再覆盖。
 	InputPrice    float64 `json:"input_price,omitempty" gorm:"default:0"`     // 每 1M tokens 输入价格（人民币）= 缓存创建价格
 	OutputPrice   float64 `json:"output_price,omitempty" gorm:"default:0"`    // 每 1M tokens 输出价格（人民币）
 	CacheHitPrice float64 `json:"cache_hit_price,omitempty" gorm:"default:0"` // 每 1M tokens 缓存命中价格（人民币）

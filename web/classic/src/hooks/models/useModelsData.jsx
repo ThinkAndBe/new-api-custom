@@ -251,7 +251,7 @@ export const useModelsData = () => {
     }
   };
 
-  // Refresh model params (max_in/out/tool/vision/reasoning) from litellm
+  // Refresh model params & prices from qiniu model catalog
   // 仅更新 ParamsLocked=false 的模型，已锁定的会被跳过
   const syncModelParams = async () => {
     setSyncingModelParams(true);
@@ -260,11 +260,12 @@ export const useModelsData = () => {
       const { success, message, data } = res.data || {};
       if (success) {
         const updated = data?.updated || 0;
+        const priceUpdated = data?.price_updated || 0;
         const skipped = data?.skipped_locked || 0;
         const notFound = data?.not_found || 0;
         showSuccess(
-          t('参数已更新：{{updated}}，跳过锁定：{{skipped}}，litellm 未覆盖：{{notFound}}', {
-            updated, skipped, notFound,
+          t('参数已更新：{{updated}}，价格更新：{{priceUpdated}}，跳过锁定：{{skipped}}，目录未覆盖（默认值）：{{notFound}}', {
+            updated, priceUpdated, skipped, notFound,
           }),
         );
         await refresh();

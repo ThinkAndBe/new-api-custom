@@ -72,7 +72,7 @@ const ModelsActions = ({
   const handleSyncModelParams = async () => {
     Modal.confirm({
       title: t('刷新模型参数'),
-      content: t('将从 litellm 上游拉取最新的 max_input/output_tokens + 能力位，更新到本库未被锁定的模型。人工编辑过（已锁定）的模型不会被覆盖。是否继续？'),
+      content: t('将从七牛模型目录拉取最新的参数（max_input/output_tokens、能力位）和价格（¥/1M tokens），更新到本库未被锁定的模型。目录里没有的模型按默认值（100 万输入/12.8 万输出）处理。是否继续？'),
       okText: t('确定刷新'),
       cancelText: t('取消'),
       onOk: async () => {
@@ -184,16 +184,16 @@ const ModelsActions = ({
             <div className='p-2 max-w-[360px]'>
               <div className='text-[var(--semi-color-text-2)] text-sm'>
                 {t(
-                  '从 litellm 社区数据库拉取最新的 max_input/output_tokens 和能力位（工具调用/图像/推理），自动更新到本库未被锁定的模型。人工编辑过的模型不会被覆盖。',
+                  '从七牛模型目录（qiniu.com/ai/models）拉取最新的参数（max_input/output_tokens、工具调用/图像/推理）和价格（¥/1M tokens），自动更新到本库未被锁定的模型。目录里没有的模型按默认值（100 万输入/12.8 万输出）处理。人工编辑过的模型不会被覆盖。',
                 )}
               </div>
               <a
-                href='https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json'
+                href='https://www.qiniu.com/ai/models'
                 target='_blank'
                 rel='noreferrer'
                 className='text-blue-600 underline'
               >
-                litellm/model_prices_and_context_window.json
+                qiniu.com/ai/models
               </a>
             </div>
           }
