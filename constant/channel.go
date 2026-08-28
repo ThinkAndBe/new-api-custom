@@ -203,7 +203,9 @@ var ChannelSpecialBases = map[string]ChannelSpecialBase{
 		OpenAIBaseURL: "https://api.kimi.com/coding/v1",
 	},
 	"doubao-coding-plan": {
-		ClaudeBaseURL: "https://ark.cn-beijing.volces.com/api/coding",
+		// 火山 Anthropic 兼容端点(/api/coding/v1/messages)存在 thinking 输出后
+		// 静默断流的上游 bug（不发包也不 FIN），Claude 格式请求改为转成 OpenAI
+		// 格式走稳定的 /api/coding/v3/chat/completions，网关做双向格式转换。
 		OpenAIBaseURL: "https://ark.cn-beijing.volces.com/api/coding/v3",
 	},
 	"doubao-agent-plan": {
