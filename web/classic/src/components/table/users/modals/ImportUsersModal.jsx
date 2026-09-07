@@ -82,7 +82,11 @@ const ImportUsersModal = ({ visible, handleClose, refresh, groupOptions }) => {
       .filter(Boolean);
     const rows = [];
     for (const [idx, line] of lines.entries()) {
-      const cols = parseCSVLine(line);
+      let cols = parseCSVLine(line);
+      // Excel 导出的 CSV 带 BOM 头（\uFEFF），剥掉后再识别表头
+      if (idx === 0 && cols.length > 0) {
+        cols = [cols[0].replace(/^\uFEFF/, ''), ...cols.slice(1)];
+      }
       // 跳过表头行
       if (idx === 0 && cols[0]?.toLowerCase() === 'username') continue;
       rows.push({
@@ -123,12 +127,20 @@ const ImportUsersModal = ({ visible, handleClose, refresh, groupOptions }) => {
     downloadCSV('users_import_template.csv', [example.split('\n')]);
   };
 
-  const handleFile = ({ file }) => {
+  const handleFile = (files) => {
+    // Semi Upload 的 onFileChange 回调签名是 (files: Array<File 包装对象>)，
+    // 原按 { file } 解构拿到 undefined，file.fileInstance 抛错导致选文件后无反应
+    const wrapper = Array.isArray(files) ? files[files.length - 1] : null;
+    const native = wrapper?.fileInstance || wrapper;
+    if (!native) return { autoRemove: true, fileList: [] };
     const reader = new FileReader();
     reader.onload = (e) => {
       updateRawText(String(e.target.result || ''));
     };
-    reader.readAsText(file.fileInstance, 'utf-8');
+    reader.onerror = () => {
+      showError(t('读取文件失败'));
+    };
+    reader.readAsText(native, 'utf-8');
     return { autoRemove: true, fileList: [] };
   };
 
