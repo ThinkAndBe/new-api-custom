@@ -593,6 +593,10 @@ func AddChannel(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if addChannelRequest.Channel == nil {
+		common.ApiErrorMsg(c, "channel 对象不能为空（请求体应为 {\"channel\": {...}}）")
+		return
+	}
 
 	// 使用统一的校验函数
 	if err := validateChannel(addChannelRequest.Channel, true); err != nil {
