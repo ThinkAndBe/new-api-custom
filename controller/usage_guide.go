@@ -201,6 +201,39 @@ func DownloadUsageGuideConfigTool(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.File(exePath)
 }
+
+// DownloadUsageGuideConfigToolMac 下发 macOS 配置脚本（zsh）。
+// 脚本已随仓库提交在 config-tool/erke-config-mac.sh（与 exe 同目录、同机制
+// 烤进镜像 /config-tool/）。macOS 侧标准用法（教程页提供复制）：
+//
+//	zsh <(curl -fsSL https://<host>/api/usage/config_tool_mac)
+//
+// GET /api/usage/config_tool_mac （无需登录：脚本本身不含密钥）
+func DownloadUsageGuideConfigToolMac(c *gin.Context) {
+	candidates := []string{
+		filepath.Join("/data", "config-tool", "erke-config-mac.sh"),
+		filepath.Join("/config-tool", "erke-config-mac.sh"),
+		filepath.Join("config-tool", "erke-config-mac.sh"),
+	}
+	scriptPath := ""
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			scriptPath = p
+			break
+		}
+	}
+	if scriptPath == "" {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "mac config script not deployed",
+		})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	// text/plain 让浏览器直接打开显示，curl 管道执行不受影响
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.File(scriptPath)
+}
 // 鉴权：Authorization Bearer <sk-token>（TokenAuthReadOnly，用户自己的令牌）。
 // GET /api/usage/guide_config?token_id=
 //
@@ -249,6 +282,19 @@ func GetUsageGuideConfig(c *gin.Context) {
 	models, metas := collectUsageGuideModels(userId)
 
 	cfg := buildUsageGuideConfig(models, metas, key, baseUrl)
+
+	// raw=1：直接以 models.json 文件体返回（macOS 配置脚本 curl -o 直接落盘，
+	// 免去脚本端 JSON 解析）
+	if c.Query("raw") == "1" {
+		data, err := common.Marshal(cfg)
+		if err != nil {
+			common.ApiError(c, fmt.Errorf("marshal config failed"))
+			return
+		}
+		c.Header("Content-Disposition", `attachment; filename="models.json"`)
+		c.Data(http.StatusOK, "application/json", data)
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

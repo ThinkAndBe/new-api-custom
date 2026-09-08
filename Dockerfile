@@ -40,6 +40,7 @@ RUN apt-get update \
 
 COPY --from=builder2 /build/new-api /
 COPY --from=builder2 /build/config-tool/erke-config-tool.exe /config-tool/erke-config-tool.exe
+COPY --from=builder2 /build/config-tool/erke-config-mac.sh /config-tool/erke-config-mac.sh
 COPY LICENSE NOTICE THIRD-PARTY-LICENSES.md /licenses/
 EXPOSE 3000 80
 WORKDIR /data

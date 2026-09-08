@@ -466,11 +466,57 @@ const UsageGuide = () => {
               <Text type='tertiary' size='small'>
                 {t('配置码 6 位数字，5 分钟内有效；两台客户端各生成一个即可')}
               </Text>
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--semi-color-border)' }}>
+                <Text type='tertiary' size='small'>
+                  {t('macOS 用户：打开「终端」，粘贴执行下面命令（同样输入配置码即可）')}
+                </Text>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                  <code
+                    style={{
+                      flex: 1,
+                      padding: '6px 10px',
+                      background: 'var(--semi-color-fill-1)',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontFamily: 'Consolas, Menlo, monospace',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    zsh &lt;(curl -fsSL {baseUrl}/api/usage/config_tool_mac)
+                  </code>
+                  <Button
+                    size='small'
+                    icon={<Copy size={14} />}
+                    onClick={() => {
+                      navigator.clipboard
+                        .writeText(`zsh <(curl -fsSL ${baseUrl}/api/usage/config_tool_mac)`)
+                        .then(() => showSuccess(t('命令已复制，请粘贴到 macOS 终端执行')));
+                    }}
+                  >
+                    {t('复制')}
+                  </Button>
+                </div>
+              </div>
             </Card>
 
             {/* 配置预览 */}
             <div style={{ marginTop: 16 }}>
-              <Text type='tertiary' size='small'>{t('配置预览')}：</Text>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Text type='tertiary' size='small'>{t('配置预览')}：</Text>
+                <Button
+                  size='small'
+                  theme='borderless'
+                  icon={<Copy size={13} />}
+                  onClick={() => {
+                    if (!modelsJson) return;
+                    navigator.clipboard
+                      .writeText(modelsJson)
+                      .then(() => showSuccess(t('配置已复制，可直接粘贴到 models.json')));
+                  }}
+                >
+                  {t('一键复制')}
+                </Button>
+              </div>
               <pre style={{
                 marginTop: 8,
                 padding: 12,
