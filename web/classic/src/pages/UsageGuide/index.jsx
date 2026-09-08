@@ -482,14 +482,16 @@ const UsageGuide = () => {
                       wordBreak: 'break-all',
                     }}
                   >
-                    zsh &lt;(curl -fsSL {baseUrl}/api/usage/config_tool_mac)
+                    zsh &lt;(curl -fsSL {window.location.origin}/api/usage/config_tool_mac)
                   </code>
                   <Button
                     size='small'
                     icon={<Copy size={14} />}
                     onClick={() => {
                       navigator.clipboard
-                        .writeText(`zsh <(curl -fsSL ${baseUrl}/api/usage/config_tool_mac)`)
+                        .writeText(
+                          `zsh <(curl -fsSL ${window.location.origin}/api/usage/config_tool_mac)`,
+                        )
                         .then(() => showSuccess(t('命令已复制，请粘贴到 macOS 终端执行')));
                     }}
                   >
