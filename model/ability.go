@@ -192,6 +192,10 @@ func (channel *Channel) AddAbilities(tx *gorm.DB) error {
 			return err
 		}
 	}
+	// 新建渠道同样自动注册模型管理（UpdateAbilities 已覆盖编辑路径）
+	if registered := EnsureModelsRegistered(useDB, models_); len(registered) > 0 {
+		common.SysLog("渠道 " + channel.Name + " 新增模型已自动注册到模型管理: " + strings.Join(registered, ", "))
+	}
 	return nil
 }
 

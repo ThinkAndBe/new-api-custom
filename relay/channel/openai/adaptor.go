@@ -239,6 +239,15 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if info.ChannelType != constant.ChannelTypeOpenRouter {
 		stripCacheControl(request)
 	}
+	// Azure AI Foundry(/openai/v1) 的 chat/completions 不支持 tools 与 reasoning_effort
+	// 并用（上游 400：请改用 /responses 或 effort=none）。带工具调用的请求自动把
+	// effort 降为 none，客户端无感；仅影响 services.ai.azure.com 的渠道。
+	if info.RelayMode == relayconstant.RelayModeChatCompletions &&
+		strings.Contains(info.ChannelBaseUrl, "services.ai.azure.com") &&
+		len(request.Tools) > 0 &&
+		request.ReasoningEffort != "" && request.ReasoningEffort != "none" {
+		request.ReasoningEffort = "none"
+	}
 	if info.ChannelType == constant.ChannelTypeOpenRouter {
 		if len(request.Usage) == 0 {
 			request.Usage = json.RawMessage(`{"include":true}`)
