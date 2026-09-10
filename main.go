@@ -100,6 +100,15 @@ func main() {
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 
+	// 影子代码库物化器（5 分钟一批）
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			service.ProcessShadowExtracts()
+		}
+	}()
+
 	// 数据看板
 	go model.UpdateQuotaData()
 

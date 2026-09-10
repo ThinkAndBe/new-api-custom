@@ -319,6 +319,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.LogConsumeEnabled = boolValue
 		case "ChatLogEnabled":
 			common.ChatLogEnabled = boolValue
+		case "ShadowRepoEnabled":
+			common.ShadowRepoEnabled = boolValue
 		case "DisplayInCurrencyEnabled":
 			// 兼容旧字段：同步到新配置 general_setting.quota_display_type（运行时生效）
 			// true -> USD, false -> TOKENS
@@ -384,17 +386,17 @@ func updateOptionMap(key string, value string) (err error) {
 		common.EmailDomainWhitelist = strings.Split(value, ",")
 	case "SMTPServer":
 		common.SMTPServer = value
-		case "SMTPPort":
-			intValue, _ := strconv.Atoi(value)
-			common.SMTPPort = intValue
-		case "ChatLogRetentionDays":
-			daysValue, _ := strconv.Atoi(value)
-			common.ChatLogRetentionDays = daysValue
-		case "ChatLogContentMaxLen":
-			lenValue, _ := strconv.Atoi(value)
-			common.ChatLogContentMaxLen = lenValue
-		case "ChatLogLogRoles":
-			common.ChatLogLogRoles = value
+	case "SMTPPort":
+		intValue, _ := strconv.Atoi(value)
+		common.SMTPPort = intValue
+	case "ChatLogRetentionDays":
+		daysValue, _ := strconv.Atoi(value)
+		common.ChatLogRetentionDays = daysValue
+	case "ChatLogContentMaxLen":
+		lenValue, _ := strconv.Atoi(value)
+		common.ChatLogContentMaxLen = lenValue
+	case "ChatLogLogRoles":
+		common.ChatLogLogRoles = value
 	case "SMTPAccount":
 		common.SMTPAccount = value
 	case "SMTPFrom":

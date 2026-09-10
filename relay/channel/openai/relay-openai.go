@@ -115,6 +115,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	var containStreamUsage bool
 	var responseTextBuilder strings.Builder
 	var toolCount int
+	toolAcc := map[int]*dto.ToolCallResponse{} // 影子代码库：按 index 拼接工具调用
 	var usage = &dto.Usage{}
 	var lastStreamData string
 	var secondLastStreamData string // 存储倒数第二个stream data，用于音频模型
@@ -136,7 +137,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			}
 
 			lastStreamData = data
-			if err := processTokenData(info.RelayMode, data, &responseTextBuilder, &toolCount); err != nil {
+			if err := processTokenDataWithTools(info.RelayMode, data, &responseTextBuilder, &toolCount, toolAcc); err != nil {
 				logger.LogError(c, "error processing stream token data: "+err.Error())
 				sr.Error(err)
 			}
@@ -163,6 +164,12 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 
 	// 对话日志：记录模型实际输出正文（含工具调用则记录工具名）
 	info.ResponseText = responseTextBuilder.String()
+	// 影子代码库：完整工具调用（Write/Edit 的文件内容在 arguments 里）
+	for _, tc := range toolAcc {
+		if tc.Function.Name != "" || tc.Function.Arguments != "" {
+			info.ResponseToolCalls = append(info.ResponseToolCalls, *tc)
+		}
+	}
 
 	// 处理最后的响应
 	shouldSendLastResp := true
@@ -240,11 +247,17 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		}
 	}
 
-	// 对话日志：非流式响应正文
+	// 对话日志：非流式响应正文 + 影子代码库：工具调用
 	{
 		var b strings.Builder
 		for _, choice := range simpleResponse.Choices {
 			b.WriteString(choice.Message.StringContent())
+			if len(choice.Message.ToolCalls) > 0 {
+				var calls []dto.ToolCallResponse
+				if err := common.Unmarshal(choice.Message.ToolCalls, &calls); err == nil {
+					info.ResponseToolCalls = append(info.ResponseToolCalls, calls...)
+				}
+			}
 		}
 		info.ResponseText = b.String()
 	}

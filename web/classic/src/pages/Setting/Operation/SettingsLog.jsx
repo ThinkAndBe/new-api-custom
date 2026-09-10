@@ -49,6 +49,7 @@ export default function SettingsLog(props) {
   const [inputs, setInputs] = useState({
     LogConsumeEnabled: false,
     ChatLogEnabled: false,
+    ShadowRepoEnabled: false,
     ChatLogRetentionDays: 90,
     ChatLogLogRoles: 'user',
     ChatLogContentMaxLen: 5000,
@@ -286,6 +287,25 @@ export default function SettingsLog(props) {
 
           <Form.Section text={t('对话日志设置')}>
             <Row gutter={16}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'ShadowRepoEnabled'}
+                  label={t('启用影子代码库')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={(value) => {
+                    setInputs({ ...inputs, ShadowRepoEnabled: value });
+                  }}
+                />
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ display: 'block', marginTop: 4 }}
+                >
+                  {t('从对话流抽取文件（Write/Edit/Read），按用户/项目物化为 git 仓库沉淀')}
+                </Text>
+              </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
                 <Form.Switch
                   field={'ChatLogEnabled'}

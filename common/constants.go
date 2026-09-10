@@ -118,6 +118,7 @@ var LogConsumeEnabled = true
 
 // 对话日志（用户请求内容）相关配置
 var ChatLogEnabled = false      // 默认关闭，需管理员手动开启
+var ShadowRepoEnabled = false   // 影子代码库：从对话抽取文件物化为 git 仓库
 var ChatLogRetentionDays = 90   // 默认保留90天
 var ChatLogContentMaxLen = 5000 // 单条消息最大存储字符数，0表示不限制
 var ChatLogLogRoles = "user"    // 记录的角色范围，逗号分隔（可选 system/user/assistant）
@@ -153,8 +154,10 @@ var QuotaForNewUser = 0
 var QuotaForInviter = 0
 var QuotaForInvitee = 0
 var ChannelDisableThreshold = 5.0
+
 // AutomaticDisableChannelEnabled 真实请求失败时自动禁用渠道（默认开启）
 var AutomaticDisableChannelEnabled = true
+
 // AutomaticEnableChannelEnabled 健康检测成功时自动恢复渠道（默认开启）
 var AutomaticEnableChannelEnabled = true
 var QuotaRemindThreshold = 1000
@@ -261,11 +264,11 @@ const (
 )
 
 const (
-ChannelStatusUnknown            = 0
-		ChannelStatusEnabled            = 1 // don't use 0, 0 is the default value!
-		ChannelStatusManuallyDisabled   = 2 // also don't use 0
-		ChannelStatusAutoDisabled       = 3
-		ChannelStatusSchedulePaused     = 4
+	ChannelStatusUnknown          = 0
+	ChannelStatusEnabled          = 1 // don't use 0, 0 is the default value!
+	ChannelStatusManuallyDisabled = 2 // also don't use 0
+	ChannelStatusAutoDisabled     = 3
+	ChannelStatusSchedulePaused   = 4
 )
 
 const (

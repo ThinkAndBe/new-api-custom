@@ -182,6 +182,9 @@ type RelayInfo struct {
 	// 最终用量（结算后回填），对话日志统计用
 	FinalPromptTokens     int
 	FinalCompletionTokens int
+	// ResponseToolCalls 模型本轮的工具调用（name + arguments JSON），
+	// 影子代码库抽取文件操作用，由流式 handler 累计
+	ResponseToolCalls []dto.ToolCallResponse
 
 	// RequestConversionChain records request format conversions in order, e.g.
 	// ["openai", "openai_responses"] or ["openai", "claude"].

@@ -76,6 +76,12 @@ func handleGeminiFormat(c *gin.Context, data string, info *relaycommon.RelayInfo
 }
 
 func ProcessStreamResponse(streamResponse dto.ChatCompletionsStreamResponse, responseTextBuilder *strings.Builder, toolCount *int) error {
+	return ProcessStreamResponseWithTools(streamResponse, responseTextBuilder, toolCount, nil)
+}
+
+// ProcessStreamResponseWithTools 额外累计工具调用（按 index 拼接 name/arguments
+// 分片），供影子代码库抽取文件操作。toolAcc 为 nil 时行为与旧函数一致。
+func ProcessStreamResponseWithTools(streamResponse dto.ChatCompletionsStreamResponse, responseTextBuilder *strings.Builder, toolCount *int, toolAcc map[int]*dto.ToolCallResponse) error {
 	for _, choice := range streamResponse.Choices {
 		responseTextBuilder.WriteString(choice.Delta.GetContentString())
 		responseTextBuilder.WriteString(choice.Delta.GetReasoningContent())
@@ -86,6 +92,22 @@ func ProcessStreamResponse(streamResponse dto.ChatCompletionsStreamResponse, res
 			for _, tool := range choice.Delta.ToolCalls {
 				responseTextBuilder.WriteString(tool.Function.Name)
 				responseTextBuilder.WriteString(tool.Function.Arguments)
+				if toolAcc != nil {
+					idx := 0
+					if tool.Index != nil {
+						idx = *tool.Index
+					}
+					acc, ok := toolAcc[idx]
+					if !ok {
+						acc = &dto.ToolCallResponse{ID: tool.ID}
+						toolAcc[idx] = acc
+					}
+					if tool.ID != "" {
+						acc.ID = tool.ID
+					}
+					acc.Function.Name += tool.Function.Name
+					acc.Function.Arguments += tool.Function.Arguments
+				}
 			}
 		}
 	}
@@ -116,6 +138,20 @@ func processTokenData(relayMode int, data string, responseTextBuilder *strings.B
 		return ProcessStreamResponse(streamResponse, responseTextBuilder, toolCount)
 	}
 	return nil
+}
+
+// processTokenDataWithTools processTokenData 的带工具累计版本
+func processTokenDataWithTools(relayMode int, data string, responseTextBuilder *strings.Builder, toolCount *int, toolAcc map[int]*dto.ToolCallResponse) error {
+	switch relayMode {
+	case relayconstant.RelayModeChatCompletions:
+		var streamResponse dto.ChatCompletionsStreamResponse
+		if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
+			return err
+		}
+		return ProcessStreamResponseWithTools(streamResponse, responseTextBuilder, toolCount, toolAcc)
+	default:
+		return processTokenData(relayMode, data, responseTextBuilder, toolCount)
+	}
 }
 
 func processCompletionsStreamResponse(streamResponse dto.CompletionsStreamResponse, responseTextBuilder *strings.Builder) {

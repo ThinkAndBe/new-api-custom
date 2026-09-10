@@ -56,6 +56,7 @@ const HeadroomDashboard = lazy(() => import('./pages/Headroom'));
 const About = lazy(() => import('./pages/About'));
 const UsageGuide = lazy(() => import('./pages/UsageGuide'));
 const ChatLog = lazy(() => import('./pages/ChatLog'));
+const ShadowRepo = lazy(() => import('./pages/ShadowRepo'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
@@ -314,6 +315,16 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <ChatLog />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/shadow-repo'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <ShadowRepo />
               </Suspense>
             </PrivateRoute>
           }

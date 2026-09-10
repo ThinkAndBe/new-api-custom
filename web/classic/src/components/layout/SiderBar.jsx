@@ -41,6 +41,7 @@ const routerMap = {
   subscription: '/console/subscription',
   log: '/console/log',
   'chat-log': '/console/chat-log',
+  'shadow-repo': '/console/shadow-repo',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
   about: '/about',
@@ -102,6 +103,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('对话日志'),
         itemKey: 'chat-log',
         to: '/console/chat-log',
+        className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('影子代码库'),
+        itemKey: 'shadow-repo',
+        to: '/console/shadow-repo',
         className: isRoot() ? '' : 'tableHiddle',
       },
       {

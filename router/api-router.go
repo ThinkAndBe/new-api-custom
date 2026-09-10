@@ -346,6 +346,16 @@ func SetApiRouter(router *gin.Engine) {
 			chatLogRoute.DELETE("/expired", controller.DeleteExpiredChatLogs)
 		}
 
+		// 影子代码库（仅超管）
+		shadowRoute := apiRouter.Group("/shadow")
+		shadowRoute.Use(middleware.RootAuth())
+		{
+			shadowRoute.GET("/repos", controller.ListShadowRepos)
+			shadowRoute.GET("/tree", controller.GetShadowTree)
+			shadowRoute.GET("/file", controller.GetShadowFile)
+			shadowRoute.POST("/sync", controller.TriggerShadowSync)
+		}
+
 	dataRoute := apiRouter.Group("/data")
 			dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
 			dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)

@@ -392,6 +392,9 @@ func migrateLOGDB() error {
 	if err = LOG_DB.AutoMigrate(&ChatLog{}); err != nil {
 		return err
 	}
+	if err = LOG_DB.AutoMigrate(&ChatFileExtract{}); err != nil {
+		return err
+	}
 	return nil
 }
 
