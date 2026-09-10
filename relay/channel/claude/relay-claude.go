@@ -593,6 +593,8 @@ type ClaudeResponseInfo struct {
 	OpenBlocks map[int]bool
 	// HasTextContent 表示流中出现过非 thinking 的文本块（text/tool_use）
 	HasTextContent bool
+	// ResponseTextOnly 仅累计 text 块内容（不含 thinking），对话日志用
+	ResponseTextOnly strings.Builder
 }
 
 // OpenBlockIndexes 返回仍未关闭的内容块下标（升序）。
@@ -760,6 +762,7 @@ func FormatClaudeResponseInfo(claudeResponse *dto.ClaudeResponse, oaiResponse *d
 		if claudeResponse.Delta != nil {
 			if claudeResponse.Delta.Text != nil {
 				claudeInfo.ResponseText.WriteString(*claudeResponse.Delta.Text)
+				claudeInfo.ResponseTextOnly.WriteString(*claudeResponse.Delta.Text)
 			}
 			if claudeResponse.Delta.Thinking != nil {
 				claudeInfo.ResponseText.WriteString(*claudeResponse.Delta.Thinking)
@@ -959,6 +962,9 @@ func ClaudeStreamHandler(c *gin.Context, resp *http.Response, info *relaycommon.
 		return nil, err
 	}
 
+	// 对话日志：仅记录正文（不含 thinking）
+	info.ResponseText = claudeInfo.ResponseTextOnly.String()
+
 	HandleStreamFinalResponse(c, info, claudeInfo)
 	return claudeInfo.Usage, nil
 }
@@ -986,6 +992,17 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		claudeInfo.Usage.ClaudeCacheCreation5mTokens = claudeResponse.Usage.GetCacheCreation5mTokens()
 		claudeInfo.Usage.ClaudeCacheCreation1hTokens = claudeResponse.Usage.GetCacheCreation1hTokens()
 	}
+	// 对话日志：非流式响应正文（text 块拼接，不含 thinking）
+	if claudeResponse.Content != nil {
+		var b strings.Builder
+		for _, block := range claudeResponse.Content {
+			if block.Type == "text" && block.Text != nil {
+				b.WriteString(*block.Text)
+			}
+		}
+		info.ResponseText = b.String()
+	}
+
 	var responseData []byte
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:

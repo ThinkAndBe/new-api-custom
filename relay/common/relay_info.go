@@ -176,6 +176,9 @@ type RelayInfo struct {
 	BillingRequestInput   *billingexpr.RequestInput
 
 	Request dto.Request
+	// ResponseText 模型本轮实际输出的正文（不含 thinking），对话日志记录用。
+	// 由各响应 handler 在流结束后填充。
+	ResponseText string
 
 	// RequestConversionChain records request format conversions in order, e.g.
 	// ["openai", "openai_responses"] or ["openai", "claude"].

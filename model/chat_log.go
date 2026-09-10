@@ -10,18 +10,19 @@ import (
 
 // ChatLog 对话日志，存储用户请求的文本内容（不含图片/文件等二进制数据）
 type ChatLog struct {
-	Id             int    `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserId         int    `gorm:"index" json:"user_id"`
-	Username       string `json:"username"`
-	TokenId        int    `json:"token_id"`
-	TokenName      string `json:"token_name"`
-	ChannelId      int    `json:"channel_id"`
-	RequestId      string `gorm:"index" json:"request_id"`
-	ModelName      string `json:"model_name"`
-	Group          string `json:"group"`
-	RequestContent string `gorm:"type:text" json:"request_content"`
-	IsStream       bool   `json:"is_stream"`
-	CreatedAt      int64  `gorm:"index;bigint" json:"created_at"`
+	Id              int    `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserId          int    `gorm:"index" json:"user_id"`
+	Username        string `json:"username"`
+	TokenId         int    `json:"token_id"`
+	TokenName       string `json:"token_name"`
+	ChannelId       int    `json:"channel_id"`
+	RequestId       string `gorm:"index" json:"request_id"`
+	ModelName       string `json:"model_name"`
+	Group           string `json:"group"`
+	RequestContent  string `gorm:"type:text" json:"request_content"`
+	ResponseContent string `gorm:"type:text" json:"response_content"`
+	IsStream        bool   `json:"is_stream"`
+	CreatedAt       int64  `gorm:"index;bigint" json:"created_at"`
 }
 
 // ChatLogFilter 对话日志查询过滤条件
@@ -39,6 +40,18 @@ type ChatLogFilter struct {
 
 // RecordChatLog 写入一条对话日志
 // 同一个 request_id 或同一用户短时间内相同内容只记录一次，避免重试导致重复
+// truncateChatLogText 对话日志字段截断：maxLen<=0 不限制
+func truncateChatLogText(text string) string {
+	if text == "" {
+		return ""
+	}
+	maxLen := common.ChatLogContentMaxLen
+	if maxLen > 0 && len(text) > maxLen {
+		return text[:maxLen]
+	}
+	return text
+}
+
 func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 	if content == "" {
 		return
@@ -76,17 +89,18 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 		group = info.UserGroup
 	}
 	log := &ChatLog{
-		UserId:         info.UserId,
-		Username:       username,
-		TokenId:        info.TokenId,
-		TokenName:      tokenDisplay,
-		ChannelId:      info.ChannelId,
-		RequestId:      info.RequestId,
-		ModelName:      info.OriginModelName,
-		Group:          group,
-		RequestContent: content,
-		IsStream:       info.IsStream,
-		CreatedAt:      time.Now().Unix(),
+		UserId:          info.UserId,
+		Username:        username,
+		TokenId:         info.TokenId,
+		TokenName:       tokenDisplay,
+		ChannelId:       info.ChannelId,
+		RequestId:       info.RequestId,
+		ModelName:       info.OriginModelName,
+		Group:           group,
+		RequestContent:  content,
+		ResponseContent: truncateChatLogText(info.ResponseText),
+		IsStream:        info.IsStream,
+		CreatedAt:       time.Now().Unix(),
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {

@@ -161,6 +161,9 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		}
 	}
 
+	// 对话日志：记录模型实际输出正文（含工具调用则记录工具名）
+	info.ResponseText = responseTextBuilder.String()
+
 	// 处理最后的响应
 	shouldSendLastResp := true
 	if err := handleLastResponse(lastStreamData, &responseId, &createAt, &systemFingerprint, &model, &usage,
@@ -235,6 +238,15 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 			common.SetContextKey(c, constant.ContextKeyAdminRejectReason, "openai_finish_reason=content_filter")
 			break
 		}
+	}
+
+	// 对话日志：非流式响应正文
+	{
+		var b strings.Builder
+		for _, choice := range simpleResponse.Choices {
+			b.WriteString(choice.Message.StringContent())
+		}
+		info.ResponseText = b.String()
 	}
 
 	forceFormat := false

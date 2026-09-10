@@ -211,6 +211,19 @@ const ChatLog = () => {
       },
     },
     {
+      title: t('输出预览'),
+      dataIndex: 'response_content',
+      render: (val) => {
+        if (!val) return <Text type='tertiary'>{t('暂无')}</Text>;
+        const preview = val.length > 120 ? val.slice(0, 120) + '...' : val;
+        return (
+          <Text style={{ maxWidth: 400, cursor: 'pointer' }} ellipsis={{ showTooltip: true }}>
+            {preview}
+          </Text>
+        );
+      },
+    },
+    {
       title: t('字数'),
       key: 'content_length',
       width: 80,
@@ -220,7 +233,7 @@ const ChatLog = () => {
   ], [t]);
 
   const expandRowRender = (record) => {
-    if (!record.request_content) return null;
+    if (!record.request_content && !record.response_content) return null;
     const segments = record.request_content.split('\n[');
     const roleColors = {
       system: 'orange',
@@ -266,6 +279,25 @@ const ChatLog = () => {
             </div>
           );
         })}
+        {record.response_content && (
+          <div style={{ marginTop: 16 }}>
+            <Tag color='green' size='small'>assistant(输出)</Tag>
+            <div style={{
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              fontSize: 13,
+              lineHeight: 1.6,
+              maxHeight: 500,
+              overflow: 'auto',
+              marginTop: 4,
+              padding: '8px 12px',
+              background: 'var(--semi-color-success-light-default)',
+              borderRadius: 6,
+            }}>
+              {record.response_content}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
