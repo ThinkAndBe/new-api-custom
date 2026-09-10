@@ -57,7 +57,9 @@ const ChatLog = () => {
         params.set('start_timestamp', String(Math.floor(formData.dateRange[0].getTime() / 1000)));
         params.set('end_timestamp', String(Math.floor(formData.dateRange[1].getTime() / 1000)));
       }
-      const res = await API.get(`/api/chat_log/user_stats?${params.toString()}`);
+      // 汇总取真实账目（logs 表，历史完整）；chat_logs 的 token 列仅覆盖开启后的新对话
+      params.set('type', '2');
+      const res = await API.get(`/api/log/user_stats?${params.toString()}`);
       const { success, data, message } = res.data;
       if (success) {
         setUserStats(data || []);
@@ -450,7 +452,7 @@ const ChatLog = () => {
       </Card>
 
       <Modal
-        title={t('按用户汇总（当前筛选条件）')}
+        title={t('按用户汇总（真实账目：token 用量与调用次数）')}
         visible={showUserStats}
         onCancel={() => setShowUserStats(false)}
         footer={null}
@@ -483,6 +485,12 @@ const ChatLog = () => {
               title: t('总 Tokens'),
               render: (_, r) =>
                 Number((r.prompt_tokens || 0) + (r.completion_tokens || 0)).toLocaleString(),
+            },
+            {
+              title: t('花费'),
+              dataIndex: 'quota',
+              width: 100,
+              render: (v) => (v != null ? '¥' + (v / 500000).toFixed(2) : '-'),
             },
           ]}
         />
