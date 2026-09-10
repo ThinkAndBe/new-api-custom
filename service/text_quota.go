@@ -488,6 +488,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 
 	// 记录对话日志（仅管理员可查看）
 	if common.ChatLogEnabled {
+		relayInfo.FinalPromptTokens = summary.PromptTokens
+		relayInfo.FinalCompletionTokens = summary.CompletionTokens
 		gopool.Go(func() {
 			RecordChatLog(relayInfo)
 		})

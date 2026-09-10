@@ -10,19 +10,21 @@ import (
 
 // ChatLog 对话日志，存储用户请求的文本内容（不含图片/文件等二进制数据）
 type ChatLog struct {
-	Id              int    `gorm:"primaryKey;autoIncrement" json:"id"`
-	UserId          int    `gorm:"index" json:"user_id"`
-	Username        string `json:"username"`
-	TokenId         int    `json:"token_id"`
-	TokenName       string `json:"token_name"`
-	ChannelId       int    `json:"channel_id"`
-	RequestId       string `gorm:"index" json:"request_id"`
-	ModelName       string `json:"model_name"`
-	Group           string `json:"group"`
-	RequestContent  string `gorm:"type:text" json:"request_content"`
-	ResponseContent string `gorm:"type:text" json:"response_content"`
-	IsStream        bool   `json:"is_stream"`
-	CreatedAt       int64  `gorm:"index;bigint" json:"created_at"`
+	Id               int    `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserId           int    `gorm:"index" json:"user_id"`
+	Username         string `json:"username"`
+	TokenId          int    `json:"token_id"`
+	TokenName        string `json:"token_name"`
+	ChannelId        int    `json:"channel_id"`
+	RequestId        string `gorm:"index" json:"request_id"`
+	ModelName        string `json:"model_name"`
+	Group            string `json:"group"`
+	RequestContent   string `gorm:"type:text" json:"request_content"`
+	ResponseContent  string `gorm:"type:text" json:"response_content"`
+	PromptTokens     int    `gorm:"default:0" json:"prompt_tokens"`
+	CompletionTokens int    `gorm:"default:0" json:"completion_tokens"`
+	IsStream         bool   `json:"is_stream"`
+	CreatedAt        int64  `gorm:"index;bigint" json:"created_at"`
 }
 
 // ChatLogFilter 对话日志查询过滤条件
@@ -89,18 +91,20 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 		group = info.UserGroup
 	}
 	log := &ChatLog{
-		UserId:          info.UserId,
-		Username:        username,
-		TokenId:         info.TokenId,
-		TokenName:       tokenDisplay,
-		ChannelId:       info.ChannelId,
-		RequestId:       info.RequestId,
-		ModelName:       info.OriginModelName,
-		Group:           group,
-		RequestContent:  content,
-		ResponseContent: truncateChatLogText(info.ResponseText),
-		IsStream:        info.IsStream,
-		CreatedAt:       time.Now().Unix(),
+		UserId:           info.UserId,
+		Username:         username,
+		TokenId:          info.TokenId,
+		TokenName:        tokenDisplay,
+		ChannelId:        info.ChannelId,
+		RequestId:        info.RequestId,
+		ModelName:        info.OriginModelName,
+		Group:            group,
+		RequestContent:   content,
+		ResponseContent:  truncateChatLogText(info.ResponseText),
+		PromptTokens:     info.FinalPromptTokens,
+		CompletionTokens: info.FinalCompletionTokens,
+		IsStream:         info.IsStream,
+		CreatedAt:        time.Now().Unix(),
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -109,6 +113,46 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 }
 
 // GetChatLogs 分页查询对话日志
+// ChatLogUserStat 对话日志按用户汇总行
+type ChatLogUserStat struct {
+	UserId           int    `json:"user_id"`
+	Username         string `json:"username"`
+	Count            int64  `json:"count"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+}
+
+// GetChatLogUserStats 按用户汇总对话日志（调用次数 / token），筛选条件与列表一致
+func GetChatLogUserStats(filter ChatLogFilter) ([]*ChatLogUserStat, error) {
+	tx := LOG_DB.Model(&ChatLog{}).
+		Select("user_id, MAX(username) as username, COUNT(*) as count, " +
+			"SUM(CASE WHEN prompt_tokens > 0 THEN prompt_tokens ELSE 0 END) as prompt_tokens, " +
+			"SUM(CASE WHEN completion_tokens > 0 THEN completion_tokens ELSE 0 END) as completion_tokens")
+	if filter.UserId != 0 {
+		tx = tx.Where("user_id = ?", filter.UserId)
+	}
+	if filter.Username != "" {
+		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
+	}
+	if filter.ModelName != "" {
+		tx = tx.Where("model_name = ?", filter.ModelName)
+	}
+	if filter.Group != "" {
+		tx = tx.Where(logGroupCol+" = ?", filter.Group)
+	}
+	if filter.StartTime != 0 {
+		tx = tx.Where("created_at >= ?", filter.StartTime)
+	}
+	if filter.EndTime != 0 {
+		tx = tx.Where("created_at <= ?", filter.EndTime)
+	}
+	var stats []*ChatLogUserStat
+	if err := tx.Group("user_id").Order("count desc").Limit(500).Find(&stats).Error; err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
 func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, error) {
 	var logs []*ChatLog
 	var total int64

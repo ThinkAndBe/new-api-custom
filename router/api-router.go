@@ -340,6 +340,7 @@ func SetApiRouter(router *gin.Engine) {
 		chatLogRoute.Use(middleware.RootAuth())
 		{
 			chatLogRoute.GET("/", controller.GetChatLogs)
+			chatLogRoute.GET("/user_stats", controller.GetChatLogUserStats)
 			chatLogRoute.GET("/export", controller.ExportChatLogs)
 			chatLogRoute.DELETE("/", controller.DeleteAllChatLogs)
 			chatLogRoute.DELETE("/expired", controller.DeleteExpiredChatLogs)

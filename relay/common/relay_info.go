@@ -179,6 +179,9 @@ type RelayInfo struct {
 	// ResponseText 模型本轮实际输出的正文（不含 thinking），对话日志记录用。
 	// 由各响应 handler 在流结束后填充。
 	ResponseText string
+	// 最终用量（结算后回填），对话日志统计用
+	FinalPromptTokens     int
+	FinalCompletionTokens int
 
 	// RequestConversionChain records request format conversions in order, e.g.
 	// ["openai", "openai_responses"] or ["openai", "claude"].

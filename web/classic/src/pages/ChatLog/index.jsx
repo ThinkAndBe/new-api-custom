@@ -20,6 +20,7 @@ import {
 } from '@douyinfe/semi-icons';
 import CardTable from '../../components/common/ui/CardTable';
 import { API, showError, showSuccess, timestamp2string, copy } from '../../helpers';
+import { DATE_RANGE_PRESETS } from '../../constants/console.constants';
 import { exportFromAPI, genExportFilename } from '../../helpers/csv';
 import { useTranslation } from 'react-i18next';
 
@@ -42,6 +43,32 @@ const ChatLog = () => {
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [formApi, setFormApi] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [userStats, setUserStats] = useState([]);
+  const [showUserStats, setShowUserStats] = useState(false);
+
+  const handleUserStats = async () => {
+    try {
+      const formData = formApi?.getValues() || {};
+      const params = new URLSearchParams();
+      if (formData.username) params.set('username', formData.username);
+      if (formData.model_name) params.set('model_name', formData.model_name);
+      if (formData.group) params.set('group', formData.group);
+      if (formData.dateRange && formData.dateRange.length === 2) {
+        params.set('start_timestamp', String(Math.floor(formData.dateRange[0].getTime() / 1000)));
+        params.set('end_timestamp', String(Math.floor(formData.dateRange[1].getTime() / 1000)));
+      }
+      const res = await API.get(`/api/chat_log/user_stats?${params.toString()}`);
+      const { success, data, message } = res.data;
+      if (success) {
+        setUserStats(data || []);
+        setShowUserStats(true);
+      } else {
+        showError(message || t('获取失败'));
+      }
+    } catch (err) {
+      showError(err.response?.data?.message || t('获取失败'));
+    }
+  };
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -331,6 +358,11 @@ const ChatLog = () => {
                 placeholder={[t('开始时间'), t('结束时间')]}
                 showClear
                 density='compact'
+                presets={DATE_RANGE_PRESETS.map((preset) => ({
+                  text: t(preset.text),
+                  start: preset.start(),
+                  end: preset.end(),
+                }))}
               />
             </div>
             <Form.Input
@@ -371,6 +403,7 @@ const ChatLog = () => {
             <Button icon={<IconDownload />} loading={exporting} onClick={handleExport}>
               {t('导出CSV')}
             </Button>
+            <Button onClick={handleUserStats}>{t('按用户汇总')}</Button>
             <Popconfirm
               title={t('确认清空')}
               content={t('确定要清空所有对话日志吗？此操作不可撤销。')}
@@ -415,6 +448,45 @@ const ChatLog = () => {
           rowExpandable={(record) => record.request_content}
         />
       </Card>
+
+      <Modal
+        title={t('按用户汇总（当前筛选条件）')}
+        visible={showUserStats}
+        onCancel={() => setShowUserStats(false)}
+        footer={null}
+        width={680}
+      >
+        <Table
+          size='small'
+          dataSource={userStats}
+          rowKey='user_id'
+          pagination={userStats.length > 20 ? { pageSize: 20 } : false}
+          columns={[
+            { title: t('用户名'), dataIndex: 'username', width: 140 },
+            {
+              title: t('调用次数'),
+              dataIndex: 'count',
+              width: 100,
+              render: (v) => (v != null ? Number(v).toLocaleString() : '-'),
+            },
+            {
+              title: t('输入 Tokens'),
+              dataIndex: 'prompt_tokens',
+              render: (v) => (v != null ? Number(v).toLocaleString() : '-'),
+            },
+            {
+              title: t('输出 Tokens'),
+              dataIndex: 'completion_tokens',
+              render: (v) => (v != null ? Number(v).toLocaleString() : '-'),
+            },
+            {
+              title: t('总 Tokens'),
+              render: (_, r) =>
+                Number((r.prompt_tokens || 0) + (r.completion_tokens || 0)).toLocaleString(),
+            },
+          ]}
+        />
+      </Modal>
     </div>
   );
 };

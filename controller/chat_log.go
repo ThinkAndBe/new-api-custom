@@ -13,6 +13,28 @@ import (
 )
 
 // GetChatLogs 分页查询对话日志（管理员）
+// GetChatLogUserStats 超管：对话日志按用户汇总（调用次数/token）。
+// GET /api/chat_log/user_stats
+func GetChatLogUserStats(c *gin.Context) {
+	userId, _ := strconv.Atoi(c.Query("user_id"))
+	startTime, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTime, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	filter := model.ChatLogFilter{
+		UserId:    userId,
+		Username:  c.Query("username"),
+		ModelName: c.Query("model_name"),
+		Group:     c.Query("group"),
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+	stats, err := model.GetChatLogUserStats(filter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": stats})
+}
+
 func GetChatLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("p"))
 	pageSize, _ := strconv.Atoi(c.Query("page_size"))
