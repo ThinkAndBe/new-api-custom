@@ -332,7 +332,7 @@ const ChatLog = () => {
   };
 
   return (
-    <div className='px-4 py-2'>
+    <div className='mt-[60px] px-4 py-2'>
       <Card>
         <div className='flex items-center justify-between mb-4'>
           <div>
