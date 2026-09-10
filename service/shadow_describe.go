@@ -17,6 +17,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 )
 
 const shadowDescribeInterval = 24 * 3600
@@ -40,8 +41,15 @@ func loadShadowDescribeEnv() {
 	}
 	shadowDescribeBase = os.Getenv("SHADOW_DESCRIBE_BASE")
 	if shadowDescribeBase == "" {
-		shadowDescribeBase = "http://127.0.0.1:3000"
+		// 生产容器内 127.0.0.1:3000 未必可达（3000 前有 TLS 代理等拓扑差异），
+		// 默认走系统配置的对外地址（客户端正在用的稳定通道），回环兜底
+		if sa := strings.TrimSpace(system_setting.ServerAddress); sa != "" {
+			shadowDescribeBase = sa
+		} else {
+			shadowDescribeBase = "http://127.0.0.1:3000"
+		}
 	}
+	common.SysLog("shadow: describe base = " + shadowDescribeBase + " model = " + shadowDescribeModel)
 }
 
 // ensureShadowInternalToken 确保 root 用户名下有内部令牌（回环调用用）
@@ -161,9 +169,23 @@ func describeProject(userId int, username, project string) error {
 // callShadowLLM 回环调用网关 chat/completions
 func callShadowLLM(key, prompt string) (string, error) {
 	loadShadowDescribeEnv()
-	body := fmt.Sprintf(`{"model":%q,"max_tokens":600,"messages":[{"role":"user","content":%q}]}`,
+	content, err := callShadowLLMOnce(shadowDescribeBase, key, prompt)
+	if err == nil {
+		return content, nil
+	}
+	// 对外地址失败时回环兜底（本机直跑/内网部署场景）
+	fallback := "http://127.0.0.1:3000"
+	if shadowDescribeBase == fallback {
+		return "", err
+	}
+	common.SysLog("shadow: describe via " + shadowDescribeBase + " failed: " + err.Error() + "，尝试回环 " + fallback)
+	return callShadowLLMOnce(fallback, key, prompt)
+}
+
+func callShadowLLMOnce(base, key, prompt string) (string, error) {
+	body := fmt.Sprintf(`{"model":%q,"max_tokens":1200,"messages":[{"role":"user","content":%q}]}`,
 		shadowDescribeModel, prompt)
-	req, err := http.NewRequest("POST", shadowDescribeBase+"/v1/chat/completions",
+	req, err := http.NewRequest("POST", base+"/v1/chat/completions",
 		strings.NewReader(body))
 	if err != nil {
 		return "", err
