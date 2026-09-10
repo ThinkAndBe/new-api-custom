@@ -88,6 +88,8 @@ export const useLogsData = () => {
     : 'logs-billing-display-mode-user';
 
   // Statistics state
+  const [userStats, setUserStats] = useState([]);
+  const [showUserStats, setShowUserStats] = useState(false);
   const [stat, setStat] = useState({
     quota: 0,
     token: 0,
@@ -307,6 +309,32 @@ export const useLogsData = () => {
     const { success, message, data } = res.data;
     if (success) {
       setStat(data);
+    } else {
+      showError(message);
+    }
+  };
+
+  // 按用户汇总（管理端）：与列表相同的筛选条件
+  const getUserLogStats = async () => {
+    const {
+      username,
+      token_name,
+      model_name,
+      start_timestamp,
+      end_timestamp,
+      channel,
+      group,
+      logType: formLogType,
+    } = getFormValues();
+    const currentLogType = formLogType !== undefined ? formLogType : logType;
+    let localStartTimestamp = Date.parse(start_timestamp) / 1000;
+    let localEndTimestamp = Date.parse(end_timestamp) / 1000;
+    let url = `/api/log/user_stats?type=${currentLogType}&username=${encodeURIComponent(username)}&token_name=${encodeURIComponent(token_name)}&model_name=${encodeURIComponent(model_name)}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${encodeURIComponent(group)}`;
+    let res = await API.get(url);
+    const { success, message, data } = res.data;
+    if (success) {
+      setUserStats(data || []);
+      setShowUserStats(true);
     } else {
       showError(message);
     }
@@ -1009,6 +1037,10 @@ export const useLogsData = () => {
     refresh,
     copyText,
     handleEyeClick,
+    getUserLogStats,
+    userStats,
+    showUserStats,
+    setShowUserStats,
     setLogsFormat,
     hasExpandableRows,
     setLogType,

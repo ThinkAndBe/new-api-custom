@@ -529,6 +529,55 @@ type Stat struct {
 	RequestCount     int64 `json:"request_count"`
 }
 
+// UserLogStat 日志按用户汇总行
+type UserLogStat struct {
+	UserId           int    `json:"user_id"`
+	Username         string `json:"username"`
+	Count            int64  `json:"count"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+	Quota            int64  `json:"quota"`
+}
+
+// GetUserLogStats 按用户汇总消费日志（次数 / token / 花费），筛选条件与日志列表一致。
+func GetUserLogStats(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) ([]*UserLogStat, error) {
+	tx := LOG_DB.Table("logs").
+		Select("user_id, MAX(username) as username, COUNT(*) as count, "+
+			"SUM(CASE WHEN prompt_tokens > 0 THEN prompt_tokens ELSE 0 END) as prompt_tokens, "+
+			"SUM(CASE WHEN completion_tokens > 0 THEN completion_tokens ELSE 0 END) as completion_tokens, "+
+			"SUM(CASE WHEN quota > 0 THEN quota ELSE 0 END) as quota").
+		Where("type = ?", LogTypeConsume)
+
+	var err error
+	if tx, err = applyExplicitLogTextFilter(tx, "username", username); err != nil {
+		return nil, err
+	}
+	if tokenName != "" {
+		tx = tx.Where("token_name = ?", tokenName)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	if tx, err = applyExplicitLogTextFilter(tx, "model_name", modelName); err != nil {
+		return nil, err
+	}
+	if channel != 0 {
+		tx = tx.Where("channel_id = ?", channel)
+	}
+	if group != "" {
+		tx = tx.Where(logGroupCol+" = ?", group)
+	}
+
+	var stats []*UserLogStat
+	if err := tx.Group("user_id").Order("count desc").Limit(500).Find(&stats).Error; err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("sum(quota) quota, count(*) request_count, sum(prompt_tokens) prompt_tokens, sum(completion_tokens) completion_tokens")
 
