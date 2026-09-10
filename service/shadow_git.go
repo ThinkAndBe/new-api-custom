@@ -229,6 +229,9 @@ func ProcessShadowExtracts() {
 			common.SysLog(fmt.Sprintf("shadow: commit %s/%s failed: %s", key.username, key.project, err.Error()))
 		}
 		lock.Unlock()
+		// 项目元数据 + 功能描述（24h 刷新，异步）
+		model.UpsertShadowProjectMeta(key.userId, key.project)
+		MaybeDescribeProject(key.userId, key.username, key.project)
 	}
 }
 

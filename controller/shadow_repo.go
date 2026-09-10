@@ -22,8 +22,32 @@ func ListShadowRepos(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 合并项目功能描述
+	for _, r := range repos {
+		if meta, err := model.GetShadowProject(r.UserId, r.ProjectName); err == nil {
+			r.Description = meta.Description
+			r.DescribedAt = meta.DescribedAt
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": repos,
 		"base_dir": service.ShadowRepoBaseDir()})
+}
+
+// RedescribeShadowProject POST /api/shadow/redescribe?user_id=&project=
+func RedescribeShadowProject(c *gin.Context) {
+	userId, project := shadowParams(c)
+	if userId == 0 || project == "" {
+		common.ApiErrorMsg(c, "user_id 与 project 必填")
+		return
+	}
+	var username string
+	model.DB.Table("users").Where("id = ?", userId).Pluck("username", &username)
+	go func() {
+		if err := service.RedescribeProject(userId, username, project); err != nil {
+			common.SysLog("shadow: redescribe failed: " + err.Error())
+		}
+	}()
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "已触发重新生成，稍后刷新查看"})
 }
 
 // GetShadowTree GET /api/shadow/tree?user_id=&project=

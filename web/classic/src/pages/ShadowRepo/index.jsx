@@ -161,6 +161,14 @@ const ShadowRepo = () => {
           size='small'
           dataSource={filtered}
           rowKey={(r) => r.user_id + '/' + r.project_name}
+          expandRowRender={(r) =>
+            r.description ? (
+              <div style={{ padding: '4px 12px' }}>
+                <Text strong>{t('功能描述')}：</Text>
+                <Text style={{ whiteSpace: 'pre-wrap' }}>{r.description}</Text>
+              </div>
+            ) : null
+          }
           pagination={filtered.length > 20 ? { pageSize: 20 } : false}
           loading={loading}
           columns={[
@@ -178,18 +186,52 @@ const ShadowRepo = () => {
               render: (v) => fmtBytes(v),
             },
             {
+              title: t('功能描述'),
+              dataIndex: 'description',
+              render: (v) =>
+                v ? (
+                  <Text
+                    style={{ maxWidth: 320, cursor: 'pointer' }}
+                    ellipsis={{ showTooltip: true }}
+                    onClick={() => fetchRepos()}
+                  >
+                    {v}
+                  </Text>
+                ) : (
+                  <Text type='tertiary'>{t('生成中…')}</Text>
+                ),
+            },
+            {
               title: t('最近更新'),
               dataIndex: 'last_update',
-              width: 160,
+              width: 150,
               render: (v) => (v ? timestamp2string(v) : '-'),
             },
             {
               title: '',
-              width: 110,
+              width: 190,
               render: (_, r) => (
-                <Button size='small' onClick={() => openTree(r)}>
-                  {t('查看文件')}
-                </Button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <Button size='small' onClick={() => openTree(r)}>
+                    {t('查看文件')}
+                  </Button>
+                  <Button
+                    size='small'
+                    theme='light'
+                    onClick={async () => {
+                      try {
+                        await API.post(
+                          `/api/shadow/redescribe?user_id=${r.user_id}&project=${encodeURIComponent(r.project_name)}`,
+                        );
+                        setTimeout(fetchRepos, 8000);
+                      } catch (e) {
+                        showError(e.response?.data?.message || t('触发失败'));
+                      }
+                    }}
+                  >
+                    {t('重新描述')}
+                  </Button>
+                </div>
               ),
             },
           ]}

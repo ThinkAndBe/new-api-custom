@@ -60,6 +60,16 @@ func LatestFilesForRepo(userId int, project string) (map[string]string, int, err
 	return files, len(files), nil
 }
 
+// ShadowProjectRequestIds 项目最近的 request_id（反查对话用）
+func ShadowProjectRequestIds(userId int, project string, limit int) ([]string, error) {
+	var ids []string
+	err := LOG_DB.Model(&ChatFileExtract{}).
+		Where("user_id = ? AND project_name = ? AND request_id != ''", userId, project).
+		Order("id desc").Limit(limit).
+		Pluck("DISTINCT request_id", &ids).Error
+	return ids, err
+}
+
 // RecordFileExtracts 批量写入抽取记录
 func RecordFileExtracts(rows []*ChatFileExtract) {
 	if len(rows) == 0 {
@@ -78,6 +88,8 @@ type ShadowRepoSummary struct {
 	FileCount   int64  `json:"file_count"`
 	LastUpdate  int64  `json:"last_update"`
 	TotalBytes  int64  `json:"total_bytes"`
+	Description string `json:"description" gorm:"-"`
+	DescribedAt int64  `json:"described_at" gorm:"-"`
 }
 
 // ShadowRepoSummaries 全部仓库摘要
