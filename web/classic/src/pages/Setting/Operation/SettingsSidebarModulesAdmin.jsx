@@ -52,6 +52,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       token: true,
       log: true,
       'chat-log': true,
+      'shadow-repo': true,
       midjourney: true,
       task: true,
     },
@@ -235,6 +236,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'chat-log',
           title: t('对话日志'),
           description: t('用户对话内容记录'),
+        },
+        {
+          key: 'shadow-repo',
+          title: t('影子代码库'),
+          description: t('从对话自动沉淀的项目文件仓库'),
         },
         {
           key: 'midjourney',

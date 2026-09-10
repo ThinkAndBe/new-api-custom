@@ -38,6 +38,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     token: true,
     log: true,
     'chat-log': true,
+    'shadow-repo': true,
     midjourney: true,
     task: true,
   },
