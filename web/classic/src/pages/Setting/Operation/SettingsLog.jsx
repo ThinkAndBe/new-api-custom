@@ -217,9 +217,12 @@ export default function SettingsLog(props) {
       }
     }
     currentInputs['historyTimestamp'] = inputs.historyTimestamp;
-    setInputs(Object.assign(inputs, currentInputs));
-    setInputsRow(structuredClone(currentInputs));
-    refForm.current.setValues(currentInputs);
+    // 基线必须覆盖全部键：新配置项（库里还没有对应 option 行）也要进基线，
+    // 否则切换开关后对比函数找不到该键，误报「你似乎并没有修改什么」
+    const merged = Object.assign({}, inputs, currentInputs);
+    setInputs(merged);
+    setInputsRow(structuredClone(merged));
+    refForm.current.setValues(merged);
   }, [props.options]);
   return (
     <>

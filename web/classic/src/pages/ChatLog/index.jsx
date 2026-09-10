@@ -455,7 +455,35 @@ const ChatLog = () => {
         title={t('按用户汇总（真实账目：token 用量与调用次数）')}
         visible={showUserStats}
         onCancel={() => setShowUserStats(false)}
-        footer={null}
+        footer={
+          <Button
+            icon={<IconDownload />}
+            disabled={!userStats.length}
+            onClick={() => {
+              const header = ['用户名', '调用次数', '输入Tokens', '输出Tokens', '总Tokens', '花费(元)'];
+              const rows = userStats.map((r) => [
+                r.username || '',
+                r.count || 0,
+                r.prompt_tokens || 0,
+                r.completion_tokens || 0,
+                (r.prompt_tokens || 0) + (r.completion_tokens || 0),
+                ((r.quota || 0) / 500000).toFixed(6),
+              ]);
+              const csv = [header, ...rows]
+                .map((cols) => cols.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+                .join(String.fromCharCode(10));
+              const blob = new Blob([String.fromCharCode(0xfeff) + csv], { type: 'text/csv;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `用户用量汇总_${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            {t('导出CSV')}
+          </Button>
+        }
         width={680}
       >
         <Table
