@@ -6,8 +6,11 @@ package controller
 // chat_file_extracts 的最新状态（与物化内容一致）读数据，避免解析 git 对象。
 
 import (
+	"archive/zip"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -79,6 +82,46 @@ func GetShadowFile(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": row})
+}
+
+// DownloadShadowProject GET /api/shadow/download?user_id=&project=
+// 按最新文件状态打包 zip 下载；路径重定到项目根目录（去掉用户目录前缀），
+// 解开即得可直接查看/运行的项目结构。
+func DownloadShadowProject(c *gin.Context) {
+	userId, project := shadowParams(c)
+	if userId == 0 || project == "" {
+		common.ApiErrorMsg(c, "user_id 与 project 必填")
+		return
+	}
+	files, _, err := model.LatestFilesForRepo(userId, project)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if len(files) == 0 {
+		common.ApiErrorMsg(c, "该项目暂无文件")
+		return
+	}
+	// 项目根段：路径中等于项目名的最后一段目录，其后的部分作为 zip 内路径
+	projSeg := "/" + project + "/"
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, project))
+	zw := zip.NewWriter(c.Writer)
+	defer zw.Close()
+	for path, content := range files {
+		rel := path
+		if idx := strings.LastIndex(path, projSeg); idx >= 0 {
+			rel = path[idx+len(projSeg):]
+		}
+		if rel == "" {
+			continue
+		}
+		w, err := zw.Create(rel)
+		if err != nil {
+			continue
+		}
+		_, _ = w.Write([]byte(content))
+	}
 }
 
 // TriggerShadowSync POST /api/shadow/sync 手动触发一轮物化

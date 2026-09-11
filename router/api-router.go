@@ -353,6 +353,7 @@ func SetApiRouter(router *gin.Engine) {
 			shadowRoute.GET("/repos", controller.ListShadowRepos)
 			shadowRoute.GET("/tree", controller.GetShadowTree)
 			shadowRoute.GET("/file", controller.GetShadowFile)
+			shadowRoute.GET("/download", controller.DownloadShadowProject)
 			shadowRoute.POST("/sync", controller.TriggerShadowSync)
 			shadowRoute.POST("/redescribe", controller.RedescribeShadowProject)
 		}

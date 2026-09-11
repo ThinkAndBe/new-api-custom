@@ -2,6 +2,7 @@ package model
 
 import (
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -145,15 +146,32 @@ type ShadowFileEntry struct {
 	UpdatedAt  int64  `json:"updated_at"`
 }
 
-// ShadowRepoFiles 某仓库的文件清单（每文件最新一条）
+// ShadowRepoFiles 某仓库的文件清单——每个路径只显示一条（取最新记录）。
+// 此前按 file_path+action+content_len 分组，同一文件因动作不同出现多条，
+// 页面上表现为「许多相同名字的文件」。
 func ShadowRepoFiles(userId int, project string) ([]*ShadowFileEntry, error) {
-	var rows []*ShadowFileEntry
+	var raws []*ChatFileExtract
 	err := LOG_DB.Model(&ChatFileExtract{}).
-		Select("file_path, action, content_len, MAX(created_at) as updated_at").
+		Select("file_path, action, content_len, created_at").
 		Where("user_id = ? AND project_name = ?", userId, project).
-		Group("file_path, action, content_len").
-		Order("file_path asc").Find(&rows).Error
-	return rows, err
+		Order("id asc").Find(&raws).Error
+	if err != nil {
+		return nil, err
+	}
+	// id 升序遍历，同路径后者覆盖前者 = 最新；保持路径字母序输出
+	latest := map[string]*ShadowFileEntry{}
+	for _, r := range raws {
+		latest[r.FilePath] = &ShadowFileEntry{
+			FilePath: r.FilePath, Action: r.Action,
+			ContentLen: r.ContentLen, UpdatedAt: r.CreatedAt,
+		}
+	}
+	out := make([]*ShadowFileEntry, 0, len(latest))
+	for _, v := range latest {
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].FilePath < out[j].FilePath })
+	return out, nil
 }
 
 // ShadowRepoFileContent 某文件最新内容

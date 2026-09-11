@@ -209,11 +209,23 @@ const ShadowRepo = () => {
             },
             {
               title: '',
-              width: 190,
+              width: 250,
               render: (_, r) => (
                 <div style={{ display: 'flex', gap: 4 }}>
                   <Button size='small' onClick={() => openTree(r)}>
                     {t('查看文件')}
+                  </Button>
+                  <Button
+                    size='small'
+                    icon={<IconDownload size={13} />}
+                    onClick={() =>
+                      window.open(
+                        `/api/shadow/download?user_id=${r.user_id}&project=${encodeURIComponent(r.project_name)}`,
+                        '_blank',
+                      )
+                    }
+                  >
+                    {t('下载zip')}
                   </Button>
                   <Button
                     size='small'
