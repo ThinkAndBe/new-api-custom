@@ -28,7 +28,7 @@ import {
   Tag,
   Input,
 } from '@douyinfe/semi-ui';
-import { IconRefresh } from '@douyinfe/semi-icons';
+import { IconRefresh, IconDownload } from '@douyinfe/semi-icons';
 import { API, showError, timestamp2string } from '../../helpers';
 import { useTranslation } from 'react-i18next';
 
