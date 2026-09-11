@@ -60,14 +60,47 @@ func LatestFilesForRepo(userId int, project string) (map[string]string, int, err
 	return files, len(files), nil
 }
 
-// ShadowProjectRequestIds 项目最近的 request_id（反查对话用）
+// ShadowProjectRequestIds 项目最近的 request_id（反查对话用）。
+// 注意 DISTINCT + ORDER BY 的列必须在 SELECT 列表（PostgreSQL 强制，
+// SQLite/MySQL 不查——曾因此在生产全量失败），用 GROUP BY + MAX(id) 取每
+// 个 request_id 的最新位置，跨库安全。
 func ShadowProjectRequestIds(userId int, project string, limit int) ([]string, error) {
-	var ids []string
+	var rows []struct {
+		RequestId string
+		MaxId     int
+	}
 	err := LOG_DB.Model(&ChatFileExtract{}).
+		Select("request_id, MAX(id) as max_id").
 		Where("user_id = ? AND project_name = ? AND request_id != ''", userId, project).
-		Order("id desc").Limit(limit).
-		Pluck("DISTINCT request_id", &ids).Error
-	return ids, err
+		Group("request_id").
+		Order("max_id desc").Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.RequestId)
+	}
+	return ids, nil
+}
+
+// ShadowRepoKey 仓库键（存量补描述用）
+type ShadowRepoKey struct {
+	UserId      int
+	Username    string
+	ProjectName string
+}
+
+// ShadowAllRepoKeys 全部仓库键（按最近活动排序）
+func ShadowAllRepoKeys(limit int) []*ShadowRepoKey {
+	var rows []*ShadowRepoKey
+	LOG_DB.Model(&ChatFileExtract{}).
+		Select("user_id, MAX(username) as username, project_name, MAX(created_at) as last_at").
+		Group("user_id, project_name").
+		Order("last_at desc").Limit(limit).
+		Find(&rows)
+	return rows
 }
 
 // RecordFileExtracts 批量写入抽取记录

@@ -233,6 +233,22 @@ func ProcessShadowExtracts() {
 		model.UpsertShadowProjectMeta(key.userId, key.project)
 		MaybeDescribeProject(key.userId, key.username, key.project)
 	}
+
+	// 存量补齐：每轮最多补 10 个缺描述/过期描述的仓库（按最近活动优先），
+	// 让历史项目在若干轮内自动补全描述
+	backfill := 0
+	for _, k := range model.ShadowAllRepoKeys(200) {
+		if backfill >= 10 {
+			break
+		}
+		meta, err := model.GetShadowProject(k.UserId, k.ProjectName)
+		now := common.GetTimestamp()
+		if err == nil && meta.DescribedAt > 0 && now-meta.DescribedAt < shadowDescribeInterval {
+			continue
+		}
+		MaybeDescribeProject(k.UserId, k.Username, k.ProjectName)
+		backfill++
+	}
 }
 
 func sanitizeDirComponent(name string) string {
