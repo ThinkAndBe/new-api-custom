@@ -156,8 +156,8 @@ func ShadowUserSummaries() ([]*ShadowUserSummary, error) {
 	var stats []statRow
 	if err := LOG_DB.Model(&ChatFileExtract{}).
 		Select("user_id, MAX(username) as username, " +
-			"COUNT(DISTINCT project_name) as projects, " +
-			"COUNT(DISTINCT file_path) as files, " +
+			"COUNT(DISTINCT CASE WHEN content != '' THEN project_name END) as projects, " +
+			"COUNT(DISTINCT CASE WHEN content != '' THEN file_path END) as files, " +
 			"MAX(created_at) as last_update").
 		Group("user_id").Find(&stats).Error; err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func ShadowRepoSummaries() ([]*ShadowRepoSummary, error) {
 	var rows []*ShadowRepoSummary
 	err := LOG_DB.Model(&ChatFileExtract{}).
 		Select("user_id, MAX(username) as username, project_name, " +
-			"COUNT(DISTINCT file_path) as file_count, MAX(created_at) as last_update, " +
+			"COUNT(DISTINCT CASE WHEN content != '' THEN file_path END) as file_count, MAX(created_at) as last_update, " +
 			"SUM(CASE WHEN content_len > 0 THEN content_len ELSE 0 END) as total_bytes").
 		Group("user_id, project_name").
 		Order("last_update desc").Find(&rows).Error
@@ -337,7 +337,7 @@ func ShadowRepoFiles(userId int, project string) ([]*ShadowFileEntry, error) {
 	var raws []*ChatFileExtract
 	err := LOG_DB.Model(&ChatFileExtract{}).
 		Select("file_path, action, content_len, created_at").
-		Where("user_id = ? AND project_name = ?", userId, project).
+		Where("user_id = ? AND project_name = ? AND content != ''", userId, project).
 		Order("id asc").Find(&raws).Error
 	if err != nil {
 		return nil, err

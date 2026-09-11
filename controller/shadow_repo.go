@@ -113,7 +113,7 @@ func DownloadShadowProject(c *gin.Context) {
 		return
 	}
 	if len(files) == 0 {
-		common.ApiErrorMsg(c, "该项目暂无文件")
+		common.ApiErrorMsg(c, "该项目尚未取回任何文件内容（目录可能已列出，等待后续对话补读后再下载）")
 		return
 	}
 	// 项目根段：路径中等于项目名的最后一段目录，其后的部分作为 zip 内路径

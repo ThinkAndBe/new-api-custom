@@ -206,7 +206,21 @@ const ShadowRepo = () => {
             <Button icon={<IconRefresh />} loading={loading} onClick={fetchRepos}>
               {t('刷新')}
             </Button>
-            <Button onClick={triggerSync}>{t('立即物化')}</Button>
+            <Button
+              theme='solid'
+              type='warning'
+              onClick={async () => {
+                try {
+                  const res = await API.post('/api/shadow/scan');
+                  if (res.data.success) showSuccess(res.data.message || t('已请求全员扫描'));
+                  setTimeout(fetchUsers, 3000);
+                } catch (e) {
+                  showError(e.response?.data?.message || t('触发失败'));
+                }
+              }}
+            >
+              {t('一键扫描所有')}
+            </Button>
             <Popconfirm
               title={t('确定清空全部影子数据？')}
               content={t('删除所有已捕获的项目文件与描述，磁盘仓库一并清除，将从下一次扫描重建')}
