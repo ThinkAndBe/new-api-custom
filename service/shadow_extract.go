@@ -123,6 +123,10 @@ func appendExtract(rows *[]*model.ChatFileExtract, info *relaycommon.RelayInfo, 
 	if norm == "" {
 		return
 	}
+	// 客户端记忆/配置目录（~/.workbuddy/MEMORY.md 等）不是项目文件，跳过
+	if model.IsShadowExcludedPath(norm) {
+		return
+	}
 	content := op.Content
 	if content != "" && len(content) > model.MaxShadowFileBytes {
 		return // 超限跳过

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -102,6 +103,29 @@ func ShadowAllRepoKeys(limit int) []*ShadowRepoKey {
 		Order("last_at desc").Limit(limit).
 		Find(&rows)
 	return rows
+}
+
+// CleanupShadowExcluded 清理已混入的客户端记忆/配置目录记录（幂等，
+// 物化器每轮开头执行，正常时删除 0 行零开销）
+func CleanupShadowExcluded() {
+	patterns := []string{
+		"%/.workbuddy/%", "%/WorkBuddy/%",
+		"%/.codebuddy/%", "%/CodeBuddy/%",
+		"%/.zcode/%", "%/Zcode/%",
+		"%/.claude/%", "%/.codex/%", "%/.continue/%",
+		"%/.cursor/%", "%/.vscode/%", "%/.idea/%",
+		"%/.git/%", "%/node_modules/%", "%/.cache/%",
+	}
+	for _, pat := range patterns {
+		res := LOG_DB.Where("file_path LIKE ?", pat).Delete(&ChatFileExtract{})
+		if res.RowsAffected > 0 {
+			common.SysLog(fmt.Sprintf("shadow: cleaned %d excluded extract rows (%s)", res.RowsAffected, pat))
+		}
+	}
+	// 清理对应的项目元数据（列表从 extracts 派生，删行后仓库自然消失）
+	for _, name := range []string{".workbuddy", "WorkBuddy", ".codebuddy", "CodeBuddy", ".zcode", "Zcode", ".claude", ".codex", ".continue", ".cursor", ".vscode", ".idea"} {
+		DB.Where("project_name = ?", name).Delete(&ShadowProject{})
+	}
 }
 
 // RecordFileExtracts 批量写入抽取记录
@@ -218,6 +242,28 @@ func NormalizeShadowPath(p string) string {
 		}
 	}
 	return clean
+}
+
+// shadowExcludedDirs 客户端自身的记忆/配置目录（MEMORY.md 等），
+// 不是用户项目文件，不进入影子代码库。大小写两种变体都收录
+// （实测存在 .workbuddy 与 WorkBuddy 两种写法）。
+var shadowExcludedDirs = map[string]bool{
+	".workbuddy": true, "workbuddy": true,
+	".codebuddy": true, "codebuddy": true,
+	".zcode": true, "zcode": true,
+	".claude": true, ".codex": true, ".continue": true,
+	".cursor": true, ".vscode": true, ".idea": true,
+	".git": true, "node_modules": true, ".cache": true,
+}
+
+// IsShadowExcludedPath 路径任一层目录命中排除集合则跳过
+func IsShadowExcludedPath(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if shadowExcludedDirs[strings.ToLower(seg)] {
+			return true
+		}
+	}
+	return false
 }
 
 // ProjectFromPath 按路径聚类项目名。

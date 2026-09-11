@@ -188,6 +188,8 @@ func ProcessShadowExtracts() {
 	if !common.ShadowRepoEnabled {
 		return
 	}
+	// 清理客户端记忆/配置目录的混入记录（幂等）
+	model.CleanupShadowExcluded()
 	rows, err := model.PendingFileExtracts(2000)
 	if err != nil || len(rows) == 0 {
 		return
