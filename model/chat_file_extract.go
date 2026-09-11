@@ -140,15 +140,50 @@ type ShadowUserSummary struct {
 
 // ShadowUserSummaries 用户维度汇总（项目数/文件数/最近活动）
 func ShadowUserSummaries() ([]*ShadowUserSummary, error) {
-	var rows []*ShadowUserSummary
-	err := LOG_DB.Model(&ChatFileExtract{}).
+	// 以全量启用用户为基线（没有影子数据的用户也列出，显示 0/未扫描）
+	var users []User
+	if err := DB.Where("status = ?", common.UserStatusEnabled).
+		Select("id, username").Order("id asc").Find(&users).Error; err != nil {
+		return nil, err
+	}
+	type statRow struct {
+		UserId     int
+		Username   string
+		Projects   int64
+		Files      int64
+		LastUpdate int64
+	}
+	var stats []statRow
+	if err := LOG_DB.Model(&ChatFileExtract{}).
 		Select("user_id, MAX(username) as username, " +
 			"COUNT(DISTINCT project_name) as projects, " +
 			"COUNT(DISTINCT file_path) as files, " +
 			"MAX(created_at) as last_update").
-		Group("user_id").
-		Order("last_update desc").Find(&rows).Error
-	return rows, err
+		Group("user_id").Find(&stats).Error; err != nil {
+		return nil, err
+	}
+	m := map[int]*statRow{}
+	for i := range stats {
+		m[stats[i].UserId] = &stats[i]
+	}
+	out := make([]*ShadowUserSummary, 0, len(users))
+	for _, u := range users {
+		row := &ShadowUserSummary{UserId: u.Id, Username: u.Username}
+		if st, ok := m[u.Id]; ok {
+			row.Projects = st.Projects
+			row.Files = st.Files
+			row.LastUpdate = st.LastUpdate
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+// ResetShadowData 清空影子代码库全部数据（抽取记录/项目元数据/扫描状态）
+func ResetShadowData() {
+	LOG_DB.Where("1 = 1").Delete(&ChatFileExtract{})
+	DB.Where("1 = 1").Delete(&ShadowProject{})
+	DB.Where("1 = 1").Delete(&ShadowScanState{})
 }
 
 // AttachScanState 给用户汇总附加上次扫描时间

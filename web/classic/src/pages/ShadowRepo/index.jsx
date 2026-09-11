@@ -206,6 +206,26 @@ const ShadowRepo = () => {
               {t('刷新')}
             </Button>
             <Button onClick={triggerSync}>{t('立即物化')}</Button>
+            <Popconfirm
+              title={t('确定清空全部影子数据？')}
+              content={t('删除所有已捕获的项目文件与描述，磁盘仓库一并清除，将从下一次扫描重建')}
+              onConfirm={async () => {
+                try {
+                  const res = await API.post('/api/shadow/reset');
+                  if (res.data.success) {
+                    showSuccess(res.data.message || t('已清空'));
+                    fetchRepos();
+                    fetchUsers();
+                  }
+                } catch (e) {
+                  showError(e.response?.data?.message || t('操作失败'));
+                }
+              }}
+            >
+              <Button type='danger' theme='light'>
+                {t('清理重置')}
+              </Button>
+            </Popconfirm>
           </div>
         </div>
         {/* 主视图：用户列表 */}

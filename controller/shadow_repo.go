@@ -9,6 +9,9 @@ import (
 	"archive/zip"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -116,7 +119,11 @@ func DownloadShadowProject(c *gin.Context) {
 	// 项目根段：路径中等于项目名的最后一段目录，其后的部分作为 zip 内路径
 	projSeg := "/" + project + "/"
 	c.Header("Content-Type", "application/zip")
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, project))
+	// 中文项目名：ASCII 回退名 + RFC 5987 filename*，两者都给（部分浏览器只认其一）
+	asciiName := sanitizeAsciiFilename(project)
+	c.Header("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="%s.zip"; filename*=UTF-8''%s.zip`,
+			asciiName, url.PathEscape(project)))
 	zw := zip.NewWriter(c.Writer)
 	defer zw.Close()
 	for path, content := range files {
@@ -133,6 +140,39 @@ func DownloadShadowProject(c *gin.Context) {
 		}
 		_, _ = w.Write([]byte(content))
 	}
+}
+
+// sanitizeAsciiFilename 非 ASCII 字符替换为 _（Content-Disposition 回退名）
+func sanitizeAsciiFilename(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "project"
+	}
+	return b.String()
+}
+
+// ResetShadowProjects POST /api/shadow/reset 清空全部影子数据并删除磁盘仓库
+func ResetShadowProjects(c *gin.Context) {
+	model.ResetShadowData()
+	base := service.ShadowRepoBaseDir()
+	removed := 0
+	if entries, err := os.ReadDir(base); err == nil {
+		for _, e := range entries {
+			if err := os.RemoveAll(filepath.Join(base, e.Name())); err == nil {
+				removed++
+			}
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true,
+		"message": fmt.Sprintf("已清空影子数据与 %d 个磁盘仓库目录，将从下一次扫描重建", removed)})
 }
 
 // TriggerShadowScan POST /api/shadow/scan?user_id=
