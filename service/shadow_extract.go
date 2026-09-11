@@ -75,6 +75,20 @@ func parseToolCallForFiles(toolName string, args string) []*fileOp {
 		return nil
 	}
 
+	// 列目录工具（list/ls/glob/tree）：记录目录路径供增量同步参考
+	if strings.Contains(name, "list") || strings.Contains(name, "ls") ||
+		strings.Contains(name, "glob") || strings.Contains(name, "tree") || strings.Contains(name, "search") {
+		var m map[string]interface{}
+		if err := common.Unmarshal([]byte(args), &m); err == nil {
+			for _, k := range []string{"path", "directory", "dir", "root", "pattern"} {
+				if v, ok := m[k].(string); ok && v != "" {
+					return nil // 目录清单本身不产生文件行；清单结果在请求侧解析
+				}
+			}
+		}
+		return nil
+	}
+
 	// 结构化工具（file_path + content 字段）
 	if op := parseFileOpFromToolCall(toolName, args); op != nil {
 		return []*fileOp{op}
@@ -331,6 +345,27 @@ func extractFromOpenAIMessages(rows *[]*model.ChatFileExtract, info *relaycommon
 		if !ok {
 			continue
 		}
+		metaLower := strings.ToLower(meta.name)
+		// 列目录结果：逐行解析为文件路径（known paths，无内容）
+		if strings.Contains(metaLower, "list") || strings.Contains(metaLower, "ls") ||
+			strings.Contains(metaLower, "glob") || strings.Contains(metaLower, "tree") {
+			for _, line := range strings.Split(m.StringContent(), chrLF()) {
+				line = strings.TrimSpace(line)
+				if line == "" || len(line) > 512 {
+					continue
+				}
+				cand := strings.Fields(line)
+				if len(cand) == 0 {
+					continue
+				}
+				path2 := cand[len(cand)-1]
+				if !strings.Contains(path2, ".") {
+					continue
+				}
+				appendExtract(rows, info, &fileOp{Path: path2, Content: "", Action: "listed"}, "request", now)
+			}
+			continue
+		}
 		for _, op := range parseToolCallForFiles(meta.name, meta.args) {
 			if op.Action == "read" {
 				op.Content = m.StringContent() // Read 结果全文
@@ -344,3 +379,5 @@ func extractFromOpenAIMessages(rows *[]*model.ChatFileExtract, info *relaycommon
 // Claude 请求都转换为 OpenAI 格式上行，转换后的历史已按 OpenAI 路径抽取。
 func extractFromClaudeMessages(rows *[]*model.ChatFileExtract, info *relaycommon.RelayInfo, messages []dto.ClaudeMessage, now int64) {
 }
+
+func chrLF() string { return string(rune(10)) }

@@ -37,6 +37,9 @@ func TestMain(m *testing.M) {
 	common.LogConsumeEnabled = true
 
 	if err := db.AutoMigrate(
+		&model.ChatFileExtract{},
+		&model.ShadowProject{},
+		&model.ShadowScanState{},
 		&model.Task{},
 		&model.User{},
 		&model.Token{},

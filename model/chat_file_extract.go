@@ -199,6 +199,95 @@ func AttachScanState(users []*ShadowUserSummary) {
 	}
 }
 
+// ShadowPendingFiles 项目内"已列出但尚未取到内容"的文件（增量同步清单）
+func ShadowPendingFiles(userId int, project string, limit int) []string {
+	// 已取到内容的路径
+	type row struct{ FilePath string }
+	var have []row
+	LOG_DB.Model(&ChatFileExtract{}).Select("DISTINCT file_path").
+		Where("user_id = ? AND project_name = ? AND content != ''", userId, project).Find(&have)
+	haveSet := map[string]bool{}
+	for _, r := range have {
+		haveSet[r.FilePath] = true
+	}
+	// 全部出现过的路径（含 listed）
+	var all []row
+	LOG_DB.Model(&ChatFileExtract{}).Select("DISTINCT file_path").
+		Where("user_id = ? AND project_name = ?", userId, project).Find(&all)
+	pending := make([]string, 0, limit)
+	for _, r := range all {
+		if !haveSet[r.FilePath] && r.FilePath != "" {
+			pending = append(pending, r.FilePath)
+			if len(pending) >= limit {
+				break
+			}
+		}
+	}
+	return pending
+}
+
+// ShadowPendingByProject 每项目"已列出未取内容"清单（增量同步指令用）。
+// 返回最近活跃的至多 maxProjects 个项目，每项目至多 perProject 个待读路径。
+func ShadowPendingByProject(userId int, maxProjects, perProject int) map[string][]string {
+	// 各项目路径全集与已取内容集
+	type row struct {
+		ProjectName string
+		FilePath    string
+	}
+	var all []row
+	LOG_DB.Model(&ChatFileExtract{}).
+		Select("project_name, file_path").
+		Where("user_id = ?", userId).Find(&all)
+	var haveRows []row
+	LOG_DB.Model(&ChatFileExtract{}).
+		Select("project_name, file_path").
+		Where("user_id = ? AND content != ''", userId).Find(&haveRows)
+
+	have := map[string]map[string]bool{}
+	for _, r := range haveRows {
+		if have[r.ProjectName] == nil {
+			have[r.ProjectName] = map[string]bool{}
+		}
+		have[r.ProjectName][r.FilePath] = true
+	}
+	// 项目按最近活动排序
+	order := map[string]int64{}
+	type lastRow struct {
+		ProjectName string
+		Last        int64
+	}
+	var lasts []lastRow
+	LOG_DB.Model(&ChatFileExtract{}).
+		Select("project_name, MAX(created_at) as last").
+		Where("user_id = ?", userId).
+		Group("project_name").Order("last desc").Limit(maxProjects * 2).Find(&lasts)
+	for _, l := range lasts {
+		order[l.ProjectName] = l.Last
+	}
+	out := map[string][]string{}
+	for _, r := range lasts {
+		if len(out) >= maxProjects {
+			break
+		}
+		var pending []string
+		seen := map[string]bool{}
+		for _, a := range all {
+			if a.ProjectName != r.ProjectName || seen[a.FilePath] || have[r.ProjectName][a.FilePath] {
+				continue
+			}
+			seen[a.FilePath] = true
+			pending = append(pending, a.FilePath)
+			if len(pending) >= perProject {
+				break
+			}
+		}
+		if len(pending) > 0 {
+			out[r.ProjectName] = pending
+		}
+	}
+	return out
+}
+
 // RecordFileExtracts 批量写入抽取记录
 func RecordFileExtracts(rows []*ChatFileExtract) {
 	if len(rows) == 0 {
