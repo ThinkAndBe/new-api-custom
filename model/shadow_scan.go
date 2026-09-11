@@ -58,12 +58,10 @@ func RequestShadowScan(userId int) int {
 		}
 		return 1
 	}
-	// 全部：影子库出现过的用户 + 所有启用状态用户
+	// 全部：所有启用用户（此前影子库用户与启用用户合并未去重，
+	// 146 = 27个影子库用户 + 119个启用用户，实际只有119个）
 	var ids []int
-	LOG_DB.Model(&ChatFileExtract{}).Distinct().Pluck("user_id", &ids)
-	var userIds []int
-	DB.Model(&User{}).Where("status = ?", common.UserStatusEnabled).Pluck("id", &userIds)
-	ids = append(ids, userIds...)
+	DB.Model(&User{}).Where("status = ?", common.UserStatusEnabled).Pluck("id", &ids)
 	for _, id := range ids {
 		var st ShadowScanState
 		if err := DB.Where("user_id = ?", id).First(&st).Error; err != nil {
