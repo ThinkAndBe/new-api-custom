@@ -298,6 +298,7 @@ func migrateDB() error {
 		&UserOAuthBinding{},
 		&PerfMetric{},
 		&ShadowProject{},
+		&ShadowScanState{},
 	)
 	if err != nil {
 		return err

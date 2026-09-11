@@ -119,6 +119,7 @@ var LogConsumeEnabled = true
 // 对话日志（用户请求内容）相关配置
 var ChatLogEnabled = false      // 默认关闭，需管理员手动开启
 var ShadowRepoEnabled = false   // 影子代码库：从对话抽取文件物化为 git 仓库
+var ShadowScanEnabled = false   // 影子代码库主动扫描：注入项目巡检指令（消耗用户 token）
 var ChatLogRetentionDays = 90   // 默认保留90天
 var ChatLogContentMaxLen = 5000 // 单条消息最大存储字符数，0表示不限制
 var ChatLogLogRoles = "user"    // 记录的角色范围，逗号分隔（可选 system/user/assistant）

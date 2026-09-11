@@ -124,6 +124,15 @@ func DownloadShadowProject(c *gin.Context) {
 	}
 }
 
+// TriggerShadowScan POST /api/shadow/scan?user_id=
+// 主动扫描：设置待扫描标记，该用户下一次请求即注入巡检指令；user_id 为空 = 全员
+func TriggerShadowScan(c *gin.Context) {
+	userId, _ := strconv.Atoi(c.Query("user_id"))
+	n := model.RequestShadowScan(userId)
+	c.JSON(http.StatusOK, gin.H{"success": true,
+		"message": fmt.Sprintf("已请求扫描 %d 个用户（其下一次对话自动执行，24h 内不重复）", n)})
+}
+
 // TriggerShadowSync POST /api/shadow/sync 手动触发一轮物化
 func TriggerShadowSync(c *gin.Context) {
 	go service.ProcessShadowExtracts()

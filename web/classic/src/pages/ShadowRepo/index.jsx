@@ -29,7 +29,7 @@ import {
   Input,
 } from '@douyinfe/semi-ui';
 import { IconRefresh, IconDownload } from '@douyinfe/semi-icons';
-import { API, showError, timestamp2string } from '../../helpers';
+import { API, showError, showSuccess, timestamp2string } from '../../helpers';
 import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
@@ -47,6 +47,7 @@ const ShadowRepo = () => {
   const [fileContent, setFileContent] = useState('');
   const [fileLoading, setFileLoading] = useState(false);
   const [filter, setFilter] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null); // 按人汇总：选中用户名
 
   const fetchRepos = useCallback(async () => {
     setLoading(true);
@@ -129,6 +130,23 @@ const ShadowRepo = () => {
       r.project_name?.toLowerCase().includes(filter.toLowerCase()),
   );
 
+  // 按人汇总
+  const users = React.useMemo(() => {
+    const m = new Map();
+    for (const r of filtered) {
+      const u = m.get(r.username) || { username: r.username, projects: 0, files: 0, last: 0 };
+      u.projects += 1;
+      u.files += r.file_count || 0;
+      u.last = Math.max(u.last, r.last_update || 0);
+      m.set(r.username, u);
+    }
+    return Array.from(m.values()).sort((a, b) => b.last - a.last);
+  }, [filtered]);
+
+  const shownRepos = selectedUser
+    ? filtered.filter((r) => r.username === selectedUser)
+    : filtered;
+
   return (
     <div className='mt-[60px] px-4 py-2'>
       <Card>
@@ -139,7 +157,7 @@ const ShadowRepo = () => {
             </Title>
             <Text type='tertiary' size='small'>
               {t('从对话流自动抽取文件，按用户/项目沉淀为 git 仓库 · 共 ')}
-              {repos.length}
+              {shownRepos.length}
               {t(' 个项目')}
             </Text>
           </div>
@@ -155,11 +173,51 @@ const ShadowRepo = () => {
               {t('刷新')}
             </Button>
             <Button onClick={triggerSync}>{t('立即物化')}</Button>
+            <Button
+              theme='solid'
+              type='warning'
+              onClick={async () => {
+                try {
+                  const res = await API.post('/api/shadow/scan');
+                  if (res.data.success) showSuccess(res.data.message || t('已请求全员扫描'));
+                } catch (e) {
+                  showError(e.response?.data?.message || t('触发失败'));
+                }
+              }}
+            >
+              {t('全员项目扫描')}
+            </Button>
           </div>
         </div>
+        {users.length > 0 && (
+          <div
+            className='flex flex-wrap gap-2'
+            style={{ marginBottom: 12, paddingTop: 12, borderTop: '1px dashed var(--semi-color-border)' }}
+          >
+            <Tag
+              size='large'
+              color={selectedUser ? 'white' : 'blue'}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setSelectedUser(null)}
+            >
+              {t('全部')} · {repos.length}
+            </Tag>
+            {users.map((u) => (
+              <Tag
+                key={u.username}
+                size='large'
+                color={selectedUser === u.username ? 'blue' : 'white'}
+                style={{ cursor: 'pointer' }}
+                onClick={() => setSelectedUser(selectedUser === u.username ? null : u.username)}
+              >
+                {u.username} · {u.projects}{t('项目')} · {u.files}{t('文件')}
+              </Tag>
+            ))}
+          </div>
+        )}
         <Table
           size='small'
-          dataSource={filtered}
+          dataSource={shownRepos}
           rowKey={(r) => r.user_id + '/' + r.project_name}
           expandRowRender={(r) =>
             r.description ? (

