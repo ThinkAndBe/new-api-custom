@@ -184,15 +184,33 @@ func commitToRepo(repoDir, username, message string, files map[string]string) er
 // 策略：按 (user, project) 分组，每组取每文件最新内容，整体重建 tree 提交。
 // 仓库内文件全集 = 历史所有文件的最新内容（本批之外的历史内容从上一轮
 // commit 的 tree 继承 —— v1 简化：从 DB 按 (user,project) 重建全量）。
+// ShadowSyncStats 一轮物化的结果统计
+type ShadowSyncStats struct {
+	ReposTouched  int // 有新文件而提交的仓库数
+	Describes     int // 触发的描述生成数
+	CleanedRows   int // 清理的排除目录记录数
+	PendingBefore int // 本轮待处理记录数
+}
+
 func ProcessShadowExtracts() {
+	ProcessShadowExtractsWithStats()
+}
+
+// ProcessShadowExtractsWithStats 物化并返回统计（手动触发时给用户反馈）
+func ProcessShadowExtractsWithStats() ShadowSyncStats {
+	var stats ShadowSyncStats
 	if !common.ShadowRepoEnabled {
-		return
+		return stats
 	}
 	// 清理客户端记忆/配置目录的混入记录（幂等）
 	model.CleanupShadowExcluded()
 	rows, err := model.PendingFileExtracts(2000)
-	if err != nil || len(rows) == 0 {
-		return
+	if err != nil {
+		return stats
+	}
+	stats.PendingBefore = len(rows)
+	if len(rows) == 0 {
+		return stats
 	}
 	// 1. 本批涉及的 (user, project)
 	type repoKey struct {
@@ -229,6 +247,8 @@ func ProcessShadowExtracts() {
 		msg := fmt.Sprintf("sync %s · %d files", time.Now().Format("2006-01-02 15:04"), fileCount)
 		if err := commitToRepo(repoDir, key.username, msg, files); err != nil {
 			common.SysLog(fmt.Sprintf("shadow: commit %s/%s failed: %s", key.username, key.project, err.Error()))
+		} else {
+			stats.ReposTouched++
 		}
 		lock.Unlock()
 		// 项目元数据 + 功能描述（24h 刷新，异步）
@@ -250,7 +270,9 @@ func ProcessShadowExtracts() {
 		}
 		MaybeDescribeProject(k.UserId, k.Username, k.ProjectName)
 		backfill++
+		stats.Describes++
 	}
+	return stats
 }
 
 func sanitizeDirComponent(name string) string {

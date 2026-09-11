@@ -109,7 +109,8 @@ const ShadowRepo = () => {
     try {
       const res = await API.post('/api/shadow/sync');
       if (res.data.success) {
-        setTimeout(fetchRepos, 3000);
+        showSuccess(res.data.message || t('已触发物化'));
+        setTimeout(fetchRepos, 2000);
       }
     } catch (e) {
       showError(e.response?.data?.message || t('触发失败'));

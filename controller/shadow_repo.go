@@ -133,10 +133,17 @@ func TriggerShadowScan(c *gin.Context) {
 		"message": fmt.Sprintf("已请求扫描 %d 个用户（其下一次对话自动执行，24h 内不重复）", n)})
 }
 
-// TriggerShadowSync POST /api/shadow/sync 手动触发一轮物化
+// TriggerShadowSync POST /api/shadow/sync 手动触发一轮物化（同步执行并返回结果）
 func TriggerShadowSync(c *gin.Context) {
-	go service.ProcessShadowExtracts()
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "已触发物化，稍后刷新查看"})
+	stats := service.ProcessShadowExtractsWithStats()
+	msg := fmt.Sprintf("本轮物化完成：%d 个仓库更新", stats.ReposTouched)
+	if stats.PendingBefore == 0 {
+		msg = "本轮无需物化：没有新的文件捕获记录（文件在用户对话产生工具调用后自动捕获，后台每 5 分钟也会自动物化）"
+	}
+	if stats.Describes > 0 {
+		msg += fmt.Sprintf("，%d 个描述生成已触发", stats.Describes)
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": msg, "stats": stats})
 }
 
 func shadowParams(c *gin.Context) (int, string) {
