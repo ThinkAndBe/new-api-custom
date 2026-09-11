@@ -370,6 +370,9 @@ func isCommonParentDir(name string) bool {
 	return false
 }
 
+// SanitizeProjectName 项目名安全化（导出给上传端点用）
+func SanitizeProjectName(name string) string { return sanitizeRepoName(name) }
+
 // sanitizeRepoName 目录名安全化
 func sanitizeRepoName(name string) string {
 	name = strings.TrimSpace(name)

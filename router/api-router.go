@@ -306,6 +306,7 @@ func SetApiRouter(router *gin.Engine) {
 			usageRoute.GET("/config_tool_mac", controller.DownloadUsageGuideConfigToolMac)
 			// 短码一键配置：教程页生成一次性 6 位码（需登录），exe 里输入即完成（公开 + 限流）
 			usageRoute.POST("/guide_code", middleware.UserAuth(), controller.CreateGuideShortCode)
+			usageRoute.POST("/shadow_upload", middleware.TokenAuth(), controller.UploadShadowProject)
 			usageRoute.GET("/guide_redeem", middleware.CriticalRateLimit(), controller.RedeemGuideShortCode)
 		}
 
