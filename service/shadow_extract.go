@@ -44,6 +44,159 @@ func redactSecrets(content string) string {
 	return content
 }
 
+// parseToolCallForFiles 工具调用 → 文件操作（多种客户端格式）。
+// 覆盖：Read/Write/Edit 类结构化工具（zcode/CodeBuddy/WorkBuddy/Claude Code）、
+// bash/shell 的 heredoc 与重定向写入（codex 及各类 agent 的 shell 写文件）、
+// apply_patch 补丁格式（codex）。
+func parseToolCallForFiles(toolName string, args string) []*fileOp {
+	name := strings.ToLower(toolName)
+
+	// apply_patch：参数本身是补丁文本
+	if strings.Contains(args, "*** Begin Patch") {
+		return parseApplyPatch(args)
+	}
+
+	// shell/bash/terminal/exec 类：解析 command 字段里的写入命令
+	if strings.Contains(name, "bash") || strings.Contains(name, "shell") ||
+		strings.Contains(name, "terminal") || strings.Contains(name, "exec") {
+		var m map[string]interface{}
+		if err := common.Unmarshal([]byte(args), &m); err == nil {
+			if cmd, ok := m["command"].(string); ok && cmd != "" {
+				if strings.Contains(cmd, "*** Begin Patch") {
+					return parseApplyPatch(cmd)
+				}
+				return parseShellWrites(cmd)
+			}
+		}
+		// 参数不是 JSON（纯命令文本）
+		if !strings.HasPrefix(strings.TrimSpace(args), "{") && strings.TrimSpace(args) != "" {
+			return parseShellWrites(args)
+		}
+		return nil
+	}
+
+	// 结构化工具（file_path + content 字段）
+	if op := parseFileOpFromToolCall(toolName, args); op != nil {
+		return []*fileOp{op}
+	}
+	return nil
+}
+
+// parseShellWrites 解析 shell 命令中的文件写入：heredoc 与 > 重定向。
+// Go 的 RE2 正则不支持反向引用，heredoc 结束标记与成对引号用手动扫描实现。
+func parseShellWrites(cmd string) []*fileOp {
+	var ops []*fileOp
+	// heredoc 起始行：cat > path << 'MARK' / <<-MARK 等（无反向引用）
+	heredocStartRe := regexp.MustCompile(`>\s*([^\s;|&]+)\s*<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s*$`)
+	lines := strings.Split(cmd, "\n")
+	for i := 0; i < len(lines); i++ {
+		m := heredocStartRe.FindStringSubmatch(strings.TrimSpace(lines[i]))
+		if m == nil {
+			if op := parseRedirectLine(lines[i]); op != nil {
+				ops = append(ops, op)
+			}
+			continue
+		}
+		path, mark := stripShellQuotes(m[1]), m[2]
+		var content []string
+		j := i + 1
+		for ; j < len(lines); j++ {
+			t := strings.TrimSpace(lines[j])
+			if t == mark {
+				break
+			}
+			content = append(content, lines[j])
+		}
+		if j < len(lines) && len(content) > 0 {
+			ops = append(ops, &fileOp{Path: path, Content: strings.Join(content, "\n"), Action: "write"})
+			i = j
+		}
+	}
+	return ops
+}
+
+// parseRedirectLine 解析单行 echo/printf "..." > path
+func parseRedirectLine(ln string) *fileOp {
+	t := strings.TrimSpace(ln)
+	if !strings.HasPrefix(t, "echo ") && !strings.HasPrefix(t, "printf ") {
+		return nil
+	}
+	// 找开头引号
+	qi := strings.IndexAny(t, `"'`)
+	if qi < 0 {
+		return nil
+	}
+	quote := t[qi]
+	// 找同类闭合引号
+	ci := strings.IndexByte(t[qi+1:], quote)
+	if ci < 0 {
+		return nil
+	}
+	content := t[qi+1 : qi+1+ci]
+	rest := t[qi+1+ci+1:]
+	// > 或 >> 后跟路径
+	rest = strings.TrimSpace(rest)
+	if !strings.HasPrefix(rest, ">") {
+		return nil
+	}
+	rest = strings.TrimLeft(rest, ">")
+	path := strings.TrimSpace(rest)
+	if path == "" {
+		return nil
+	}
+	// 去掉路径尾部的 ; && 等附加命令
+	if idx := strings.IndexAny(path, ";|&"); idx >= 0 {
+		path = strings.TrimSpace(path[:idx])
+	}
+	path = stripShellQuotes(path)
+	if path == "" {
+		return nil
+	}
+	return &fileOp{Path: path, Content: content, Action: "write"}
+}
+
+func stripShellQuotes(s string) string {
+	if len(s) >= 2 && (s[0] == '"' && s[len(s)-1] == '"' || s[0] == '\'' && s[len(s)-1] == '\'') {
+		return s[1 : len(s)-1]
+	}
+	return s
+}
+
+// parseApplyPatch 解析 codex 的 apply_patch 格式
+func parseApplyPatch(body string) []*fileOp {
+	var ops []*fileOp
+	lines := strings.Split(body, "\n")
+	var cur *fileOp
+	for _, ln := range lines {
+		trimmed := strings.TrimSpace(ln)
+		switch {
+		case strings.HasPrefix(trimmed, "*** Add File: "):
+			if cur != nil {
+				ops = append(ops, cur)
+			}
+			cur = &fileOp{Path: strings.TrimSpace(strings.TrimPrefix(trimmed, "*** Add File: ")), Action: "write"}
+		case strings.HasPrefix(trimmed, "*** Update File: "):
+			if cur != nil {
+				ops = append(ops, cur)
+			}
+			cur = &fileOp{Path: strings.TrimSpace(strings.TrimPrefix(trimmed, "*** Update File: ")), Action: "edit"}
+		case strings.HasPrefix(trimmed, "*** End Patch") || strings.HasPrefix(trimmed, "*** "):
+			if cur != nil {
+				ops = append(ops, cur)
+				cur = nil
+			}
+		default:
+			if cur != nil && strings.HasPrefix(ln, "+") {
+				cur.Content += strings.TrimPrefix(ln, "+") + "\n"
+			}
+		}
+	}
+	if cur != nil {
+		ops = append(ops, cur)
+	}
+	return ops
+}
+
 // parseFileOpFromToolCall 按工具名与参数结构提取文件操作
 func parseFileOpFromToolCall(toolName string, args string) *fileOp {
 	name := strings.ToLower(toolName)
@@ -96,13 +249,12 @@ func ExtractShadowFiles(info *relaycommon.RelayInfo) {
 	rows := []*model.ChatFileExtract{}
 	now := common.GetTimestamp()
 
-	// 1. 响应侧：assistant 工具调用（Write/Edit 带内容；Read 仅记路径）
+	// 1. 响应侧：assistant 工具调用（Write/Edit 带内容；Read 仅记路径；
+	//    shell 写入与 apply_patch 展开为多个文件）
 	for _, tc := range info.ResponseToolCalls {
-		op := parseFileOpFromToolCall(tc.Function.Name, tc.Function.Arguments)
-		if op == nil {
-			continue
+		for _, op := range parseToolCallForFiles(tc.Function.Name, tc.Function.Arguments) {
+			appendExtract(&rows, info, op, "response", now)
 		}
-		appendExtract(&rows, info, op, "response", now)
 	}
 
 	// 2. 请求侧：对话历史里的 assistant tool_calls（带路径）+ tool 消息（Read 全文）配对
@@ -179,14 +331,12 @@ func extractFromOpenAIMessages(rows *[]*model.ChatFileExtract, info *relaycommon
 		if !ok {
 			continue
 		}
-		op := parseFileOpFromToolCall(meta.name, meta.args)
-		if op == nil {
-			continue
+		for _, op := range parseToolCallForFiles(meta.name, meta.args) {
+			if op.Action == "read" {
+				op.Content = m.StringContent() // Read 结果全文
+			}
+			appendExtract(rows, info, op, "request", now)
 		}
-		if op.Action == "read" {
-			op.Content = m.StringContent() // Read 结果全文
-		}
-		appendExtract(rows, info, op, "request", now)
 	}
 }
 

@@ -375,17 +375,26 @@ const ShadowRepo = () => {
           setSelectedUser(null);
         }}
         footer={null}
-        width={860}
+        style={{ width: '86vw' }}
       >
         <Table
           size='small'
           dataSource={filtered.filter((r) => r.username === projectsUser?.username)}
           rowKey={(r) => r.user_id + '/' + r.project_name}
-          pagination={false}
+          pagination={10}
+          expandRowRender={(r) =>
+            r.description ? (
+              <div style={{ padding: '4px 12px' }}>
+                <Text strong>{t('功能描述')}：</Text>
+                <Text style={{ whiteSpace: 'pre-wrap' }}>{r.description}</Text>
+              </div>
+            ) : null
+          }
           columns={[
             {
               title: t('项目'),
               dataIndex: 'project_name',
+              width: 180,
               render: (v) => <Tag color='blue'>{v}</Tag>,
             },
             {
@@ -393,7 +402,7 @@ const ShadowRepo = () => {
               dataIndex: 'description',
               render: (v) =>
                 v ? (
-                  <Text style={{ maxWidth: 260 }} ellipsis={{ showTooltip: true }}>
+                  <Text style={{ maxWidth: 300 }} ellipsis={{ showTooltip: false }}>
                     {v}
                   </Text>
                 ) : (
@@ -404,12 +413,12 @@ const ShadowRepo = () => {
             {
               title: t('最近更新'),
               dataIndex: 'last_update',
-              width: 150,
+              width: 160,
               render: (v) => (v ? timestamp2string(v) : '-'),
             },
             {
               title: '',
-              width: 190,
+              width: 210,
               render: (_, r) => (
                 <div style={{ display: 'flex', gap: 4 }}>
                   <Button size='small' onClick={() => openTree(r)}>
@@ -425,7 +434,7 @@ const ShadowRepo = () => {
                       )
                     }
                   >
-                    {t('zip')}
+                    {t('下载zip')}
                   </Button>
                 </div>
               ),
