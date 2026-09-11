@@ -351,6 +351,7 @@ func SetApiRouter(router *gin.Engine) {
 		shadowRoute.Use(middleware.RootAuth())
 		{
 			shadowRoute.GET("/repos", controller.ListShadowRepos)
+			shadowRoute.GET("/users", controller.GetShadowUsers)
 			shadowRoute.GET("/tree", controller.GetShadowTree)
 			shadowRoute.GET("/file", controller.GetShadowFile)
 			shadowRoute.GET("/download", controller.DownloadShadowProject)

@@ -53,6 +53,17 @@ func RedescribeShadowProject(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "已触发重新生成，稍后刷新查看"})
 }
 
+// GetShadowUsers GET /api/shadow/users —— 按用户汇总（主视图）
+func GetShadowUsers(c *gin.Context) {
+	users, err := model.ShadowUserSummaries()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	model.AttachScanState(users)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": users})
+}
+
 // GetShadowTree GET /api/shadow/tree?user_id=&project=
 func GetShadowTree(c *gin.Context) {
 	userId, project := shadowParams(c)

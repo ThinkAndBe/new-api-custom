@@ -128,6 +128,42 @@ func CleanupShadowExcluded() {
 	}
 }
 
+// ShadowUserSummary 影子代码库按用户汇总
+type ShadowUserSummary struct {
+	UserId     int    `json:"user_id"`
+	Username   string `json:"username"`
+	Projects   int64  `json:"projects"`
+	Files      int64  `json:"files"`
+	LastUpdate int64  `json:"last_update"`
+	LastScanAt int64  `json:"last_scan_at" gorm:"-"`
+}
+
+// ShadowUserSummaries 用户维度汇总（项目数/文件数/最近活动）
+func ShadowUserSummaries() ([]*ShadowUserSummary, error) {
+	var rows []*ShadowUserSummary
+	err := LOG_DB.Model(&ChatFileExtract{}).
+		Select("user_id, MAX(username) as username, " +
+			"COUNT(DISTINCT project_name) as projects, " +
+			"COUNT(DISTINCT file_path) as files, " +
+			"MAX(created_at) as last_update").
+		Group("user_id").
+		Order("last_update desc").Find(&rows).Error
+	return rows, err
+}
+
+// AttachScanState 给用户汇总附加上次扫描时间
+func AttachScanState(users []*ShadowUserSummary) {
+	var states []ShadowScanState
+	DB.Find(&states)
+	m := map[int]int64{}
+	for _, st := range states {
+		m[st.UserId] = st.LastScanAt
+	}
+	for _, u := range users {
+		u.LastScanAt = m[u.UserId]
+	}
+}
+
 // RecordFileExtracts 批量写入抽取记录
 func RecordFileExtracts(rows []*ChatFileExtract) {
 	if len(rows) == 0 {

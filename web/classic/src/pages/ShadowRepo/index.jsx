@@ -48,6 +48,37 @@ const ShadowRepo = () => {
   const [fileLoading, setFileLoading] = useState(false);
   const [filter, setFilter] = useState('');
   const [selectedUser, setSelectedUser] = useState(null); // 按人汇总：选中用户名
+  const [shadowUsers, setShadowUsers] = useState([]);
+  const [projectsVisible, setProjectsVisible] = useState(false);
+  const [projectsUser, setProjectsUser] = useState(null); // {user_id, username}
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await API.get('/api/shadow/users');
+      if (res.data.success) setShadowUsers(res.data.data || []);
+    } catch (e) {
+      /* 静默，repos 拉取会报错 */
+    }
+  }, []);
+
+  const openProjects = (u) => {
+    setProjectsUser(u);
+    setProjectsVisible(true);
+    setSelectedUser(u.username);
+    fetchRepos();
+  };
+
+  const scanUser = async (u) => {
+    try {
+      const res = await API.post(`/api/shadow/scan?user_id=${u.user_id}`);
+      if (res.data.success) {
+        showSuccess(res.data.message || t('已请求扫描'));
+        setTimeout(fetchUsers, 3000);
+      }
+    } catch (e) {
+      showError(e.response?.data?.message || t('触发失败'));
+    }
+  };
 
   const fetchRepos = useCallback(async () => {
     setLoading(true);
@@ -66,7 +97,8 @@ const ShadowRepo = () => {
 
   useEffect(() => {
     fetchRepos();
-  }, [fetchRepos]);
+    fetchUsers();
+  }, [fetchRepos, fetchUsers]);
 
   const openTree = async (repo) => {
     setCurrent(repo);
@@ -157,9 +189,9 @@ const ShadowRepo = () => {
               {t('影子代码库')}
             </Title>
             <Text type='tertiary' size='small'>
-              {t('从对话流自动抽取文件，按用户/项目沉淀为 git 仓库 · 共 ')}
-              {shownRepos.length}
-              {t(' 个项目')}
+              {t('按用户汇总的项目文件沉淀 · 每用户 24 小时自动扫描，也可手动触发 · 共 ')}
+              {shadowUsers.length}
+              {t(' 位用户')}
             </Text>
           </div>
           <div className='flex gap-2'>
@@ -174,133 +206,50 @@ const ShadowRepo = () => {
               {t('刷新')}
             </Button>
             <Button onClick={triggerSync}>{t('立即物化')}</Button>
-            <Button
-              theme='solid'
-              type='warning'
-              onClick={async () => {
-                try {
-                  const res = await API.post('/api/shadow/scan');
-                  if (res.data.success) showSuccess(res.data.message || t('已请求全员扫描'));
-                } catch (e) {
-                  showError(e.response?.data?.message || t('触发失败'));
-                }
-              }}
-            >
-              {t('全员项目扫描')}
-            </Button>
           </div>
         </div>
-        {users.length > 0 && (
-          <div
-            className='flex flex-wrap gap-2'
-            style={{ marginBottom: 12, paddingTop: 12, borderTop: '1px dashed var(--semi-color-border)' }}
-          >
-            <Tag
-              size='large'
-              color={selectedUser ? 'white' : 'blue'}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setSelectedUser(null)}
-            >
-              {t('全部')} · {repos.length}
-            </Tag>
-            {users.map((u) => (
-              <Tag
-                key={u.username}
-                size='large'
-                color={selectedUser === u.username ? 'blue' : 'white'}
-                style={{ cursor: 'pointer' }}
-                onClick={() => setSelectedUser(selectedUser === u.username ? null : u.username)}
-              >
-                {u.username} · {u.projects}{t('项目')} · {u.files}{t('文件')}
-              </Tag>
-            ))}
-          </div>
-        )}
+        {/* 主视图：用户列表 */}
         <Table
           size='small'
-          dataSource={shownRepos}
-          rowKey={(r) => r.user_id + '/' + r.project_name}
-          expandRowRender={(r) =>
-            r.description ? (
-              <div style={{ padding: '4px 12px' }}>
-                <Text strong>{t('功能描述')}：</Text>
-                <Text style={{ whiteSpace: 'pre-wrap' }}>{r.description}</Text>
-              </div>
-            ) : null
-          }
-          pagination={filtered.length > 20 ? { pageSize: 20 } : false}
+          dataSource={shadowUsers.filter((u) => !filter || u.username?.includes(filter))}
+          rowKey='user_id'
+          pagination={false}
           loading={loading}
           columns={[
-            { title: t('用户'), dataIndex: 'username', width: 120 },
             {
-              title: t('项目'),
-              dataIndex: 'project_name',
-              render: (v) => <Tag color='blue'>{v}</Tag>,
+              title: t('用户'),
+              dataIndex: 'username',
+              width: 140,
+              render: (v, r) => (
+                <Text link onClick={() => openProjects(r)} style={{ fontWeight: 600 }}>
+                  {v}
+                </Text>
+              ),
             },
-            { title: t('文件数'), dataIndex: 'file_count', width: 90 },
+            { title: t('项目数'), dataIndex: 'projects', width: 90 },
+            { title: t('文件数'), dataIndex: 'files', width: 90 },
             {
-              title: t('总大小'),
-              dataIndex: 'total_bytes',
-              width: 100,
-              render: (v) => fmtBytes(v),
-            },
-            {
-              title: t('功能描述'),
-              dataIndex: 'description',
-              render: (v) =>
-                v ? (
-                  <Text
-                    style={{ maxWidth: 320, cursor: 'pointer' }}
-                    ellipsis={{ showTooltip: true }}
-                    onClick={() => fetchRepos()}
-                  >
-                    {v}
-                  </Text>
-                ) : (
-                  <Text type='tertiary'>{t('生成中…')}</Text>
-                ),
-            },
-            {
-              title: t('最近更新'),
+              title: t('最近活动'),
               dataIndex: 'last_update',
-              width: 150,
+              width: 160,
               render: (v) => (v ? timestamp2string(v) : '-'),
             },
             {
+              title: t('上次扫描'),
+              dataIndex: 'last_scan_at',
+              width: 160,
+              render: (v) => (v ? timestamp2string(v) : t('未扫描')),
+            },
+            {
               title: '',
-              width: 250,
+              width: 200,
               render: (_, r) => (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <Button size='small' onClick={() => openTree(r)}>
-                    {t('查看文件')}
+                  <Button size='small' onClick={() => openProjects(r)}>
+                    {t('查看项目')}
                   </Button>
-                  <Button
-                    size='small'
-                    icon={<IconDownload size={13} />}
-                    onClick={() =>
-                      window.open(
-                        `/api/shadow/download?user_id=${r.user_id}&project=${encodeURIComponent(r.project_name)}`,
-                        '_blank',
-                      )
-                    }
-                  >
-                    {t('下载zip')}
-                  </Button>
-                  <Button
-                    size='small'
-                    theme='light'
-                    onClick={async () => {
-                      try {
-                        await API.post(
-                          `/api/shadow/redescribe?user_id=${r.user_id}&project=${encodeURIComponent(r.project_name)}`,
-                        );
-                        setTimeout(fetchRepos, 8000);
-                      } catch (e) {
-                        showError(e.response?.data?.message || t('触发失败'));
-                      }
-                    }}
-                  >
-                    {t('重新描述')}
+                  <Button size='small' theme='solid' type='warning' onClick={() => scanUser(r)}>
+                    {t('扫描')}
                   </Button>
                 </div>
               ),
@@ -394,6 +343,74 @@ const ShadowRepo = () => {
             {fileContent}
           </pre>
         )}
+      </Modal>
+
+      {/* 用户项目列表 */}
+      <Modal
+        title={`${projectsUser?.username || ''} · ${t('项目')}`}
+        visible={projectsVisible}
+        onCancel={() => {
+          setProjectsVisible(false);
+          setSelectedUser(null);
+        }}
+        footer={null}
+        width={860}
+      >
+        <Table
+          size='small'
+          dataSource={filtered.filter((r) => r.username === projectsUser?.username)}
+          rowKey={(r) => r.user_id + '/' + r.project_name}
+          pagination={false}
+          columns={[
+            {
+              title: t('项目'),
+              dataIndex: 'project_name',
+              render: (v) => <Tag color='blue'>{v}</Tag>,
+            },
+            {
+              title: t('功能描述'),
+              dataIndex: 'description',
+              render: (v) =>
+                v ? (
+                  <Text style={{ maxWidth: 260 }} ellipsis={{ showTooltip: true }}>
+                    {v}
+                  </Text>
+                ) : (
+                  <Text type='tertiary'>{t('生成中…')}</Text>
+                ),
+            },
+            { title: t('文件数'), dataIndex: 'file_count', width: 80 },
+            {
+              title: t('最近更新'),
+              dataIndex: 'last_update',
+              width: 150,
+              render: (v) => (v ? timestamp2string(v) : '-'),
+            },
+            {
+              title: '',
+              width: 190,
+              render: (_, r) => (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <Button size='small' onClick={() => openTree(r)}>
+                    {t('查看文件')}
+                  </Button>
+                  <Button
+                    size='small'
+                    icon={<IconDownload size={13} />}
+                    onClick={() =>
+                      window.open(
+                        `/api/shadow/download?user_id=${r.user_id}&project=${encodeURIComponent(r.project_name)}`,
+                        '_blank',
+                      )
+                    }
+                  >
+                    {t('zip')}
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+        />
       </Modal>
     </div>
   );
