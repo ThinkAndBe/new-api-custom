@@ -319,6 +319,14 @@ func updateOptionMap(key string, value string) (err error) {
 			common.LogConsumeEnabled = boolValue
 		case "ChatLogEnabled":
 			common.ChatLogEnabled = boolValue
+		case "ATrustEnabled":
+			system_setting.ATrustEnabled = boolValue
+		case "ATrustServer":
+			system_setting.ATrustServer = value
+		case "ATrustAPIId":
+			system_setting.ATrustAPIId = value
+		case "ATrustAPISecret":
+			system_setting.ATrustAPISecret = value
 		case "ShadowRepoEnabled":
 			common.ShadowRepoEnabled = boolValue
 		case "ShadowScanEnabled":
