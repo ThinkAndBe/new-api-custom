@@ -330,16 +330,6 @@ function App() {
           }
         />
         <Route
-          path='/console/quota-monitor'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <QuotaMonitor />
-              </Suspense>
-            </PrivateRoute>
-          }
-        />
-        <Route
           path='/console'
           element={
             <PrivateRoute>
