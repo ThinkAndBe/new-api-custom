@@ -100,6 +100,16 @@ func main() {
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 
+	// 套餐额度定时刷新（30 分钟）
+	go func() {
+		service.RefreshAllProviderQuotas() // 启动时立即刷一次
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			service.RefreshAllProviderQuotas()
+		}
+	}()
+
 	// 影子代码库物化器（5 分钟一批）
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)

@@ -39,6 +39,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     log: true,
     'chat-log': true,
     'shadow-repo': true,
+    'quota-monitor': true,
     midjourney: true,
     task: true,
   },

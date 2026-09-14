@@ -347,6 +347,17 @@ func SetApiRouter(router *gin.Engine) {
 			chatLogRoute.DELETE("/expired", controller.DeleteExpiredChatLogs)
 		}
 
+		// 套餐额度监控（仅超管）
+		quotaRoute := apiRouter.Group("/quota")
+		quotaRoute.Use(middleware.RootAuth())
+		{
+			quotaRoute.GET("/accounts", controller.ListQuotaAccounts)
+			quotaRoute.POST("/accounts", controller.CreateQuotaAccount)
+			quotaRoute.PUT("/accounts", controller.UpdateQuotaAccount)
+			quotaRoute.DELETE("/accounts", controller.DeleteQuotaAccount)
+			quotaRoute.POST("/refresh", controller.RefreshQuota)
+		}
+
 		// 影子代码库（仅超管）
 		shadowRoute := apiRouter.Group("/shadow")
 		shadowRoute.Use(middleware.RootAuth())

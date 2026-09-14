@@ -42,6 +42,7 @@ const routerMap = {
   log: '/console/log',
   'chat-log': '/console/chat-log',
   'shadow-repo': '/console/shadow-repo',
+  'quota-monitor': '/console/quota-monitor',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
   about: '/about',
@@ -109,6 +110,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('影子代码库'),
         itemKey: 'shadow-repo',
         to: '/console/shadow-repo',
+        className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('额度监控'),
+        itemKey: 'quota-monitor',
+        to: '/console/quota-monitor',
         className: isRoot() ? '' : 'tableHiddle',
       },
       {
