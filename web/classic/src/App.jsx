@@ -57,7 +57,6 @@ const About = lazy(() => import('./pages/About'));
 const UsageGuide = lazy(() => import('./pages/UsageGuide'));
 const ChatLog = lazy(() => import('./pages/ChatLog'));
 const ShadowRepo = lazy(() => import('./pages/ShadowRepo'));
-const QuotaMonitor = lazy(() => import('./pages/QuotaMonitor'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 

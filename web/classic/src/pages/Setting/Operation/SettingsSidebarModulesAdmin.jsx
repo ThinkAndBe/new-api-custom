@@ -53,7 +53,6 @@ export default function SettingsSidebarModulesAdmin(props) {
       log: true,
       'chat-log': true,
       'shadow-repo': true,
-      'quota-monitor': true,
       midjourney: true,
       task: true,
     },
@@ -242,11 +241,6 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'shadow-repo',
           title: t('影子代码库'),
           description: t('从对话自动沉淀的项目文件仓库'),
-        },
-        {
-          key: 'quota-monitor',
-          title: t('额度监控'),
-          description: t('服务商套餐用量追踪'),
         },
         {
           key: 'midjourney',

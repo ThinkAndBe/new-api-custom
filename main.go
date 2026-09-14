@@ -100,36 +100,6 @@ func main() {
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 
-	// 套餐额度定时刷新（30 分钟）
-	go func() {
-		service.RefreshAllProviderQuotas() // 启动时立即刷一次
-		ticker := time.NewTicker(30 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			service.RefreshAllProviderQuotas()
-		}
-	}()
-
-	// 影子代码库物化器（5 分钟一批）
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			service.ProcessShadowExtracts()
-		}
-	}()
-
-	// 数据看板
-	go model.UpdateQuotaData()
-
-	if os.Getenv("CHANNEL_UPDATE_FREQUENCY") != "" {
-		frequency, err := strconv.Atoi(os.Getenv("CHANNEL_UPDATE_FREQUENCY"))
-		if err != nil {
-			common.FatalLog("failed to parse CHANNEL_UPDATE_FREQUENCY: " + err.Error())
-		}
-		go controller.AutomaticallyUpdateChannels(frequency)
-	}
-
 	go controller.AutomaticallyTestChannels()
 
 	// 渠道定时暂停任务（自动根据配置的时间窗口切换状态 1↔4）
