@@ -35,8 +35,12 @@ FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tzdata libasan8 wget \
+        chromium \
+        fonts-liberation fonts-noto-cjk \
+        libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2 \
     && rm -rf /var/lib/apt/lists/* \
-    && update-ca-certificates
+    && update-ca-certificates \
+    && ln -sf /usr/bin/chromium /usr/bin/google-chrome 2>/dev/null || true
 
 COPY --from=builder2 /build/new-api /
 COPY --from=builder2 /build/config-tool/erke-config-tool.exe /config-tool/erke-config-tool.exe
