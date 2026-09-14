@@ -43,6 +43,7 @@ func GetChatLogs(c *gin.Context) {
 	modelName := c.Query("model_name")
 	tokenName := c.Query("token_name")
 	groupName := c.Query("group")
+	keyword := c.Query("keyword")
 	startId, _ := strconv.Atoi(c.Query("start_id"))
 	endId, _ := strconv.Atoi(c.Query("end_id"))
 	startTime, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
@@ -54,6 +55,7 @@ func GetChatLogs(c *gin.Context) {
 		ModelName: modelName,
 		TokenName: tokenName,
 		Group:     groupName,
+		Keyword:   keyword,
 		StartId:   startId,
 		EndId:     endId,
 		StartTime: startTime,

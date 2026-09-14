@@ -53,6 +53,7 @@ const ChatLog = () => {
       if (formData.username) params.set('username', formData.username);
       if (formData.model_name) params.set('model_name', formData.model_name);
       if (formData.group) params.set('group', formData.group);
+      if (formData.keyword) params.set('keyword', formData.keyword);
       if (formData.dateRange && formData.dateRange.length === 2) {
         params.set('start_timestamp', String(Math.floor(formData.dateRange[0].getTime() / 1000)));
         params.set('end_timestamp', String(Math.floor(formData.dateRange[1].getTime() / 1000)));
@@ -82,6 +83,7 @@ const ChatLog = () => {
       if (formData.username) params.set('username', formData.username);
       if (formData.model_name) params.set('model_name', formData.model_name);
       if (formData.group) params.set('group', formData.group);
+      if (formData.keyword) params.set('keyword', formData.keyword);
       if (formData.dateRange && formData.dateRange.length === 2) {
         params.set('start_timestamp', String(Math.floor(formData.dateRange[0].getTime() / 1000)));
         params.set('end_timestamp', String(Math.floor(formData.dateRange[1].getTime() / 1000)));
@@ -119,6 +121,7 @@ const ChatLog = () => {
       if (formData.username) params.set('username', formData.username);
       if (formData.model_name) params.set('model_name', formData.model_name);
       if (formData.group) params.set('group', formData.group);
+      if (formData.keyword) params.set('keyword', formData.keyword);
       if (formData.dateRange && formData.dateRange.length === 2) {
         params.set('start_timestamp', String(Math.floor(formData.dateRange[0].getTime() / 1000)));
         params.set('end_timestamp', String(Math.floor(formData.dateRange[1].getTime() / 1000)));
@@ -386,10 +389,18 @@ const ChatLog = () => {
             <Form.Input
               field='group'
               label={t('分组')}
-              placeholder={t('分组')}
+              placeholder={t('分组（模糊）')}
               showClear
               density='compact'
               style={{ width: 150 }}
+            />
+            <Form.Input
+              field='keyword'
+              label={t('关键词')}
+              placeholder={t('搜索用户/分组/内容')}
+              showClear
+              density='compact'
+              style={{ width: 200 }}
             />
           </div>
           <div className='flex gap-2 mb-3'>

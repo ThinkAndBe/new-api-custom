@@ -34,6 +34,7 @@ type ChatLogFilter struct {
 	ModelName string
 	TokenName string
 	Group     string
+	Keyword   string
 	StartId   int
 	EndId     int
 	StartTime int64
@@ -135,10 +136,15 @@ func GetChatLogUserStats(filter ChatLogFilter) ([]*ChatLogUserStat, error) {
 		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
 	}
 	if filter.ModelName != "" {
-		tx = tx.Where("model_name = ?", filter.ModelName)
+		tx = tx.Where("model_name LIKE ?", "%"+filter.ModelName+"%")
 	}
 	if filter.Group != "" {
-		tx = tx.Where(logGroupCol+" = ?", filter.Group)
+		tx = tx.Where(logGroupCol+" LIKE ?", "%"+filter.Group+"%")
+	}
+	// 通用关键词：同时搜用户名/分组/对话内容（如搜 WK 匹配 WK第一批/WK第二批 等）
+	if filter.Keyword != "" {
+		kw := "%" + filter.Keyword + "%"
+		tx = tx.Where("username LIKE ? OR "+logGroupCol+" LIKE ? OR request_content LIKE ?", kw, kw, kw)
 	}
 	if filter.StartTime != 0 {
 		tx = tx.Where("created_at >= ?", filter.StartTime)
@@ -166,13 +172,18 @@ func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, e
 		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
 	}
 	if filter.ModelName != "" {
-		tx = tx.Where("model_name = ?", filter.ModelName)
+		tx = tx.Where("model_name LIKE ?", "%"+filter.ModelName+"%")
 	}
 	if filter.TokenName != "" {
 		tx = tx.Where("token_name = ?", filter.TokenName)
 	}
 	if filter.Group != "" {
-		tx = tx.Where(logGroupCol+" = ?", filter.Group)
+		tx = tx.Where(logGroupCol+" LIKE ?", "%"+filter.Group+"%")
+	}
+	// 通用关键词：同时搜用户名/分组/对话内容（如搜 WK 匹配 WK第一批/WK第二批 等）
+	if filter.Keyword != "" {
+		kw := "%" + filter.Keyword + "%"
+		tx = tx.Where("(username LIKE ? OR "+logGroupCol+" LIKE ? OR request_content LIKE ?)", kw, kw, kw)
 	}
 	if filter.StartId != 0 {
 		tx = tx.Where("id >= ?", filter.StartId)
