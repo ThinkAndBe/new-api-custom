@@ -32,6 +32,7 @@ import {
   Space,
   Popconfirm,
   Banner,
+  Spin,
 } from '@douyinfe/semi-ui';
 import {
   IconRefresh,
@@ -52,6 +53,12 @@ const QuotaMonitor = () => {
   const [editVisible, setEditVisible] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formApi, setFormApi] = useState(null);
+  const [browserVisible, setBrowserVisible] = useState(false);
+  const [browserSession, setBrowserSession] = useState(null);
+  const [browserStep, setBrowserStep] = useState('init');
+  const [browserLoading, setBrowserLoading] = useState(false);
+  const [shotTick, setShotTick] = useState(0);
+  const [loginFormApi, setLoginFormApi] = useState(null);
 
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
@@ -252,12 +259,13 @@ const QuotaMonitor = () => {
             },
             {
               title: '',
-              width: 200,
+              width: 260,
               render: (_, a) => (
                 <Space>
                   <Button size='small' onClick={() => refreshOne(a.id)}>
                     {t('刷新')}
                   </Button>
+                  <Button size='small' theme='solid' type='primary' onClick={() => { setEditing(a); setBrowserVisible(true); setBrowserStep('init'); }}>{t('连接')}</Button>
                   <Button size='small' icon={<IconEdit size={13} />} onClick={() => openEdit(a)}>
                     {t('编辑')}
                   </Button>
@@ -311,8 +319,97 @@ const QuotaMonitor = () => {
           />
         </Form>
       </Modal>
+
+      {/* Browser Login Modal */}
+      <Modal
+        title={t('智谱账号连接')}
+        visible={browserVisible}
+        onCancel={() => {
+          if (browserSession) API.post('/api/quota/browser/close', { session: browserSession }).catch(() => {});
+          setBrowserVisible(false); setBrowserSession(null); setBrowserStep('init');
+        }}
+        footer={null} width={860} bodyStyle={{ maxHeight: '75vh', overflow: 'auto' }}
+      >
+        {browserStep === 'init' && (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Text style={{ display: 'block', marginBottom: 16 }}>{t('启动浏览器登录智谱账号，全程无需离开本页')}</Text>
+            <Button theme='solid' type='primary' loading={browserLoading} onClick={async () => {
+              setBrowserLoading(true);
+              try {
+                const res = await API.post('/api/quota/browser/start');
+                if (res.data.success) { setBrowserSession(res.data.data.session_id); setBrowserStep('screenshot'); setShotTick(Date.now()); }
+                else showError(res.data.message || t('启动失败'));
+              } catch (e) { showError(e.response?.data?.message || t('启动失败')); }
+              setBrowserLoading(false);
+            }}>{t('启动浏览器')}</Button>
+          </div>
+        )}
+        {browserStep === 'screenshot' && browserSession && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Button size='small' icon={<IconRefresh size={14} />} onClick={() => setShotTick(Date.now())}>{t('刷新截图')}</Button>
+              <Text type='tertiary' size='small'>{t('下方是智谱登录页实时截图')}</Text>
+            </div>
+            <div style={{ border: '1px solid var(--semi-color-border)', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
+              <img src={'/api/quota/browser/screenshot?session=' + browserSession + '&t=' + shotTick}
+                   style={{ width: '100%' }} alt={t('截图')} />
+            </div>
+            <Form getFormApi={(api) => setLoginFormApi(api)} key='browser-login'>
+              <Form.Input field='phone' label={t('手机号/邮箱')} placeholder={t('智谱登录账号')} />
+              <Form.Input field='password' label={t('密码')} mode='password' placeholder={t('智谱登录密码')} />
+            </Form>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
+              <Button theme='solid' type='primary' loading={browserLoading} onClick={async () => {
+                const v = loginFormApi?.getValues() || {};
+                if (!v.phone || !v.password) { showError(t('请输入账号和密码')); return; }
+                setBrowserLoading(true);
+                try {
+                  await API.post('/api/quota/browser/fill', { session: browserSession, phone: v.phone, password: v.password });
+                  await API.post('/api/quota/browser/submit', { session: browserSession });
+                  setBrowserStep('capturing');
+                } catch (e) { showError(e.response?.data?.message || t('操作失败')); }
+                setBrowserLoading(false);
+              }}>{t('填入并登录')}</Button>
+            </div>
+          </div>
+        )}
+        {browserStep === 'capturing' && browserSession && (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin size='large' />
+            <Text style={{ display: 'block', marginTop: 12 }}>{t('正在等待登录完成...')}</Text>
+            <Text type='tertiary' size='small' style={{ display: 'block', marginTop: 4 }}>{t('如有验证码请点下方返回查看截图')}</Text>
+            <Button size='small' style={{ marginTop: 8 }} onClick={() => { setBrowserStep('screenshot'); setShotTick(Date.now()); }}>{t('返回截图')}</Button>
+            <TokenCapturePoller session={browserSession} accountId={editing?.id} onDone={() => { setBrowserStep('done'); fetchAccounts(); }} onFail={(m) => { showError(m); setBrowserStep('screenshot'); }} />
+          </div>
+        )}
+        {browserStep === 'done' && (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Tag color='green' size='large'>{t('登录成功')}</Tag>
+            <Text style={{ display: 'block', marginTop: 12 }}>{t('Token 已保存，额度将自动刷新')}</Text>
+            <Button theme='solid' type='primary' style={{ marginTop: 12 }} onClick={() => setBrowserVisible(false)}>{t('完成')}</Button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
+
+const TokenCapturePoller = ({ session, accountId, onDone, onFail }) => {
+  const started = React.useRef(false);
+  React.useEffect(() => {
+    if (!session || started.current) return;
+    started.current = true;
+    const poll = async () => {
+      try {
+        const res = await API.post('/api/quota/browser/capture', { session, account_id: accountId || undefined, timeout: 25 });
+        if (res.data.success) onDone();
+        else onFail(res.data.message || '未捕获到 Token');
+      } catch (e) { onFail(e?.response?.data?.message || '捕获失败'); }
+    };
+    poll();
+  }, [session]);
+  return null;
+};
+
 
 export default QuotaMonitor;
