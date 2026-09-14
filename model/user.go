@@ -35,6 +35,7 @@ type User struct {
 	DiscordId          string         `json:"discord_id" gorm:"column:discord_id;index"`
 	OidcId             string         `json:"oidc_id" gorm:"column:oidc_id;index"`
 	WeChatId           string         `json:"wechat_id" gorm:"column:wechat_id;index"`
+	WeChatWorkId       string         `json:"wechat_work_id" gorm:"column:wechat_work_id;index"`
 	TelegramId         string         `json:"telegram_id" gorm:"column:telegram_id;index"`
 	VerificationCode   string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
 	AccessToken        *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
@@ -916,6 +917,24 @@ func (user *User) FillUserByWeChatId() error {
 	return nil
 }
 
+func (user *User) FillUserByWeChatWorkId() error {
+	if user.WeChatWorkId == "" {
+		return errors.New("企业微信 userid 为空！")
+	}
+	err := DB.Where(User{WeChatWorkId: user.WeChatWorkId}).First(user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return errors.New("该企业微信账号未绑定")
+	}
+	return nil
+}
+
+// GetEnabledUsersByDisplayName 按显示名精确查找启用中的用户（用于企业微信姓名匹配）
+func GetEnabledUsersByDisplayName(displayName string) ([]User, error) {
+	var users []User
+	err := DB.Where("display_name = ? AND status = ?", displayName, common.UserStatusEnabled).Find(&users).Error
+	return users, err
+}
+
 func (user *User) FillUserByTelegramId() error {
 	if user.TelegramId == "" {
 		return errors.New("Telegram id 为空！")
@@ -953,6 +972,10 @@ func GetUniqueUserByEmail(email string) (*User, error) {
 
 func IsWeChatIdAlreadyTaken(wechatId string) bool {
 	return DB.Unscoped().Where("wechat_id = ?", wechatId).Find(&User{}).RowsAffected == 1
+}
+
+func IsWeChatWorkIdAlreadyTaken(wechatWorkId string) bool {
+	return DB.Unscoped().Where("wechat_work_id = ?", wechatWorkId).Find(&User{}).RowsAffected == 1
 }
 
 func IsGitHubIdAlreadyTaken(githubId string) bool {

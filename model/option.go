@@ -321,6 +321,10 @@ func updateOptionMap(key string, value string) (err error) {
 			common.ChatLogEnabled = boolValue
 		case "ATrustEnabled":
 			system_setting.ATrustEnabled = boolValue
+		case "WeChatWorkAuthEnabled":
+			system_setting.WeChatWorkAuthEnabled = boolValue
+		case "WeChatWorkAutoRegister":
+			system_setting.WeChatWorkAutoRegister = boolValue
 		case "ShadowRepoEnabled":
 			common.ShadowRepoEnabled = boolValue
 		case "ShadowScanEnabled":
@@ -394,6 +398,12 @@ func updateOptionMap(key string, value string) (err error) {
 		system_setting.ATrustAPIId = value
 	case "ATrustAPISecret":
 		system_setting.ATrustAPISecret = value
+	case "WeChatWorkCorpID":
+		system_setting.WeChatWorkCorpID = value
+	case "WeChatWorkAgentID":
+		system_setting.WeChatWorkAgentID = value
+	case "WeChatWorkSecret":
+		system_setting.WeChatWorkSecret = value
 	case "SMTPServer":
 		common.SMTPServer = value
 	case "SMTPPort":

@@ -46,6 +46,7 @@ import {
   showError,
   showSuccess,
   onGitHubOAuthClicked,
+  onWeChatWorkOAuthClicked,
   onOIDCClicked,
   onLinuxDOOAuthClicked,
   onDiscordOAuthClicked,
@@ -271,6 +272,52 @@ const AccountManagement = ({
                         : status.wechat_login
                           ? t('绑定')
                           : t('未启用')}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+
+              {/* 企业微信绑定 */}
+              <Card className='!rounded-xl'>
+                <div className='flex items-center justify-between gap-3'>
+                  <div className='flex items-center flex-1 min-w-0'>
+                    <div className='w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mr-3 flex-shrink-0'>
+                      <SiWechat
+                        size={20}
+                        style={{ color: '#0082EF' }}
+                        className='text-slate-600 dark:text-slate-300'
+                      />
+                    </div>
+                    <div className='flex-1 min-w-0'>
+                      <div className='font-medium text-gray-900'>
+                        {t('企业微信')}
+                      </div>
+                      <div className='text-sm text-gray-500 truncate'>
+                        {!status.wechatwork_oauth
+                          ? t('未启用')
+                          : isBound(userState.user?.wechat_work_id)
+                            ? t('已绑定')
+                            : t('未绑定')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className='flex-shrink-0'>
+                    <Button
+                      type='primary'
+                      theme='outline'
+                      size='small'
+                      onClick={() =>
+                        onWeChatWorkOAuthClicked(
+                          status.wechatwork_corpid,
+                          status.wechatwork_agentid,
+                        )
+                      }
+                      disabled={
+                        isBound(userState.user?.wechat_work_id) ||
+                        !status.wechatwork_oauth
+                      }
+                    >
+                      {status.wechatwork_oauth ? t('绑定') : t('未启用')}
                     </Button>
                   </div>
                 </div>

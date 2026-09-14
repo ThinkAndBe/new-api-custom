@@ -9,6 +9,15 @@ var (
 	ATrustAPIId     = ""
 	ATrustAPISecret = ""
 )
+
+// 企业微信扫码登录（aTrust 反代不透传用户身份，改用企微 OAuth 实现免密登录）
+var (
+	WeChatWorkAuthEnabled  = false
+	WeChatWorkCorpID       = "" // 企业 ID
+	WeChatWorkAgentID      = "" // 自建应用 AgentId
+	WeChatWorkSecret       = "" // 自建应用 Secret
+	WeChatWorkAutoRegister = false // 未匹配到已有账号时是否自动创建
+)
 var WorkerUrl = ""
 var WorkerValidKey = ""
 var WorkerAllowHttpImageRequestEnabled = false

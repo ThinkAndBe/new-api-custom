@@ -32,6 +32,7 @@ import {
   getOAuthProviderIcon,
   setUserData,
   onGitHubOAuthClicked,
+  onWeChatWorkOAuthClicked,
   onDiscordOAuthClicked,
   onOIDCClicked,
   onLinuxDOOAuthClicked,
@@ -92,6 +93,7 @@ const LoginForm = () => {
   const [showWeChatLoginModal, setShowWeChatLoginModal] = useState(false);
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [wechatLoading, setWechatLoading] = useState(false);
+  const [wechatworkLoading, setWechatworkLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
   const [discordLoading, setDiscordLoading] = useState(false);
   const [oidcLoading, setOidcLoading] = useState(false);
@@ -144,6 +146,7 @@ const LoginForm = () => {
       status.discord_oauth ||
       status.oidc_enabled ||
       status.wechat_login ||
+      status.wechatwork_oauth ||
       status.linuxdo_oauth ||
       status.telegram_oauth ||
       hasCustomOAuthProviders,
@@ -350,6 +353,24 @@ const LoginForm = () => {
     }
   };
 
+  // 包装的企业微信扫码登录点击处理
+  const handleWeChatWorkClick = () => {
+    if ((hasUserAgreement || hasPrivacyPolicy) && !agreedToTerms) {
+      showInfo(t('请先阅读并同意用户协议和隐私政策'));
+      return;
+    }
+    setWechatworkLoading(true);
+    try {
+      onWeChatWorkOAuthClicked(
+        status.wechatwork_corpid,
+        status.wechatwork_agentid,
+        { shouldLogout: true },
+      );
+    } finally {
+      setTimeout(() => setWechatworkLoading(false), 3000);
+    }
+  };
+
   // 包装的Discord登录点击处理
   const handleDiscordClick = () => {
     if ((hasUserAgreement || hasPrivacyPolicy) && !agreedToTerms) {
@@ -544,6 +565,24 @@ const LoginForm = () => {
                     loading={wechatLoading}
                   >
                     <span className='ml-3'>{t('使用 微信 继续')}</span>
+                  </Button>
+                )}
+
+                {status.wechatwork_oauth && (
+                  <Button
+                    theme='outline'
+                    className='w-full h-12 flex items-center justify-center !rounded-full border border-gray-200 hover:bg-gray-50 transition-colors'
+                    type='tertiary'
+                    icon={
+                      <Icon
+                        svg={<WeChatIcon />}
+                        style={{ color: '#0082EF' }}
+                      />
+                    }
+                    onClick={handleWeChatWorkClick}
+                    loading={wechatworkLoading}
+                  >
+                    <span className='ml-3'>{t('使用 企业微信 扫码继续')}</span>
                   </Button>
                 )}
 

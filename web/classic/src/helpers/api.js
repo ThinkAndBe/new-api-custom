@@ -304,6 +304,17 @@ export async function onGitHubOAuthClicked(github_client_id, options = {}) {
   );
 }
 
+export async function onWeChatWorkOAuthClicked(corp_id, agent_id, options = {}) {
+  const state = await prepareOAuthState(options);
+  if (!state) return;
+  const redirect_uri = encodeURIComponent(
+    `${window.location.origin}/oauth/wechatwork`,
+  );
+  redirectToOAuthUrl(
+    `https://login.work.weixin.qq.com/wwlogin/sso/login?login_type=CorpApp&appid=${corp_id}&agentid=${agent_id}&redirect_uri=${redirect_uri}&state=${state}`,
+  );
+}
+
 export async function onLinuxDOOAuthClicked(
   linuxdo_client_id,
   options = { shouldLogout: false },
