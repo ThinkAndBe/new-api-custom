@@ -24,22 +24,15 @@ func ATrustAutoAuth() gin.HandlerFunc {
 		}
 
 		clientIP := c.ClientIP()
-		user, err := service.ATrustLookupByIP(clientIP)
+		atrustUser, err := service.ATrustLookupByIP(clientIP)
 		if err != nil {
 			c.Next() // 不在 aTrust 在线列表，走正常认证
 			return
 		}
 
-		// 找到 aTrust 用户，自动登录
-		username := normalizeATrustUsername(user.Name, user.DisplayName)
-		if username == "" {
-			c.Next()
-			return
-		}
-
-		u, err := findOrCreateATrustUser(username, user.DisplayName)
-		if err != nil {
-			common.SysLog("atrust: auto login failed for " + username + ": " + err.Error())
+		// 匹配优先级：中文姓名（与 CSV 导入一致）> 工号 > displayName
+		u := matchATrustUser(atrustUser)
+		if u == nil {
 			c.Next()
 			return
 		}
@@ -49,8 +42,7 @@ func ATrustAutoAuth() gin.HandlerFunc {
 		c.Set("username", u.Username)
 		c.Set("role", u.Role)
 		c.Set("group", u.Group)
-		c.Set(" atoftrust", true) // 标记来源（供日志区分）
-		common.SysLog("atrust: auto login " + username + " from IP " + clientIP)
+		common.SysLog("atrust: auto login " + u.Username + " from IP " + clientIP)
 		c.Next()
 	}
 }
@@ -70,37 +62,50 @@ func isATrustCandidate(c *gin.Context) bool {
 	return true
 }
 
-// normalizeATrustUsername 从 aTrust 用户信息提取用户名
-func normalizeATrustUsername(name, displayName string) string {
-	if name != "" {
-		return strings.TrimSpace(name)
-	}
+// matchATrustUser 按 aTrust 身份匹配/创建用户。
+// 优先级：中文姓名（displayName，与 CSV 导入一致）→ 工号（name）→ 自动创建。
+// 这样已有的 119 个用户（苏长辉 等）能直接匹配，不会产生重复账号。
+func matchATrustUser(atrustUser *service.ATrustOnlineUser) *model.User {
+	displayName := strings.TrimSpace(atrustUser.DisplayName)
+	employeeId := strings.TrimSpace(atrustUser.Name)
+
+	// 1. 按中文姓名匹配（大多数已有用户的 username 就是中文名）
 	if displayName != "" {
-		return strings.TrimSpace(displayName)
-	}
-	return ""
-}
-
-// findOrCreateATrustUser 查找或自动创建用户
-func findOrCreateATrustUser(username, displayName string) (*model.User, error) {
-	// 先按用户名查
-	var existing model.User
-	if err := model.DB.Where("username = ?", username).First(&existing).Error; err == nil {
-		return &existing, nil
+		var u model.User
+		if err := model.DB.Where("username = ? OR display_name = ?", displayName, displayName).First(&u).Error; err == nil {
+			return &u
+		}
 	}
 
-	// 不存在 → 自动创建
+	// 2. 按工号匹配（以防有人用工号注册过）
+	if employeeId != "" {
+		var u model.User
+		if err := model.DB.Where("username = ?", employeeId).First(&u).Error; err == nil {
+			return &u
+		}
+	}
+
+	// 3. 都没匹配到 → 自动创建（用中文姓名做 username，保持一致性）
+	username := displayName
+	if username == "" {
+		username = employeeId
+	}
+	if username == "" {
+		return nil
+	}
+
 	newUser := &model.User{
 		Username:    username,
 		DisplayName: displayName,
-		Password:    common.GetUUID(), // 随机密码，用户永远不需要知道
+		Password:    common.GetUUID(), // 随机密码，用户永远不需要
 		Role:        common.RoleCommonUser,
 		Status:      common.UserStatusEnabled,
 		Group:       "default",
 	}
 	if err := newUser.Insert(0); err != nil {
-		return nil, err
+		common.SysLog("atrust: auto create user " + username + " failed: " + err.Error())
+		return nil
 	}
 	common.SysLog("atrust: auto created user " + username)
-	return newUser, nil
+	return newUser
 }
