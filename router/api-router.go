@@ -338,6 +338,19 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/token_summary", middleware.AdminAuth(), controller.GetLogsTokenSummary)
 		logRoute.GET("/self/token_summary", middleware.UserAuth(), controller.GetLogsSelfTokenSummary)
 
+		// aTrust 公开调试：显示请求 IP 和 Header（不需要登录，排查用）
+		apiRouter.GET("/atrust/headers", func(c *gin.Context) {
+			headers := make(map[string]string)
+			for k, v := range c.Request.Header {
+				headers[k] = strings.Join(v, ", ")
+			}
+			c.JSON(200, gin.H{"success": true, "data": gin.H{
+				"client_ip":   c.ClientIP(),
+				"remote_addr": c.Request.RemoteAddr,
+				"headers":     headers,
+			}})
+		})
+
 		// aTrust 调试：查看当前 IP 与在线用户匹配情况
 		apiRouter.GET("/atrust/debug", middleware.RootAuth(), func(c *gin.Context) {
 			clientIP := c.ClientIP()
