@@ -34,11 +34,11 @@ type guideShortCode struct {
 	used      bool
 }
 
-const guideShortCodeTTL = 5 * time.Minute
+const guideShortCodeTTL = 10 * time.Minute
 
 var (
-	guideShortCodes   sync.Map // code -> *guideShortCode
-	guideShortCodeMu  sync.Mutex
+	guideShortCodes  sync.Map // code -> *guideShortCode
+	guideShortCodeMu sync.Mutex
 )
 
 func genShortCode() (string, error) {
@@ -80,23 +80,17 @@ func CreateGuideShortCode(c *gin.Context) {
 		product = "workbuddy"
 	}
 
-	// 清理过期码 + 限制单用户未用码数量（防刷）
+	// 刷新即作废：生成新码时清掉该用户所有旧码（任何时刻只有一个码有效，
+	// 避免刷新多次后用户搞混新旧码、或碰上限流）
 	now := time.Now()
-	count := 0
 	guideShortCodes.Range(func(k, v any) bool {
 		if sc, ok := v.(*guideShortCode); ok {
-			if sc.expiresAt.Before(now) || sc.used {
+			if sc.expiresAt.Before(now) || sc.used || sc.userId == userId {
 				guideShortCodes.Delete(k)
-			} else if sc.userId == userId {
-				count++
 			}
 		}
 		return true
 	})
-	if count >= 5 {
-		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "message": "too many active codes, wait or use existing one"})
-		return
-	}
 
 	code, err := genShortCode()
 	if err != nil {
@@ -234,6 +228,7 @@ func DownloadUsageGuideConfigToolMac(c *gin.Context) {
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.File(scriptPath)
 }
+
 // 鉴权：Authorization Bearer <sk-token>（TokenAuthReadOnly，用户自己的令牌）。
 // GET /api/usage/guide_config?token_id=
 //
