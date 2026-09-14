@@ -37,12 +37,18 @@ type ATrustConfig struct {
 
 // ATrustOnlineUser 在线用户条目
 type ATrustOnlineUser struct {
-	Id          string `json:"id"`
-	Name        string `json:"name"`        // 用户名
-	DisplayName string `json:"displayName"` // 显示名
-	RemoteIp    string `json:"remoteIp"`    // 接入 IP
-	UserId      string `json:"userId"`
-	GroupPath   string `json:"groupPath"`
+	Id          string      `json:"id"`
+	Name        string      `json:"name"`        // 工号
+	DisplayName string      `json:"displayName"` // 中文姓名
+	RemoteIp    string      `json:"remoteIp"`    // 用户原始 IP
+	Vips        []ATrustVip `json:"vips"`        // aTrust 分配的虚拟 IP（反代来源 IP）
+	UserId      string      `json:"userId"`
+	GroupPath   string      `json:"groupPath"`
+}
+
+// ATrustVip 虚拟 IP
+type ATrustVip struct {
+	Ip string `json:"ip"`
 }
 
 // ATrustOnlineResponse 在线用户查询响应
@@ -176,13 +182,20 @@ func ATrustLookupByIP(clientIP string) (*ATrustOnlineUser, error) {
 		return nil, fmt.Errorf("aTrust 返回错误 code=%d msg=%s", resp.Code, resp.Msg)
 	}
 
-	// 重建缓存
+	// 重建缓存：同时索引 remoteIp（用户原始 IP）和 vips（aTrust 分配的虚拟 IP）。
+	// 反代模式下 new-api 看到的是 vips 里的 IP，不是 remoteIp。
 	atrustCacheMu.Lock()
 	atrustCache = make(map[string]*ATrustOnlineUser)
 	for i := range resp.Data.Data {
 		u := &resp.Data.Data[i]
 		if u.RemoteIp != "" {
 			atrustCache[u.RemoteIp] = u
+		}
+		// 虚拟 IP 也索引进去（aTrust 反代转发时来源 IP 是 VIP）
+		for _, vip := range u.Vips {
+			if vip.Ip != "" {
+				atrustCache[vip.Ip] = u
+			}
 		}
 	}
 	atrustCacheAt = time.Now()
