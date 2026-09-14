@@ -464,7 +464,7 @@ const UsageGuide = () => {
                 ))}
               </div>
               <Text type='tertiary' size='small'>
-                {t('配置码 6 位数字，5 分钟内有效；两台客户端各生成一个即可')}
+                {t('配置码 6 位，10 分钟内有效，刷新后旧码自动作废')}
               </Text>
               <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--semi-color-border)' }}>
                 <Text type='tertiary' size='small'>
