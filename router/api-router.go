@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/service"
 
 	// Import oauth package to register providers via init()
 	_ "github.com/QuantumNous/new-api/oauth"
@@ -335,6 +336,27 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/self/export", middleware.UserAuth(), controller.ExportSelfLogs)
 		logRoute.GET("/token_summary", middleware.AdminAuth(), controller.GetLogsTokenSummary)
 		logRoute.GET("/self/token_summary", middleware.UserAuth(), controller.GetLogsSelfTokenSummary)
+
+		// aTrust 调试：查看当前 IP 与在线用户匹配情况
+		apiRouter.GET("/atrust/debug", middleware.RootAuth(), func(c *gin.Context) {
+			clientIP := c.ClientIP()
+			cfg := service.GetATrustConfig()
+			result := gin.H{
+				"enabled":   cfg.Enabled,
+				"server":    cfg.Server,
+				"client_ip": clientIP,
+				"match":     nil,
+				"error":     "",
+			}
+			if cfg.Enabled && cfg.Server != "" {
+				if u, err := service.ATrustLookupByIP(clientIP); err == nil {
+					result["match"] = u
+				} else {
+					result["error"] = err.Error()
+				}
+			}
+			c.JSON(200, gin.H{"success": true, "data": result})
+		})
 
 		// 对话日志（仅超级管理员）
 		chatLogRoute := apiRouter.Group("/chat_log")
