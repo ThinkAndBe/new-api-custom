@@ -12,7 +12,7 @@ echo "  ERKE AI 配置工具 (macOS)"
 echo "================================"
 
 # 1. 配置码
-printf "配置码（在教程页点「生成配置码」，6 位，5 分钟内有效）: "
+printf "配置码（在教程页点「生成配置码」，6 位，10 分钟内有效）: "
 read CODE
 CODE=$(printf '%s' "$CODE" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')
 if [ ${#CODE} -ne 6 ]; then
@@ -34,7 +34,7 @@ mkdir -p "$DIR"
 TMP=$(mktemp) || exit 1
 URL="$SERVER/api/usage/guide_redeem?code=$CODE&product=$PRODUCT&raw=1"
 if ! curl -fsSL "$URL" -o "$TMP"; then
-  echo "[错误] 配置码无效或已过期（配置码为一次性、5 分钟内有效），请回教程页重新生成后再试"
+  echo "[错误] 配置码无效或已过期（配置码为一次性、10 分钟内有效），请回教程页重新生成后再试"
   rm -f "$TMP"
   exit 1
 fi

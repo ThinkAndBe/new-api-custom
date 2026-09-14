@@ -610,7 +610,7 @@ const UsageGuide = () => {
             type='info'
             closeIcon={null}
             style={{ marginTop: 14, textAlign: 'left' }}
-            description={t('配置码一次性使用（兑换后立即失效），5 分钟内有效。配置完成后重启对应客户端生效。')}
+            description={t('配置码 10 分钟内有效，一次性使用，刷新后旧码自动作废。配置完成后重启对应客户端生效。')}
           />
         </div>
       </Modal>
