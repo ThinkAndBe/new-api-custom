@@ -4,6 +4,7 @@ import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/service"
+	"strings"
 
 	// Import oauth package to register providers via init()
 	_ "github.com/QuantumNous/new-api/oauth"
@@ -355,6 +356,12 @@ func SetApiRouter(router *gin.Engine) {
 					result["error"] = err.Error()
 				}
 			}
+			// 附带所有请求头（排查 aTrust 注入了什么身份标识）
+			headers := make(map[string]string)
+			for k, v := range c.Request.Header {
+				headers[k] = strings.Join(v, ", ")
+			}
+			result["headers"] = headers
 			c.JSON(200, gin.H{"success": true, "data": result})
 		})
 
