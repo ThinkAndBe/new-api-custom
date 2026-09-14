@@ -66,6 +66,9 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		playgroundRouter.POST("/chat/completions", controller.Playground)
 	}
+	// 配置码兑换走 /v1/ 路径（3000 端口只放行 /v1/*，不加 TokenAuth）
+	router.GET("/v1/usage/guide_redeem", middleware.CriticalRateLimit(), controller.RedeemGuideShortCode)
+
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
 	relayV1Router.Use(middleware.SystemPerformanceCheck())

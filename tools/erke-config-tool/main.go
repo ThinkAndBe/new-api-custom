@@ -29,7 +29,7 @@ import (
 const version = "2.1"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
-var serverBase = "https://tokenhub.erke.com"
+var serverBase = "https://tokenhub.erke.com:3000"
 
 // Hero 渐变用色（walk.Color 为 0x00BBGGRR）
 const (
@@ -266,7 +266,7 @@ func fetchAndBuild(target, product string) (*usageConfig, error) {
 		if server == "" {
 			return nil, fmt.Errorf("工具未配置服务器地址")
 		}
-		target = strings.TrimSuffix(server, "/") + "/api/usage/guide_redeem?code=" + neturl.QueryEscape(code)
+		target = strings.TrimSuffix(server, "/") + "/v1/usage/guide_redeem?code=" + neturl.QueryEscape(code)
 	}
 	if !strings.Contains(target, "://") {
 		return nil, fmt.Errorf("请输入 6 位配置码，或粘贴完整链接（https:// 开头）")
