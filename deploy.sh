@@ -12,19 +12,24 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "==> [1/6] 拉取最新代码"
+echo "==> [1/7] 拉取最新代码"
 git pull
 
-echo "==> [2/6] 构建新镜像（后台构建，不影响线上服务）"
+echo "==> [2/7] 构建前清理（防磁盘占满导致构建失败）"
+docker builder prune -f 2>/dev/null || true
+docker image prune -f 2>/dev/null || true
+df -h / | tail -1
+
+echo "==> [3/7] 构建新镜像（后台构建，不影响线上服务）"
 docker compose build --pull
 
-echo "==> [3/6] 重建容器（唯一短暂中断的步骤，数秒）"
+echo "==> [4/7] 重建容器（唯一短暂中断的步骤，数秒）"
 docker compose up -d
 
-echo "==> [4/6] 清理悬空旧镜像"
+echo "==> [5/7] 清理悬空旧镜像"
 docker image prune -f
 
-echo "==> [5/6] 等待启动并验证"
+echo "==> [6/7] 等待启动并验证"
 sleep 8
 docker compose ps
 CID=$(docker compose ps -q | head -1)
@@ -43,5 +48,5 @@ else
   echo "⚠ 本机 3000 未响应，请确认端口映射：docker compose ps"
 fi
 
-echo "==> [6/6] 部署完成，剩余镜像："
+echo "==> [7/7] 部署完成，剩余镜像："
 docker images | head -6
