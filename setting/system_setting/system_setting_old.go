@@ -22,6 +22,12 @@ var (
 	ATrustProxyIPs        = ""   // aTrust 反代出口 IP（逗号分隔），命中才对未登录访客自动跳转 SSO
 )
 
+// aTrust 用户目录（工号同步数据源）
+var (
+	ATrustDirectoryDomain = "wechat33610" // 目录标识（企业微信同步目录；getUserStatus 响应的 domain 字段）
+	ATrustSyncGroups      = "AI用户"       // 工号同步只处理这些分组的本地账号（逗号分隔；留空=全部）
+)
+
 // 企业微信扫码登录（aTrust 反代不透传用户身份，改用企微 OAuth 实现免密登录）
 var (
 	WeChatWorkAuthEnabled  = false

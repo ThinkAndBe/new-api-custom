@@ -107,19 +107,25 @@ func atrustSign(apiId, apiSecret, timestamp, nonce, method, path, query, body st
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// atrustRequest 发送带签名的请求
-func atrustRequest(cfg ATrustConfig, method, path, query string) ([]byte, error) {
+// atrustRequest 发送带签名的请求（GET 或 POST+JSON body）。
+// 签名串与 body 必须逐字节一致（V3 对中文 \u 转义敏感，Go json.Marshal
+// 输出 UTF-8 原文，恰好满足）。
+func atrustRequest(cfg ATrustConfig, method, path, query, body string) ([]byte, error) {
 	timestamp := fmt.Sprintf("%d", time.Now().Unix())
 	nonce := common.GetUUID()
 
-	sign := atrustSign(cfg.APIId, cfg.APISecret, timestamp, nonce, method, path, query, "")
+	sign := atrustSign(cfg.APIId, cfg.APISecret, timestamp, nonce, method, path, query, body)
 
 	fullURL := strings.TrimSuffix(cfg.Server, "/") + path
 	if query != "" {
 		fullURL = fullURL + "?" + query
 	}
 
-	req, err := http.NewRequest(method, fullURL, nil)
+	var reqBody io.Reader
+	if body != "" && method == "POST" {
+		reqBody = strings.NewReader(body)
+	}
+	req, err := http.NewRequest(method, fullURL, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +137,7 @@ func atrustRequest(cfg ATrustConfig, method, path, query string) ([]byte, error)
 
 	// aTrust 可能用自签证书，跳过验证
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 15 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
@@ -156,7 +162,7 @@ func ATrustFetchOnlineUsers() ([]ATrustOnlineUser, error) {
 	query.Set("pageSize", "500")
 	query.Set("pageIndex", "1")
 
-	body, err := atrustRequest(cfg, "GET", "/api/v1/monitor/getUserStatus", query.Encode())
+	body, err := atrustRequest(cfg, "GET", "/api/v1/monitor/getUserStatus", query.Encode(), "")
 	if err != nil {
 		return nil, err
 	}

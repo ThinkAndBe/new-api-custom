@@ -21,8 +21,9 @@ func SyncEmployeeIds(c *gin.Context) {
 		return
 	}
 	model.RecordLog(c.GetInt("id"), model.LogTypeSystem,
-		"零信任工号同步：在线 "+itoa(report.OnlineTotal)+"，新绑定 "+itoa(report.Synced)+
-			"，更新 "+itoa(report.Overwritten)+"，歧义 "+itoa(len(report.Ambiguous)))
+		"零信任工号同步：目录 "+itoa(report.DirectoryTotal)+" 目标 "+itoa(report.TargetUsers)+
+			"，新绑定 "+itoa(report.Synced)+"，更新 "+itoa(report.Overwritten)+
+			"，歧义 "+itoa(len(report.Ambiguous)))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

@@ -202,16 +202,17 @@ export const useUsersData = () => {
         width: 520,
         content: (
           <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
-            {t('在线用户')}：{data.online_total}
+            {t('目录成员')}：{data.directory_total}
+            {'  '}
+            {t('同步账号')}：{data.target_users}
             {'  '}
             {t('新绑定')}：{data.synced}
             {'  '}
             {t('更新')}：{data.overwritten}
             {'  '}
             {t('已一致')}：{data.skipped_same}
-            {list(data.ambiguous, t('同名歧义（需人工处理）'))}
-            {list(data.unmatched, t('零信任在线但暂无账号'))}
-            {list(data.no_employee_id, t('零信任侧缺工号'))}
+            {list(data.ambiguous, t('目录同名歧义（需人工处理）'))}
+            {list(data.unmatched, t('目录中未找到同名员工'))}
           </div>
         ),
         onOk: () => refresh(),
