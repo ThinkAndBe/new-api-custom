@@ -65,5 +65,10 @@ func isATrustCandidate(c *gin.Context) bool {
 	if strings.HasPrefix(path, "/oauth/") {
 		return false
 	}
+	// 登录/注册页保持手动（管理员密码登录的退路，不能被 SSO 抢跳）；
+	// 正常导航（首页、/console/*）仍自动免登录
+	if path == "/login" || path == "/register" {
+		return false
+	}
 	return true
 }
