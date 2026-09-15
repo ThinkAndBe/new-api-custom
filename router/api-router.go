@@ -54,6 +54,9 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/oauth/telegram/bind", middleware.CriticalRateLimit(), controller.TelegramBind)
 		// 企业微信扫码登录（自建应用 OAuth，须注册在 :provider 通配之前）
 		apiRouter.GET("/oauth/wechatwork", middleware.CriticalRateLimit(), controller.WeChatWorkLogin)
+		// aTrust 反向 OAuth2 单点登录（浏览器 302 流）
+		apiRouter.GET("/oauth/atrust/start", middleware.CriticalRateLimit(), controller.ATrustSSOStart)
+		apiRouter.GET("/oauth/atrust", middleware.CriticalRateLimit(), controller.ATrustSSOCallback)
 		// Standard OAuth providers (GitHub, Discord, OIDC, LinuxDO) - unified route
 		apiRouter.GET("/oauth/:provider", middleware.CriticalRateLimit(), controller.HandleOAuth)
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)

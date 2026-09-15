@@ -493,6 +493,8 @@
     "使用 Passkey 实现免密且更安全的登录体验": "Utilisez Passkey pour une expérience de connexion sans mot de passe et plus sécurisée.",
     "使用 Passkey 登录": "Se connecter avec Passkey",
     "使用 Passkey 验证": "Vérifier avec Passkey",
+    "零信任登录失败": "Échec de la connexion Zero Trust",
+    "使用 零信任账号 继续": "Continuer avec SSO Zero Trust",
     "使用 企业微信 扫码继续": "Continuer avec WeCom (QR code)",
     "使用 微信 继续": "Continuer avec WeChat",
     "使用 用户名 注册": "S'inscrire avec un nom d'utilisateur",

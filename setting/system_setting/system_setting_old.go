@@ -10,6 +10,17 @@ var (
 	ATrustAPISecret = ""
 )
 
+// aTrust 反向 OAuth2 单点登录（官方「票据共享-反向oauth2」方案，
+// 详见《零信任aTrust资源单点登录方案-OAuth对接&票据注入》章节5）
+var (
+	ATrustSSOEnabled      = false
+	ATrustSSOServer       = "" // aTrust 客户端接入地址，如 https://atrust.example.com
+	ATrustSSOAppId        = "" // 应用开启单点登录后获取的 appid
+	ATrustSSOAppSecret    = ""
+	ATrustSSOAutoRegister = true // 未匹配到已有账号时自动创建（零信任登录即员工）
+	ATrustProxyIPs        = ""   // aTrust 反代出口 IP（逗号分隔），命中才对未登录访客自动跳转 SSO
+)
+
 // 企业微信扫码登录（aTrust 反代不透传用户身份，改用企微 OAuth 实现免密登录）
 var (
 	WeChatWorkAuthEnabled  = false

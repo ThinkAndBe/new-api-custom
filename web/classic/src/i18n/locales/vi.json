@@ -486,6 +486,8 @@
     "使用 Passkey 实现免密且更安全的登录体验": "Sử dụng Passkey để trải nghiệm đăng nhập không cần mật khẩu và an toàn hơn",
     "使用 Passkey 登录": "Đăng nhập bằng Passkey",
     "使用 Passkey 验证": "Xác minh bằng Passkey",
+    "零信任登录失败": "Đăng nhập Zero Trust thất bại",
+    "使用 零信任账号 继续": "Tiếp tục với Zero Trust SSO",
     "使用 企业微信 扫码继续": "Tiếp tục với WeCom (QR)",
     "使用 微信 继续": "Tiếp tục với WeChat",
     "使用 用户名 注册": "Đăng ký bằng Tên người dùng",

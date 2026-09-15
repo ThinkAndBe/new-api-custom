@@ -496,6 +496,8 @@
     "使用 Passkey 实现免密且更安全的登录体验": "Use Passkey for password-free and more secure login experience",
     "使用 Passkey 登录": "Sign in with Passkey",
     "使用 Passkey 验证": "Verify with Passkey",
+    "零信任登录失败": "Zero Trust login failed",
+    "使用 零信任账号 继续": "Continue with Zero Trust SSO",
     "使用 企业微信 扫码继续": "Continue with WeChat Work (QR code)",
     "使用 微信 继续": "Continue with WeChat",
     "使用 用户名 注册": "Sign up with Username",

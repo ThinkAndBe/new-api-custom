@@ -60,6 +60,7 @@ import {
   IconMail,
   IconLock,
   IconKey,
+  IconShield,
 } from '@douyinfe/semi-icons';
 import OIDCIcon from '../common/logo/OIDCIcon';
 import WeChatIcon from '../common/logo/WeChatIcon';
@@ -94,6 +95,7 @@ const LoginForm = () => {
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [wechatLoading, setWechatLoading] = useState(false);
   const [wechatworkLoading, setWechatworkLoading] = useState(false);
+  const [atrustLoading, setAtrustLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
   const [discordLoading, setDiscordLoading] = useState(false);
   const [oidcLoading, setOidcLoading] = useState(false);
@@ -147,6 +149,7 @@ const LoginForm = () => {
       status.oidc_enabled ||
       status.wechat_login ||
       status.wechatwork_oauth ||
+      status.atrust_sso ||
       status.linuxdo_oauth ||
       status.telegram_oauth ||
       hasCustomOAuthProviders,
@@ -178,6 +181,11 @@ const LoginForm = () => {
   useEffect(() => {
     if (searchParams.get('expired')) {
       showError(t('未登录或登录已过期，请重新登录'));
+    }
+    const atrustError = searchParams.get('atrust_error');
+    if (atrustError) {
+      showError(t('零信任登录失败') + '：' + atrustError);
+      setSearchParams({}, { replace: true });
     }
   }, []);
 
@@ -351,6 +359,16 @@ const LoginForm = () => {
       // 由于重定向，这里不会执行到，但为了完整性添加
       setTimeout(() => setGithubLoading(false), 3000);
     }
+  };
+
+  // 零信任单点登录（后端 302 流，直接跳转即可）
+  const handleATrustSSOClick = () => {
+    if ((hasUserAgreement || hasPrivacyPolicy) && !agreedToTerms) {
+      showInfo(t('请先阅读并同意用户协议和隐私政策'));
+      return;
+    }
+    setAtrustLoading(true);
+    window.location.href = '/api/oauth/atrust/start';
   };
 
   // 包装的企业微信扫码登录点击处理
@@ -553,6 +571,19 @@ const LoginForm = () => {
             </div>
             <div className='px-2 py-8'>
               <div className='space-y-3'>
+                {status.atrust_sso && (
+                  <Button
+                    theme='outline'
+                    className='w-full h-12 flex items-center justify-center !rounded-full border border-gray-200 hover:bg-gray-50 transition-colors'
+                    type='tertiary'
+                    icon={<IconShield size='large' style={{ color: '#0066FF' }} />}
+                    onClick={handleATrustSSOClick}
+                    loading={atrustLoading}
+                  >
+                    <span className='ml-3'>{t('使用 零信任账号 继续')}</span>
+                  </Button>
+                )}
+
                 {status.wechat_login && (
                   <Button
                     theme='outline'
