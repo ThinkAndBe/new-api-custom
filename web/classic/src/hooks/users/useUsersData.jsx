@@ -202,7 +202,7 @@ export const useUsersData = () => {
         width: 520,
         content: (
           <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
-            {t('目录成员')}：{data.directory_total}
+            {t('角色成员')}：{data.role_members}
             {'  '}
             {t('同步账号')}：{data.target_users}
             {'  '}
@@ -211,8 +211,8 @@ export const useUsersData = () => {
             {t('更新')}：{data.overwritten}
             {'  '}
             {t('已一致')}：{data.skipped_same}
-            {list(data.ambiguous, t('目录同名歧义（需人工处理）'))}
-            {list(data.unmatched, t('目录中未找到同名员工'))}
+            {list(data.ambiguous, t('角色成员同名歧义（需人工处理）'))}
+            {list(data.unmatched, t('角色成员中未找到同名员工'))}
           </div>
         ),
         onOk: () => refresh(),

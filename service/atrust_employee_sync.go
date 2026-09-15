@@ -23,10 +23,11 @@ import (
 
 // ATrustDirectoryUser queryAll 返回的目录用户（仅取同步所需字段）
 type ATrustDirectoryUser struct {
-	Name        string `json:"name"`        // 工号（账号名）
-	DisplayName string `json:"displayName"` // 姓名
-	Status      int    `json:"status"`      // 0-禁用 1-启用
-	IsDeleted   int    `json:"isDeleted"`
+	Name        string   `json:"name"`        // 工号（账号名）
+	DisplayName string   `json:"displayName"` // 姓名
+	Status      int      `json:"status"`      // 0-禁用 1-启用
+	IsDeleted   int      `json:"isDeleted"`
+	RoleIdList  []string `json:"roleIdList"` // 关联角色（微信目录存角色的 externalId，本地目录存 id）
 }
 
 type atrustDirectoryResponse struct {
@@ -35,6 +36,23 @@ type atrustDirectoryResponse struct {
 	Data struct {
 		Count int                   `json:"count"`
 		Data  []ATrustDirectoryUser `json:"data"`
+	} `json:"data"`
+}
+
+// ATrustRole queryAll 返回的角色
+type ATrustRole struct {
+	Id         string `json:"id"`
+	Name       string `json:"name"`
+	ExternalId string `json:"externalId"`
+	IsDeleted  int    `json:"isDeleted"`
+}
+
+type atrustRoleResponse struct {
+	Code interface{} `json:"code"`
+	Msg  string      `json:"msg"`
+	Data struct {
+		Count int          `json:"count"`
+		Data  []ATrustRole `json:"data"`
 	} `json:"data"`
 }
 
@@ -77,25 +95,106 @@ func ATrustQueryDirectoryUsers() ([]ATrustDirectoryUser, error) {
 	return all, nil
 }
 
+// ATrustQueryRoles 拉取目录的角色列表
+func ATrustQueryRoles() ([]ATrustRole, error) {
+	cfg := GetATrustConfig()
+	domain := strings.TrimSpace(system_setting.ATrustDirectoryDomain)
+	if cfg.Server == "" || cfg.APIId == "" || cfg.APISecret == "" || domain == "" {
+		return nil, fmt.Errorf("aTrust OpenAPI 或目录标识未配置")
+	}
+	var all []ATrustRole
+	const pageSize = 500
+	for pageIndex := 1; ; pageIndex++ {
+		body := fmt.Sprintf(`{"directoryDomain":%q,"pageSize":%d,"pageIndex":%d}`, domain, pageSize, pageIndex)
+		raw, err := atrustRequest(cfg, "POST", "/api/v3/role/queryAll", "", body)
+		if err != nil {
+			return nil, err
+		}
+		var resp atrustRoleResponse
+		if err := common.Unmarshal(raw, &resp); err != nil {
+			return nil, fmt.Errorf("解析 aTrust 角色响应失败: %v", err)
+		}
+		if fmt.Sprintf("%v", resp.Code) != "OK" {
+			return nil, fmt.Errorf("aTrust 角色查询失败 code=%v msg=%s", resp.Code, resp.Msg)
+		}
+		for _, r := range resp.Data.Data {
+			if r.IsDeleted == 0 {
+				all = append(all, r)
+			}
+		}
+		if len(all) >= resp.Data.Count || len(resp.Data.Data) == 0 {
+			break
+		}
+	}
+	return all, nil
+}
+
+// ATrustQueryRoleMembers 拉取目录中指定角色的成员。
+// 微信目录用户的 roleIdList 存的是角色 externalId（本地目录则存 id），
+// 两种标识都收集匹配。
+func ATrustQueryRoleMembers(roleName string) ([]ATrustDirectoryUser, error) {
+	roles, err := ATrustQueryRoles()
+	if err != nil {
+		return nil, err
+	}
+	var roleIds []string
+	for _, r := range roles {
+		if r.Name == roleName {
+			if r.Id != "" {
+				roleIds = append(roleIds, r.Id)
+			}
+			if r.ExternalId != "" {
+				roleIds = append(roleIds, r.ExternalId)
+			}
+		}
+	}
+	if len(roleIds) == 0 {
+		return nil, fmt.Errorf("零信任目录中不存在角色「%s」", roleName)
+	}
+	idSet := make(map[string]bool, len(roleIds))
+	for _, id := range roleIds {
+		idSet[id] = true
+	}
+
+	all, err := ATrustQueryDirectoryUsers()
+	if err != nil {
+		return nil, err
+	}
+	var members []ATrustDirectoryUser
+	for _, u := range all {
+		for _, id := range u.RoleIdList {
+			if idSet[id] {
+				members = append(members, u)
+				break
+			}
+		}
+	}
+	return members, nil
+}
+
 // ATrustSyncReport 工号同步结果报告
 type ATrustSyncReport struct {
-	DirectoryTotal int      `json:"directory_total"` // 零信任目录成员数（启用未删）
+	RoleMembers    int      `json:"role_members"`    // 零信任角色成员数（同步数据源）
 	TargetUsers    int      `json:"target_users"`    // 参与同步的本地账号数（按分组过滤后）
 	Synced         int      `json:"synced"`          // 本次新写入工号
 	Overwritten    int      `json:"overwritten"`     // 工号按目录更新（与原值不同）
 	SkippedSame    int      `json:"skipped_same"`    // 已绑定且一致
-	Ambiguous      []string `json:"ambiguous"`       // 目录同名多人：姓名(工号列表)
-	Unmatched      []string `json:"unmatched"`       // 本地账号在目录中无同名：用户名
+	Ambiguous      []string `json:"ambiguous"`       // 角色成员同名多人：姓名(工号列表)
+	Unmatched      []string `json:"unmatched"`       // 本地账号在角色成员中无同名：用户名
 }
 
-// SyncEmployeeIdsFromATrust 执行一次工号批量同步（目录为源，本地为目标）
+// SyncEmployeeIdsFromATrust 执行一次工号批量同步（角色成员为源，本地为目标）
 func SyncEmployeeIdsFromATrust() (*ATrustSyncReport, error) {
-	dirUsers, err := ATrustQueryDirectoryUsers()
+	roleName := strings.TrimSpace(system_setting.ATrustSyncRole)
+	if roleName == "" {
+		return nil, fmt.Errorf("未配置同步角色（ATrustSyncRole）")
+	}
+	dirUsers, err := ATrustQueryRoleMembers(roleName)
 	if err != nil {
-		return nil, fmt.Errorf("拉取零信任目录失败: %v", err)
+		return nil, fmt.Errorf("拉取零信任角色成员失败: %v", err)
 	}
 
-	// displayName → 工号集合（目录同名多人时会有多个工号）
+	// displayName → 工号集合（角色成员同名多人时会有多个工号）
 	nameIndex := make(map[string][]string, len(dirUsers))
 	for _, u := range dirUsers {
 		name := strings.TrimSpace(u.DisplayName)
@@ -104,7 +203,7 @@ func SyncEmployeeIdsFromATrust() (*ATrustSyncReport, error) {
 		}
 	}
 
-	// 目标本地账号：指定分组的启用账号（map 条件由 GORM 按方言转义保留字 `group`）
+	// 目标本地账号：启用账号（可再用本地分组收窄，默认全部）
 	groups := parseATrustSyncGroups()
 	var targets []model.User
 	q := model.DB.Where("status = ?", common.UserStatusEnabled)
@@ -116,10 +215,10 @@ func SyncEmployeeIdsFromATrust() (*ATrustSyncReport, error) {
 	}
 
 	report := &ATrustSyncReport{
-		DirectoryTotal: len(dirUsers),
-		TargetUsers:    len(targets),
-		Ambiguous:      []string{},
-		Unmatched:      []string{},
+		RoleMembers: len(dirUsers),
+		TargetUsers: len(targets),
+		Ambiguous:   []string{},
+		Unmatched:   []string{},
 	}
 
 	for i := range targets {
@@ -204,7 +303,7 @@ func runATrustEmployeeSync() {
 		common.SysError("[工号定时同步] " + err.Error())
 		return
 	}
-	common.SysLog(fmt.Sprintf("[工号定时同步] 目录 %d 目标 %d 新绑定 %d 更新 %d 一致 %d 歧义 %d 未匹配 %d",
-		report.DirectoryTotal, report.TargetUsers, report.Synced, report.Overwritten,
+	common.SysLog(fmt.Sprintf("[工号定时同步] 角色成员 %d 目标 %d 新绑定 %d 更新 %d 一致 %d 歧义 %d 未匹配 %d",
+		report.RoleMembers, report.TargetUsers, report.Synced, report.Overwritten,
 		report.SkippedSame, len(report.Ambiguous), len(report.Unmatched)))
 }

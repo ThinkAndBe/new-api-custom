@@ -55,7 +55,7 @@ const UsersActions = ({
         {t('导出用户')}
       </Button>
       <Popconfirm
-        title={t('从零信任用户目录按姓名匹配并回填工号（仅限同步分组），同名歧义会跳过并列出')}
+        title={t('从零信任指定角色的成员按姓名匹配回填工号，同名歧义会跳过并列出')}
         onConfirm={syncEmployeeIds}
       >
         <Button className='w-full md:w-auto' icon={<IconRefresh />} size='small'>

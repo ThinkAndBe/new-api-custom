@@ -25,7 +25,8 @@ var (
 // aTrust 用户目录（工号同步数据源）
 var (
 	ATrustDirectoryDomain = "wechat33610" // 目录标识（企业微信同步目录；getUserStatus 响应的 domain 字段）
-	ATrustSyncGroups      = "AI用户"       // 工号同步只处理这些分组的本地账号（逗号分隔；留空=全部）
+	ATrustSyncRole        = "AI用户"       // 只同步该零信任角色的成员（tokenhub 访问白名单）
+	ATrustSyncGroups      = ""            // 额外限定本地分组（逗号分隔；留空=全部，范围已由角色决定）
 )
 
 // 企业微信扫码登录（aTrust 反代不透传用户身份，改用企微 OAuth 实现免密登录）
