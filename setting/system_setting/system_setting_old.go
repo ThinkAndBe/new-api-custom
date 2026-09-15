@@ -2,6 +2,11 @@ package system_setting
 
 var ServerAddress = "http://localhost:3000"
 
+// GuideAPIBase 使用教程/配置工具下发的 API 地址。
+// 工具（zcode 等）是非浏览器调用，443 会被零信任拦截，必须走 3000 直连；
+// 留空时从 ServerAddress 推导并自动补 :3000 端口。
+var GuideAPIBase = ""
+
 // aTrust 零信任免认证
 var (
 	ATrustEnabled   = false

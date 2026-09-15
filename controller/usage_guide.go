@@ -261,8 +261,13 @@ func GetUsageGuideConfig(c *gin.Context) {
 		key = tokens[0].GetFullKey()
 	}
 
-	// 2. baseUrl：优先管理台配置的 server_address，否则按请求 Host 推导
-	baseUrl := system_setting.ServerAddress
+	// 2. baseUrl：优先专用配置 GuideAPIBase；未配置时从 ServerAddress 推导。
+	// 工具是非浏览器调用，443 会被零信任拦截，推导时自动补 :3000 直连端口
+	// （ServerAddress 现指向 443 站点地址，供 SSO 回调等浏览器场景使用）。
+	baseUrl := strings.TrimSpace(system_setting.GuideAPIBase)
+	if baseUrl == "" {
+		baseUrl = system_setting.ServerAddress
+	}
 	if baseUrl == "" {
 		host := c.Request.Host
 		scheme := "https"
@@ -272,6 +277,9 @@ func GetUsageGuideConfig(c *gin.Context) {
 		baseUrl = scheme + "://" + host
 	}
 	baseUrl = strings.TrimSuffix(baseUrl, "/")
+	if scheme, rest, ok := strings.Cut(baseUrl, "://"); ok && !strings.Contains(rest, ":") {
+		baseUrl = scheme + "://" + rest + ":3000"
+	}
 
 	// 3. 模型清单 + 参数（与 GetUserModelsMeta 相同口径：all=1 + 白名单过滤）
 	models, metas := collectUsageGuideModels(userId)
