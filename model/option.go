@@ -404,6 +404,8 @@ func updateOptionMap(key string, value string) (err error) {
 		system_setting.ATrustAPISecret = value
 	case "ATrustSSOServer":
 		system_setting.ATrustSSOServer = value
+	case "ATrustSSOAPIServer":
+		system_setting.ATrustSSOAPIServer = value
 	case "ATrustSSOAppId":
 		system_setting.ATrustSSOAppId = value
 	case "ATrustSSOAppSecret":

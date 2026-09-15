@@ -14,7 +14,8 @@ var (
 // 详见《零信任aTrust资源单点登录方案-OAuth对接&票据注入》章节5）
 var (
 	ATrustSSOEnabled      = false
-	ATrustSSOServer       = "" // aTrust 客户端接入地址，如 https://atrust.example.com
+	ATrustSSOServer       = "" // aTrust 客户端接入地址（浏览器跳转 auth2ssoLogin 用），如 https://atrust.example.com
+	ATrustSSOAPIServer    = "" // 换用户信息接口地址（服务端签名调用），留空回落到 ATrustSSOServer；分体部署时填控制中心地址
 	ATrustSSOAppId        = "" // 应用开启单点登录后获取的 appid
 	ATrustSSOAppSecret    = ""
 	ATrustSSOAutoRegister = true // 未匹配到已有账号时自动创建（零信任登录即员工）

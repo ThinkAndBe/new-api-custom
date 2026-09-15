@@ -73,13 +73,22 @@ func atrustSSOSign(appId, code, appSecret string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// atrustSSOAPIBase 换用户信息接口的基地址：分体部署时接入网关（443）只认
+// 浏览器会话、控制中心（如 4433）才提供签名 API，故允许单独配置回落。
+func atrustSSOAPIBase() string {
+	if system_setting.ATrustSSOAPIServer != "" {
+		return strings.TrimSuffix(system_setting.ATrustSSOAPIServer, "/")
+	}
+	return strings.TrimSuffix(system_setting.ATrustSSOServer, "/")
+}
+
 // ATrustSSOGetUserInfoByCode 用 code 换用户信息（步骤3）
 func ATrustSSOGetUserInfoByCode(code string) (*ATrustSSOUser, error) {
 	appId := system_setting.ATrustSSOAppId
 	q := url.Values{}
 	q.Set("appid", appId)
 	q.Set("code", code)
-	reqURL := strings.TrimSuffix(system_setting.ATrustSSOServer, "/") +
+	reqURL := atrustSSOAPIBase() +
 		"/passport/v1/user/getUserInfoByCode?" + q.Encode()
 
 	req, err := http.NewRequest("GET", reqURL, nil)
