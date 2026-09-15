@@ -36,6 +36,7 @@ type User struct {
 	OidcId             string         `json:"oidc_id" gorm:"column:oidc_id;index"`
 	WeChatId           string         `json:"wechat_id" gorm:"column:wechat_id;index"`
 	WeChatWorkId       string         `json:"wechat_work_id" gorm:"column:wechat_work_id;index"`
+	EmployeeId         string         `json:"employee_id" gorm:"column:employee_id;index"` // 工号（零信任同步）
 	TelegramId         string         `json:"telegram_id" gorm:"column:telegram_id;index"`
 	VerificationCode   string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
 	AccessToken        *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
@@ -329,8 +330,8 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	query := tx.Unscoped().Model(&User{})
 
 	// 构建搜索条件
-	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ?"
-	likeArgs := []interface{}{"%" + keyword + "%", "%" + keyword + "%", "%" + keyword + "%"}
+	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ? OR employee_id LIKE ?"
+	likeArgs := []interface{}{"%" + keyword + "%", "%" + keyword + "%", "%" + keyword + "%", "%" + keyword + "%"}
 
 	// 尝试将关键字转换为整数ID
 	keywordInt, err := strconv.Atoi(keyword)

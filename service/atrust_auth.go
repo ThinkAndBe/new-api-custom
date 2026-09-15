@@ -144,6 +144,33 @@ func atrustRequest(cfg ATrustConfig, method, path, query string) ([]byte, error)
 	return io.ReadAll(resp.Body)
 }
 
+// ATrustFetchOnlineUsers 拉取 aTrust 全部在线用户（OpenAPI getUserStatus）。
+// 供 IP 反查（ATrustLookupByIP）与工号批量同步（SyncEmployeeIdsFromATrust）共用。
+func ATrustFetchOnlineUsers() ([]ATrustOnlineUser, error) {
+	cfg := GetATrustConfig()
+	if cfg.Server == "" || cfg.APIId == "" || cfg.APISecret == "" {
+		return nil, fmt.Errorf("aTrust OpenAPI 未配置")
+	}
+
+	query := url.Values{}
+	query.Set("pageSize", "500")
+	query.Set("pageIndex", "1")
+
+	body, err := atrustRequest(cfg, "GET", "/api/v1/monitor/getUserStatus", query.Encode())
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ATrustOnlineResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("解析 aTrust 响应失败: %v", err)
+	}
+	if resp.Code != 0 {
+		return nil, fmt.Errorf("aTrust 返回错误 code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	return resp.Data.Data, nil
+}
+
 // ATrustLookupByIP 通过 IP 查 aTrust 在线用户
 func ATrustLookupByIP(clientIP string) (*ATrustOnlineUser, error) {
 	cfg := GetATrustConfig()
@@ -165,29 +192,17 @@ func ATrustLookupByIP(clientIP string) (*ATrustOnlineUser, error) {
 	atrustCacheMu.RUnlock()
 
 	// 缓存过期，拉取全部在线用户重建缓存
-	query := url.Values{}
-	query.Set("pageSize", "500")
-	query.Set("pageIndex", "1")
-
-	body, err := atrustRequest(cfg, "GET", "/api/v1/monitor/getUserStatus", query.Encode())
+	online, err := ATrustFetchOnlineUsers()
 	if err != nil {
 		return nil, err
-	}
-
-	var resp ATrustOnlineResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("解析 aTrust 响应失败: %v", err)
-	}
-	if resp.Code != 0 {
-		return nil, fmt.Errorf("aTrust 返回错误 code=%d msg=%s", resp.Code, resp.Msg)
 	}
 
 	// 重建缓存：同时索引 remoteIp（用户原始 IP）和 vips（aTrust 分配的虚拟 IP）。
 	// 反代模式下 new-api 看到的是 vips 里的 IP，不是 remoteIp。
 	atrustCacheMu.Lock()
 	atrustCache = make(map[string]*ATrustOnlineUser)
-	for i := range resp.Data.Data {
-		u := &resp.Data.Data[i]
+	for i := range online {
+		u := &online[i]
 		if u.RemoteIp != "" {
 			atrustCache[u.RemoteIp] = u
 		}

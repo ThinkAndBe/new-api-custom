@@ -361,6 +361,16 @@ export const getUsersColumns = ({
       render: (text, record) => renderUsername(text, record),
     },
     {
+      title: t('工号'),
+      dataIndex: 'employee_id',
+      render: (text) =>
+        text ? (
+          <span className='text-gray-500 text-xs'>{text}</span>
+        ) : (
+          <span className='text-gray-300'>-</span>
+        ),
+    },
+    {
       title: t('状态'),
       dataIndex: 'info',
       render: (text, record, index) =>

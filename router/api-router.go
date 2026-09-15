@@ -150,6 +150,7 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.POST("/manage", controller.ManageUser)
 				adminRoute.POST("/manage_batch", controller.ManageUserBatch)
 				adminRoute.POST("/import", controller.ImportUsers)
+				adminRoute.POST("/sync_employee_ids", controller.SyncEmployeeIds)
 				adminRoute.GET("/export", controller.ExportUsers)
 				adminRoute.PUT("/", controller.UpdateUser)
 				adminRoute.POST("/:id/reactivate", controller.ReactivateUser)

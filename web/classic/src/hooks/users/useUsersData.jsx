@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Modal } from '@douyinfe/semi-ui';
 import { API, showError, showSuccess } from '../../helpers';
 import { exportFromAPI } from '../../helpers/csv';
 import { ITEMS_PER_PAGE } from '../../constants';
@@ -180,6 +181,45 @@ export const useUsersData = () => {
     if (searchStatus !== '') params.set('status', searchStatus);
     const qs = params.toString();
     await exportFromAPI(`/api/user/export${qs ? '?' + qs : ''}`, 'users');
+  };
+
+  // 从零信任在线用户批量同步工号
+  const syncEmployeeIds = async () => {
+    setLoading(true);
+    try {
+      const res = await API.post('/api/user/sync_employee_ids');
+      const { success, message, data } = res.data;
+      if (!success) {
+        showError(message);
+        return;
+      }
+      const list = (arr, label) =>
+        arr && arr.length
+          ? `\n【${label}】(${arr.length})\n` + arr.join('、') + '\n'
+          : '';
+      Modal.info({
+        title: t('零信任工号同步完成'),
+        width: 520,
+        content: (
+          <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
+            {t('在线用户')}：{data.online_total}
+            {'  '}
+            {t('新绑定')}：{data.synced}
+            {'  '}
+            {t('更新')}：{data.overwritten}
+            {'  '}
+            {t('已一致')}：{data.skipped_same}
+            {list(data.ambiguous, t('同名歧义（需人工处理）'))}
+            {list(data.unmatched, t('零信任在线但暂无账号'))}
+            {list(data.no_employee_id, t('零信任侧缺工号'))}
+          </div>
+        ),
+        onOk: () => refresh(),
+      });
+    } catch (e) {
+      showError(e?.response?.data?.message || t('操作失败，请重试'));
+    }
+    setLoading(false);
   };
 
   // Manage user operations (promote, demote, enable, disable, delete)
@@ -389,6 +429,7 @@ export const useUsersData = () => {
     manageUser,
     manageUserBatch,
     exportUsers,
+    syncEmployeeIds,
     resetUserPasskey,
     resetUserTwoFA,
     handlePageChange,

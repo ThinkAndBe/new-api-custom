@@ -127,11 +127,35 @@ func ATrustSSOGetUserInfoByCode(code string) (*ATrustSSOUser, error) {
 }
 
 // MatchOrCreateATrustSSOUser 按零信任身份匹配本地账号。
-// 优先级与原免认证中间件一致：中文姓名（username/display_name）→ 工号（name）
-// → 自动创建（ATrustSSOAutoRegister 开启时）。
+// 优先级：工号（employee_id，绑定过即精确命中，不受重名影响）→
+// 中文姓名（username/display_name 唯一匹配）→ 工号等于 username → 自动创建。
+// 命中后回写工号，保证后续登录走精确匹配。
 func MatchOrCreateATrustSSOUser(u *ATrustSSOUser) (*model.User, error) {
 	displayName := strings.TrimSpace(u.DisplayName)
 	employeeId := strings.TrimSpace(u.Name)
+
+	bindEmployeeId := func(m *model.User) (*model.User, error) {
+		if employeeId != "" && m.EmployeeId != employeeId {
+			m.EmployeeId = employeeId
+			if err := model.DB.Model(m).Update("employee_id", employeeId).Error; err != nil {
+				common.SysError("[aTrust SSO] 回写工号失败 " + m.Username + ": " + err.Error())
+			} else {
+				common.SysLog("[aTrust SSO] 绑定工号: " + m.Username + " → " + employeeId)
+			}
+		}
+		return m, nil
+	}
+
+	// 0. 已绑定工号的用户精确命中（最强凭证）
+	if employeeId != "" {
+		var m model.User
+		if err := model.DB.Where("employee_id = ?", employeeId).First(&m).Error; err == nil {
+			if m.Status != common.UserStatusEnabled {
+				return nil, fmt.Errorf("账号 %s 已被禁用，请联系管理员", m.Username)
+			}
+			return bindEmployeeId(&m)
+		}
+	}
 
 	// 1. 按中文姓名匹配（CSV 导入用户的 username/display_name 为中文姓名）。
 	//    同名多人时拒绝登录而不是随机取第一条，避免登进别人的账号。
@@ -146,7 +170,7 @@ func MatchOrCreateATrustSSOUser(u *ATrustSSOUser) (*model.User, error) {
 			if ms[0].Status != common.UserStatusEnabled {
 				return nil, fmt.Errorf("账号 %s 已被禁用，请联系管理员", ms[0].Username)
 			}
-			return &ms[0], nil
+			return bindEmployeeId(&ms[0])
 		}
 	}
 
@@ -157,7 +181,7 @@ func MatchOrCreateATrustSSOUser(u *ATrustSSOUser) (*model.User, error) {
 			if m.Status != common.UserStatusEnabled {
 				return nil, fmt.Errorf("账号 %s 已被禁用，请联系管理员", m.Username)
 			}
-			return &m, nil
+			return bindEmployeeId(&m)
 		}
 	}
 
@@ -176,6 +200,7 @@ func MatchOrCreateATrustSSOUser(u *ATrustSSOUser) (*model.User, error) {
 	newUser := &model.User{
 		Username:    username,
 		DisplayName: displayName,
+		EmployeeId:  employeeId,
 		Password:    common.GetUUID(), // 随机密码，用户经零信任登录永远用不到
 		Role:        common.RoleCommonUser,
 		Status:      common.UserStatusEnabled,
@@ -184,7 +209,7 @@ func MatchOrCreateATrustSSOUser(u *ATrustSSOUser) (*model.User, error) {
 	if err := newUser.Insert(0); err != nil {
 		return nil, fmt.Errorf("自动创建账号失败: %v", err)
 	}
-	common.SysLog("[aTrust SSO] 自动创建用户 " + username)
+	common.SysLog("[aTrust SSO] 自动创建用户 " + username + "（工号 " + employeeId + "）")
 	return newUser, nil
 }
 

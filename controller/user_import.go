@@ -202,7 +202,7 @@ func ExportUsers(c *gin.Context) {
 	}
 	setCSVHeaders(c, "users")
 	w := csv.NewWriter(c.Writer)
-	_ = w.Write([]string{"ID", "用户名", "显示名", "分组", "角色", "状态", "额度", "已用额度", "请求数", "邮箱", "备注", "注册时间", "最后登录"})
+	_ = w.Write([]string{"ID", "用户名", "显示名", "工号", "分组", "角色", "状态", "额度", "已用额度", "请求数", "邮箱", "备注", "注册时间", "最后登录"})
 	roleName := map[int]string{1: "普通用户", 10: "管理员", 100: "Root"}
 	statusName := map[int]string{1: "启用", 2: "禁用", 3: "封禁"}
 	for _, u := range users {
@@ -214,6 +214,7 @@ func ExportUsers(c *gin.Context) {
 			strconv.Itoa(u.Id),
 			u.Username,
 			u.DisplayName,
+			u.EmployeeId,
 			u.Group,
 			roleName[u.Role],
 			st,

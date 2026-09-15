@@ -46,6 +46,7 @@ const UsersPage = () => {
     closeEditUser,
     closeImportUser,
     exportUsers,
+    syncEmployeeIds,
     refresh,
 
     // Form state
@@ -104,6 +105,7 @@ const UsersPage = () => {
               setShowAddUser={setShowAddUser}
               setShowImportUser={setShowImportUser}
               exportUsers={exportUsers}
+              syncEmployeeIds={syncEmployeeIds}
               t={t}
             />
 
