@@ -57,6 +57,7 @@ func SetApiRouter(router *gin.Engine) {
 		// aTrust 反向 OAuth2 单点登录（浏览器 302 流）
 		apiRouter.GET("/oauth/atrust/start", middleware.CriticalRateLimit(), controller.ATrustSSOStart)
 		apiRouter.GET("/oauth/atrust", middleware.CriticalRateLimit(), controller.ATrustSSOCallback)
+		apiRouter.GET("/oauth/atrust/finish", middleware.CriticalRateLimit(), controller.ATrustSSOFinish)
 		// Standard OAuth providers (GitHub, Discord, OIDC, LinuxDO) - unified route
 		apiRouter.GET("/oauth/:provider", middleware.CriticalRateLimit(), controller.HandleOAuth)
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)

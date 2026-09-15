@@ -124,5 +124,40 @@ func ATrustSSOCallback(c *gin.Context) {
 
 	common.SysLog("[aTrust SSO] 用户登录成功: " + user.Username +
 		"（零信任身份 name=" + ssoUser.Name + " displayName=" + ssoUser.DisplayName + "）")
-	c.Redirect(http.StatusFound, "/console/token")
+
+	// 跳到前端回调页完成登录引导（写 localStorage 用户态、初始化上下文）。
+	// 服务端直跳 /console 会被路由守卫当作未登录弹回（localStorage 无用户对象）。
+	c.Redirect(http.StatusFound, "/oauth/atrust?sso=1")
+}
+
+// ATrustSSOFinish 前端回调页拉取登录态：会话已建立，返回用户信息
+// 供前端写入 localStorage（与 /api/user/login 响应同构）。
+func ATrustSSOFinish(c *gin.Context) {
+	session := sessions.Default(c)
+	id := session.Get("id")
+	if id == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "零信任会话不存在，请重新发起登录",
+		})
+		return
+	}
+	user := model.User{Id: id.(int)}
+	if err := user.FillUserById(); err != nil || user.Id == 0 {
+		session.Clear()
+		_ = session.Save()
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "用户不存在或已注销",
+		})
+		return
+	}
+	if user.Status != common.UserStatusEnabled {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "账号已被禁用，请联系管理员",
+		})
+		return
+	}
+	setupLogin(&user, c)
 }

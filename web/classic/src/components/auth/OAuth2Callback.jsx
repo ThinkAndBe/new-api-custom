@@ -88,6 +88,28 @@ const OAuth2Callback = (props) => {
     }
     hasExecuted.current = true;
 
+    // aTrust 零信任 SSO 引导：服务端回调已建立会话，这里拉取登录态
+    // 写入 localStorage（与密码登录的前端处理一致）
+    if (searchParams.get('sso')) {
+      API.get(`/api/oauth/${props.type}/finish`)
+        .then(({ data: resData }) => {
+          const { success, message, data } = resData;
+          if (!success) {
+            showError(message || t('授权失败'));
+            navigate('/login');
+            return;
+          }
+          userDispatch({ type: 'login', payload: data });
+          localStorage.setItem('user', JSON.stringify(data));
+          setUserData(data);
+          updateAPI();
+          showSuccess(t('登录成功！'));
+          navigate('/console/token');
+        })
+        .catch(() => navigate('/login'));
+      return;
+    }
+
     const code = searchParams.get('code');
     const state = searchParams.get('state');
 
