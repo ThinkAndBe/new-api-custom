@@ -55,7 +55,11 @@ const UsageGuide = () => {
   // 暂不可用模型的渠道预计恢复时间（model_name -> {recovery_at}）
   const [modelRecoveryMap, setModelRecoveryMap] = useState({});
 
-  const serverAddress = statusState?.status?.server_address || '';
+  // 工具直连地址：后端已解析（无端口自动补 :3000，443 会拦截非浏览器调用）
+  const serverAddress =
+    statusState?.status?.guide_api_base ||
+    statusState?.status?.server_address ||
+    '';
   const baseUrl = serverAddress
     ? serverAddress.replace(/\/$/, '')
     : window.location.origin;

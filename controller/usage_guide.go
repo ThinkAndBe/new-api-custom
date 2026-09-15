@@ -144,6 +144,30 @@ func RedeemGuideShortCode(c *gin.Context) {
 	GetUsageGuideConfig(c)
 }
 
+// resolveGuideAPIBase 解析下发给客户端工具的 API 地址：
+// 优先专用配置 GuideAPIBase，未配置时从 ServerAddress 推导。
+// 工具是非浏览器调用，443 会被零信任拦截，无端口时自动补 :3000 直连
+// （ServerAddress 指向 443 站点地址，供 SSO 回调等浏览器场景使用）。
+func resolveGuideAPIBase(c *gin.Context) string {
+	baseUrl := strings.TrimSpace(system_setting.GuideAPIBase)
+	if baseUrl == "" {
+		baseUrl = system_setting.ServerAddress
+	}
+	if baseUrl == "" && c != nil {
+		host := c.Request.Host
+		scheme := "https"
+		if strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") {
+			scheme = "http"
+		}
+		baseUrl = scheme + "://" + host
+	}
+	baseUrl = strings.TrimSuffix(baseUrl, "/")
+	if scheme, rest, ok := strings.Cut(baseUrl, "://"); ok && !strings.Contains(rest, ":") {
+		baseUrl = scheme + "://" + rest + ":3000"
+	}
+	return baseUrl
+}
+
 // usageGuideConfig 使用教程「复制命令」模式的数据下发。
 // 前端生成 PowerShell 单行命令：irm {url} | iex，脚本从这里取配置并写入
 // ~/.workbuddy/models.json 或 ~/.codebuddy/models.json。
@@ -261,25 +285,8 @@ func GetUsageGuideConfig(c *gin.Context) {
 		key = tokens[0].GetFullKey()
 	}
 
-	// 2. baseUrl：优先专用配置 GuideAPIBase；未配置时从 ServerAddress 推导。
-	// 工具是非浏览器调用，443 会被零信任拦截，推导时自动补 :3000 直连端口
-	// （ServerAddress 现指向 443 站点地址，供 SSO 回调等浏览器场景使用）。
-	baseUrl := strings.TrimSpace(system_setting.GuideAPIBase)
-	if baseUrl == "" {
-		baseUrl = system_setting.ServerAddress
-	}
-	if baseUrl == "" {
-		host := c.Request.Host
-		scheme := "https"
-		if strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") {
-			scheme = "http"
-		}
-		baseUrl = scheme + "://" + host
-	}
-	baseUrl = strings.TrimSuffix(baseUrl, "/")
-	if scheme, rest, ok := strings.Cut(baseUrl, "://"); ok && !strings.Contains(rest, ":") {
-		baseUrl = scheme + "://" + rest + ":3000"
-	}
+	// 2. baseUrl：工具直连通道（自动补 :3000，见 resolveGuideAPIBase）
+	baseUrl := resolveGuideAPIBase(c)
 
 	// 3. 模型清单 + 参数（与 GetUserModelsMeta 相同口径：all=1 + 白名单过滤）
 	models, metas := collectUsageGuideModels(userId)
