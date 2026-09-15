@@ -124,16 +124,20 @@ func MatchOrCreateATrustSSOUser(u *ATrustSSOUser) (*model.User, error) {
 	displayName := strings.TrimSpace(u.DisplayName)
 	employeeId := strings.TrimSpace(u.Name)
 
-	// 1. 按中文姓名匹配（CSV 导入用户的 username/display_name 为中文姓名）
+	// 1. 按中文姓名匹配（CSV 导入用户的 username/display_name 为中文姓名）。
+	//    同名多人时拒绝登录而不是随机取第一条，避免登进别人的账号。
 	if displayName != "" {
-		var m model.User
+		var ms []model.User
 		if err := model.DB.Where(
 			"username = ? OR display_name = ?", displayName, displayName,
-		).First(&m).Error; err == nil {
-			if m.Status != common.UserStatusEnabled {
-				return nil, fmt.Errorf("账号 %s 已被禁用，请联系管理员", m.Username)
+		).Find(&ms).Error; err == nil && len(ms) > 0 {
+			if len(ms) > 1 {
+				return nil, fmt.Errorf("存在多个匹配「%s」的账号，为避免登错请联系管理员处理", displayName)
 			}
-			return &m, nil
+			if ms[0].Status != common.UserStatusEnabled {
+				return nil, fmt.Errorf("账号 %s 已被禁用，请联系管理员", ms[0].Username)
+			}
+			return &ms[0], nil
 		}
 	}
 
