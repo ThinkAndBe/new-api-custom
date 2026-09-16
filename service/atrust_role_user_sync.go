@@ -105,6 +105,7 @@ type ATrustOrphanUser struct {
 	DisplayName string `json:"display_name"`
 	EmployeeId  string `json:"employee_id"`
 	CreatedAt   int64  `json:"created_at"`
+	Deleted     bool   `json:"deleted"` // 已注销（此前软删过，可再次清理为彻底删除）
 }
 
 func ListATrustOrphanUsers() ([]ATrustOrphanUser, error) {
@@ -117,29 +118,44 @@ func ListATrustOrphanUsers() ([]ATrustOrphanUser, error) {
 		valid[strings.TrimSpace(m.Name)] = true
 	}
 
-	var users []ATrustOrphanUser
-	err = model.DB.Model(&model.User{}).
-		Select("id, username, display_name, employee_id, created_at").
+	// 含已注销账号（Unscoped）：此前点过清理的走的是软删，这里一并列出，
+	// 再次清理即为彻底删除
+	type row struct {
+		Id          int
+		Username    string
+		DisplayName string
+		EmployeeId  string
+		CreatedAt   int64
+		DeletedAt   *int64
+	}
+	var rows []row
+	err = model.DB.Unscoped().Model(&model.User{}).
+		Select("id, username, display_name, employee_id, created_at, deleted_at").
 		Where("employee_id != ''").
-		Find(&users).Error
+		Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
 	out := make([]ATrustOrphanUser, 0)
-	for _, u := range users {
-		if !valid[strings.TrimSpace(u.EmployeeId)] {
-			out = append(out, u)
+	for _, r := range rows {
+		if valid[strings.TrimSpace(r.EmployeeId)] {
+			continue
 		}
+		out = append(out, ATrustOrphanUser{
+			Id: r.Id, Username: r.Username, DisplayName: r.DisplayName,
+			EmployeeId: r.EmployeeId, CreatedAt: r.CreatedAt, Deleted: r.DeletedAt != nil,
+		})
 	}
 	return out, nil
 }
 
-// DeleteUsersByIds 软删除指定用户（与用户管理删除行为一致）
+// DeleteUsersByIds 彻底删除指定用户（误建账号清理用；Unscoped 硬删，
+// 不经 7 天软删等待。调用方需先经管理员确认名单）
 func DeleteUsersByIds(ids []int) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
 	}
-	res := model.DB.Where("id IN ?", ids).Delete(&model.User{})
+	res := model.DB.Unscoped().Where("id IN ?", ids).Delete(&model.User{})
 	if res.Error != nil {
 		return 0, res.Error
 	}

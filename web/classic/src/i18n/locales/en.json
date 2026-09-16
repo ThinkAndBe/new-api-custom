@@ -588,6 +588,7 @@
     "已存在跳过": "Skipped (existing)",
     "回填工号": "Employee IDs backfilled",
     "新建账号": "New accounts",
+    "个不在角色内的账号（含已注销），点确认将彻底删除：": "account(s) outside the role (incl. deactivated) will be permanently deleted:",
     "零信任同步": "Zero Trust sync",
     "同步零信任工号": "Sync Employee IDs from Zero Trust",
     "使用 零信任账号 继续": "Continue with Zero Trust SSO",

@@ -224,18 +224,18 @@ export const useUsersData = () => {
             {orphans.length > 0 && (
               <>
                 {'\n\n⚠ '}
-                {t('发现')} {orphans.length} {t('个不在角色内的已建账号（早期误同步产生），可清理：')}
+                {t('发现')} {orphans.length} {t('个不在角色内的账号（含已注销），点确认将彻底删除：')}
                 {'\n'}
                 {orphans
                   .slice(0, 30)
-                  .map((o) => `${o.display_name}(${o.employee_id})`)
+                  .map((o) => `${o.display_name}(${o.employee_id})${o.deleted ? '[' + t('已注销') + ']' : ''}`)
                   .join('、')}
                 {orphans.length > 30 ? ' …' : ''}
               </>
             )}
           </div>
         ),
-        okText: orphans.length > 0 ? t('前往清理') : t('知道了'),
+        okText: orphans.length > 0 ? t('彻底删除') : t('知道了'),
         onOk: async () => {
           if (orphans.length > 0) {
             const ids = orphans.map((o) => o.id);

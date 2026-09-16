@@ -577,6 +577,7 @@
     "已存在跳过": "Bỏ qua (đã có)",
     "回填工号": "Đã điền mã NV",
     "新建账号": "Tài khoản mới",
+    "个不在角色内的账号（含已注销），点确认将彻底删除：": "tài khoản ngoài vai trò (kể cả đã hủy) sẽ bị xóa vĩnh viễn:",
     "零信任同步": "Đồng bộ Zero Trust",
     "同步零信任工号": "Đồng bộ mã NV từ Zero Trust",
     "使用 零信任账号 继续": "Tiếp tục với Zero Trust SSO",
