@@ -456,6 +456,9 @@ const UsageGuide = () => {
                 >
                   {t('下载配置工具')}
                 </Button>
+                <Text type='warning' size='small' style={{ display: 'block', marginBottom: 6 }}>
+                  {t('配置 WorkBuddy 前请先完全退出 WorkBuddy（右下角托盘图标右键→退出），否则配置会在其重启后丢失')}
+                </Text>
                 {['workbuddy', 'codebuddy'].map((type) => (
                   <Button
                     key={type}

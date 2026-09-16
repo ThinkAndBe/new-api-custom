@@ -505,6 +505,7 @@
     "角色成员中未找到同名员工": "Không có thành viên vai trò trùng tên",
     "角色成员同名歧义（需人工处理）": "Trùng tên trong vai trò (cần xử lý tay)",
     "角色成员": "Thành viên vai trò",
+    "配置 WorkBuddy 前请先完全退出 WorkBuddy（右下角托盘图标右键→退出），否则配置会在其重启后丢失": "Trước khi cấu hình WorkBuddy, hãy thoát hoàn toàn WorkBuddy (icon khay → Thoát), nếu không cấu hình sẽ mất sau khi khởi động lại",
     "同步零信任工号": "Đồng bộ mã NV từ Zero Trust",
     "使用 零信任账号 继续": "Tiếp tục với Zero Trust SSO",
     "使用 企业微信 扫码继续": "Tiếp tục với WeCom (QR)",

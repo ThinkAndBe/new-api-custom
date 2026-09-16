@@ -515,6 +515,7 @@
     "角色成员中未找到同名员工": "No role member with matching name",
     "角色成员同名歧义（需人工处理）": "Ambiguous names among role members (manual fix needed)",
     "角色成员": "Role members",
+    "配置 WorkBuddy 前请先完全退出 WorkBuddy（右下角托盘图标右键→退出），否则配置会在其重启后丢失": "Before configuring WorkBuddy, fully quit WorkBuddy first (tray icon → Exit), otherwise the configuration will be lost on restart",
     "同步零信任工号": "Sync Employee IDs from Zero Trust",
     "使用 零信任账号 继续": "Continue with Zero Trust SSO",
     "使用 企业微信 扫码继续": "Continue with WeChat Work (QR code)",
