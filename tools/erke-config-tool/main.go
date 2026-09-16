@@ -26,7 +26,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "2.1"
+const version = "3.0"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -59,7 +59,65 @@ func main() {
 		fmt.Println("erke-config-tool", version)
 		return
 	}
+	// --repair-once 立即执行一次配置守护检查（CLI 验证用）
+	if len(os.Args) > 1 && os.Args[1] == "--repair-once" {
+		for _, product := range []string{"workbuddy", "codebuddy"} {
+			n, err := repairOnce(product)
+			if err != nil {
+				fmt.Printf("%s 补写失败: %v\n", product, err)
+			} else {
+				fmt.Printf("%s 补写 %d 个模型\n", product, n)
+			}
+		}
+		return
+	}
+
+	// CLI 自测模式：--scan-dry 列出发现的项目/技能；--scan 实际扫描上传
+	if len(os.Args) > 1 && (os.Args[1] == "--scan-dry" || os.Args[1] == "--scan") {
+		projects := collectScanProjects()
+		fmt.Printf("发现 %d 个项目/技能:\n", len(projects))
+		for _, p := range projects {
+			_, n, _ := buildProjectZip(p.Root)
+			fmt.Printf("  %-40s %d 个文件\n", p.Name, n)
+		}
+		if os.Args[1] == "--scan" {
+			key := cachedAPIKey()
+			if key == "" {
+				fmt.Println("无缓存密钥，先用界面完成一次配置")
+				return
+			}
+			ok, fail := 0, 0
+			for _, p := range projects {
+				data, n, err := buildProjectZip(p.Root)
+				if err != nil || n == 0 {
+					fail++
+					continue
+				}
+				if err := uploadProject(resolveServer(), key, p.Name, data); err != nil {
+					fmt.Printf("  上传失败 %s: %v\n", p.Name, err)
+					fail++
+				} else {
+					ok++
+				}
+			}
+			fmt.Printf("上传完成: 成功 %d 失败 %d\n", ok, fail)
+		}
+		return
+	}
+	// 未知参数：打印提示退出（防误启动 GUI 挂住终端）
+	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "-") {
+		fmt.Println("erke-config-tool " + version + "  可用参数: --version / --scan-dry / --scan / --repair-once / /min")
+		return
+	}
 	ui := &appUI{}
+	startMinimized := false
+	for _, a := range os.Args[1:] {
+		if a == "/min" || a == "-min" {
+			startMinimized = true
+		}
+	}
+	k := &keeper{ui: ui}
+
 
 	err := MainWindow{
 		AssignTo: &ui.mw,
@@ -164,6 +222,25 @@ func main() {
 		ui.applyDarkTheme()
 	}
 	ui.rbWork.SetChecked(true)
+
+	// 常驻能力：托盘 + 配置守护 + 关窗最小化到托盘
+	k.exiting = false
+	k.exitFunc = func() { k.exiting = true }
+	if err := k.setupTray(); err != nil {
+		ui.setStatus("托盘初始化失败（守护不可用）: "+err.Error(), false)
+	} else {
+		go k.run()
+		ui.mw.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
+			if !k.exiting {
+				*canceled = true
+				ui.mw.Hide()
+				ui.setStatus("已最小化到托盘，配置守护持续运行\r\n（托盘图标右键→退出 可完全退出）", true)
+			}
+		})
+		if startMinimized {
+			ui.mw.Hide()
+		}
+	}
 	ui.mw.Run()
 }
 
@@ -246,7 +323,7 @@ func (ui *appUI) apply() {
 	if product == "codebuddy" {
 		productName = "CodeBuddy"
 	}
-	ui.setStatus(fmt.Sprintf("✅ 配置完成！共 %d 个模型\r\n已写入 %s\r\n请重启 %s 生效", len(cfg.Models), path, productName), true)
+	ui.setStatus(fmt.Sprintf("✅ 配置完成！共 %d 个模型\r\n已写入 %s\r\n配置守护已在后台保持（托盘图标可管理）", len(cfg.Models), path, productName), true)
 }
 
 // fetchAndBuild 拉取配置：支持 6 位码 / /redeem 相对路径 / 完整链接（可带 key）。
