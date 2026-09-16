@@ -244,8 +244,8 @@ func (k *keeper) setupTray() error {
 	_ = ni.ContextMenu().Actions().Add(showAct)
 
 	scanAct := walk.NewAction()
-	scanAct.SetText("扫描并上传项目/技能")
-	scanAct.Triggered().Attach(func() { go k.runScanAndUpload() })
+	scanAct.SetText("扫描上报项目/技能清单")
+	scanAct.Triggered().Attach(func() { go k.runReportInventory() })
 	_ = ni.ContextMenu().Actions().Add(scanAct)
 
 	repairAct := walk.NewAction()

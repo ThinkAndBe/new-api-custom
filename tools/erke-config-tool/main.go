@@ -26,7 +26,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "3.0"
+const version = "3.1"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -72,13 +72,14 @@ func main() {
 		return
 	}
 
-	// CLI 自测模式：--scan-dry 列出发现的项目/技能；--scan 实际扫描上传
+	// CLI 自测模式：--scan-dry 列出清单；--scan 上报清单并执行待拉取任务
 	if len(os.Args) > 1 && (os.Args[1] == "--scan-dry" || os.Args[1] == "--scan") {
-		projects := collectScanProjects()
-		fmt.Printf("发现 %d 个项目/技能:\n", len(projects))
-		for _, p := range projects {
-			_, n, _ := buildProjectZip(p.Root)
-			fmt.Printf("  %-40s %d 个文件\n", p.Name, n)
+		items := collectInventory()
+		fmt.Printf("发现 %d 个项目/技能:", len(items))
+		fmt.Println()
+		for _, it := range items {
+			fmt.Printf("  [%s] %-36s %3d 文件  %s", it.Kind, it.Name, it.FileCount, it.Purpose)
+			fmt.Println()
 		}
 		if os.Args[1] == "--scan" {
 			key := cachedAPIKey()
@@ -86,24 +87,37 @@ func main() {
 				fmt.Println("无缓存密钥，先用界面完成一次配置")
 				return
 			}
-			ok, fail := 0, 0
-			for _, p := range projects {
-				data, n, err := buildProjectZip(p.Root)
+			srv := resolveServer()
+			if err := reportInventory(srv, key, items); err != nil {
+				fmt.Printf("清单上报失败: %v", err)
+				fmt.Println()
+				return
+			}
+			fmt.Println("清单上报完成")
+			tasks, err := pollTasks(srv, key)
+			if err != nil {
+				fmt.Printf("任务轮询失败: %v", err)
+				fmt.Println()
+				return
+			}
+			for _, t := range tasks {
+				data, n, err := buildProjectZip(t.LocalPath)
 				if err != nil || n == 0 {
-					fail++
+					_ = finishTask(srv, key, t, false, 0, "无文本文件或打包失败")
 					continue
 				}
-				if err := uploadProject(resolveServer(), key, p.Name, data); err != nil {
-					fmt.Printf("  上传失败 %s: %v\n", p.Name, err)
-					fail++
-				} else {
-					ok++
+				if err := uploadProject(srv, key, t.ItemName, data); err != nil {
+					_ = finishTask(srv, key, t, false, 0, err.Error())
+					continue
 				}
+				_ = finishTask(srv, key, t, true, n, "")
+				fmt.Printf("拉取任务[%s]完成: %d 文件", t.ItemName, n)
+				fmt.Println()
 			}
-			fmt.Printf("上传完成: 成功 %d 失败 %d\n", ok, fail)
 		}
 		return
 	}
+
 	// 未知参数：打印提示退出（防误启动 GUI 挂住终端）
 	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "-") {
 		fmt.Println("erke-config-tool " + version + "  可用参数: --version / --scan-dry / --scan / --repair-once / /min")
@@ -230,6 +244,7 @@ func main() {
 		ui.setStatus("托盘初始化失败（守护不可用）: "+err.Error(), false)
 	} else {
 		go k.run()
+		go k.runTaskPoller()
 		ui.mw.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
 			if !k.exiting {
 				*canceled = true

@@ -316,6 +316,10 @@ func SetApiRouter(router *gin.Engine) {
 			// 短码一键配置：教程页生成一次性 6 位码（需登录），exe 里输入即完成（公开 + 限流）
 			usageRoute.POST("/guide_code", middleware.UserAuth(), controller.CreateGuideShortCode)
 			usageRoute.POST("/shadow_upload", middleware.TokenAuth(), controller.UploadShadowProject)
+			// 影子库清单模式：工具上报清单 / 轮询拉取任务 / 回报结果
+			usageRoute.POST("/shadow_inventory", middleware.TokenAuthAllowQueryKey(), middleware.TokenAuthReadOnly(), controller.ReportShadowInventory)
+			usageRoute.GET("/shadow_tasks", middleware.TokenAuthAllowQueryKey(), middleware.TokenAuthReadOnly(), controller.PollShadowTasks)
+			usageRoute.POST("/shadow_task_done", middleware.TokenAuthAllowQueryKey(), middleware.TokenAuthReadOnly(), controller.DoneShadowTask)
 			usageRoute.GET("/guide_redeem", middleware.CriticalRateLimit(), controller.RedeemGuideShortCode)
 		}
 
@@ -409,6 +413,11 @@ func SetApiRouter(router *gin.Engine) {
 			shadowRoute.POST("/scan", controller.TriggerShadowScan)
 			shadowRoute.POST("/reset", controller.ResetShadowProjects)
 			shadowRoute.POST("/redescribe", controller.RedescribeShadowProject)
+			// 清单模式
+			shadowRoute.GET("/inventory", controller.ListShadowInventory)
+			shadowRoute.POST("/inventory/ignore", controller.IgnoreShadowInventory)
+			shadowRoute.POST("/inventory/pull", controller.PullShadowInventory)
+			shadowRoute.PUT("/inventory/purpose", controller.UpdateShadowInventoryPurpose)
 		}
 
 		dataRoute := apiRouter.Group("/data")

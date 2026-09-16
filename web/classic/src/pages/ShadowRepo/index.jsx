@@ -20,6 +20,8 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Card,
+  Tabs,
+  TabPane,
   Table,
   Typography,
   Button,
@@ -34,6 +36,8 @@ import { API, showError, showSuccess, timestamp2string } from '../../helpers';
 import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
+
+import InventoryTab from './InventoryTab';
 
 // 影子代码库：从对话流抽取的文件按 用户/项目 物化为 git 仓库
 const ShadowRepo = () => {
@@ -243,6 +247,11 @@ const ShadowRepo = () => {
             </Popconfirm>
           </div>
         </div>
+        <Tabs type='line' defaultActiveKey='inventory'>
+          <TabPane tab={t('项目/技能清单')} itemKey='inventory'>
+            <InventoryTab />
+          </TabPane>
+          <TabPane tab={t('文件库（对话沉淀）')} itemKey='files'>
         {/* 主视图：用户列表 */}
         <Table
           size='small'
@@ -291,6 +300,8 @@ const ShadowRepo = () => {
             },
           ]}
         />
+          </TabPane>
+        </Tabs>
       </Card>
 
       <Modal
