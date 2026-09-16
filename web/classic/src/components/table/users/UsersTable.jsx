@@ -54,6 +54,7 @@ const UsersTable = (usersData) => {
     resetUserTwoFA,
     selectedRowKeys,
     setSelectedRowKeys,
+    groupOptions,
     t,
   } = usersData;
 
@@ -278,6 +279,47 @@ const UsersTable = (usersData) => {
     });
   };
 
+  const showBatchGroupModal = () => {
+    let group = '';
+    Modal.confirm({
+      title: t('批量修改分组（已选 {{count}} 个用户）', {
+        count: selectedRowKeys.length,
+      }),
+      content: (
+        <div className='flex flex-col gap-3 pt-2'>
+          <Select
+            placeholder={t('请选择分组')}
+            style={{ width: '100%' }}
+            filter
+            optionList={groupOptions || []}
+            onChange={(v) => (group = v)}
+          />
+          <div className='text-xs' style={{ color: 'var(--semi-color-text-2)' }}>
+            {t(
+              '修改后立即生效；用户在令牌中另行指定分组的，仍以令牌分组为准。',
+            )}
+          </div>
+        </div>
+      ),
+      okText: t('确定'),
+      cancelText: t('取消'),
+      // 非 async：未选择分组时返回 rejected promise，让 Semi 保持弹窗打开以便补选
+      onOk: () => {
+        if (!group) {
+          showError(t('请选择分组'));
+          return Promise.reject();
+        }
+        return manageUserBatch(
+          selectedRowKeys,
+          'set_group',
+          undefined,
+          undefined,
+          group,
+        );
+      },
+    });
+  };
+
   return (
     <>
       {selectedRowKeys.length > 0 && (
@@ -310,6 +352,9 @@ const UsersTable = (usersData) => {
               }
             >
               {t('批量彻底删除')}
+            </Button>
+            <Button size='small' onClick={showBatchGroupModal}>
+              {t('批量改分组')}
             </Button>
             <Button size='small' onClick={showBatchQuotaModal}>
               {t('批量调额度')}

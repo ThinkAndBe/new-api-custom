@@ -240,9 +240,10 @@ func formatUnixTime(ts int64) string {
 // ManageUserBatchRequest 批量管理请求
 type ManageUserBatchRequest struct {
 	Ids    []int  `json:"ids"`
-	Action string `json:"action"` // disable | enable | delete | purge(彻底删除)
+	Action string `json:"action"` // disable | enable | delete | purge(彻底删除) | set_group(批量分组)
 	Value  int    `json:"value"`  // add_quota 时的额度（quota 单位）
 	Mode   string `json:"mode"`   // add_quota 时的模式
+	Group  string `json:"group"`  // set_group 时的目标分组
 }
 
 // ManageUserBatch POST /api/user/manage_batch
@@ -262,6 +263,7 @@ func ManageUserBatch(c *gin.Context) {
 		common.ApiErrorMsg(c, fmt.Sprintf("单次最多操作 %d 个用户", userImportMaxRows))
 		return
 	}
+	validGroups := ratio_setting.GetGroupRatioCopy()
 	myRole := c.GetInt("role")
 	type rowResult struct {
 		Id       int    `json:"id"`
@@ -307,6 +309,17 @@ func ManageUserBatch(c *gin.Context) {
 			} else {
 				err = model.DB.Unscoped().Where("id = ?", user.Id).Delete(&model.User{}).Error
 			}
+		case "set_group":
+			g := strings.TrimSpace(req.Group)
+			if g == "" {
+				err = fmt.Errorf("分组不能为空")
+			} else if _, ok := validGroups[g]; !ok {
+				err = fmt.Errorf("分组不存在: %s", g)
+			} else {
+				// group 为跨库保留字，用 map 条件交由 GORM 按方言转义
+				err = model.DB.Model(&model.User{}).Where("id = ?", user.Id).
+					Updates(map[string]interface{}{"group": g}).Error
+			}
 		case "add_quota":
 			switch req.Mode {
 			case "add":
@@ -334,7 +347,7 @@ func ManageUserBatch(c *gin.Context) {
 			continue
 		}
 		// 禁用/注销后失效缓存，避免 TTL 内仍可用
-		if req.Action == "disable" || req.Action == "delete" || req.Action == "purge" {
+		if req.Action == "disable" || req.Action == "delete" || req.Action == "purge" || req.Action == "set_group" {
 			if err := model.InvalidateUserCache(user.Id); err != nil {
 				common.SysLog(fmt.Sprintf("batch: invalidate user cache %d failed: %s", user.Id, err.Error()))
 			}

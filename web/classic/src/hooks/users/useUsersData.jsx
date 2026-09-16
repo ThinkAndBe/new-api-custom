@@ -142,13 +142,14 @@ export const useUsersData = () => {
   };
 
   // 批量管理（启用/禁用/注销/调额度）
-  const manageUserBatch = async (ids, action, value, mode) => {
+  const manageUserBatch = async (ids, action, value, mode, group) => {
     if (!ids || ids.length === 0) return;
     setLoading(true);
     try {
       const payload = { ids, action };
       if (value !== undefined) payload.value = value;
       if (mode !== undefined) payload.mode = mode;
+      if (group !== undefined) payload.group = group;
       const res = await API.post('/api/user/manage_batch', payload);
       const { success, message, data } = res.data;
       if (success) {
