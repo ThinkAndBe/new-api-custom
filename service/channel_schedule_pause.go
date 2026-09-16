@@ -85,7 +85,13 @@ func processSchedulePause() {
 				pausedCount++
 			}
 		case shouldPause && ch.Status == common.ChannelStatusAutoDisabled:
-			// 自动禁用但当前处于暂停窗口：纠正回定时暂停，避免被卡在 3 导致窗口结束不恢复
+			// 自动禁用但当前处于暂停窗口：纠正回定时暂停，避免被卡在 3 导致窗口结束不恢复。
+			// 例外：带未到期 recovery_at 的（429 额度耗尽）属于配额故障，不是暂停期间被误禁用；
+			// 纠正会把 recovery_at 写没，窗口结束时渠道会带着未恢复的额度被拉上线。交给健康监测
+			// 按 recovery_at 处理，此处不动它。
+			if hasPendingRecovery(ch) {
+				continue
+			}
 			if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusSchedulePaused, "定时暂停") {
 				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 从自动禁用纠正为定时暂停 (%s)", schedulePauseLogPrefix, ch.Name, ch.Id, weekdayStr))
 			}
@@ -194,6 +200,17 @@ func parseTimeToMinutes(t string) int {
 	}
 	return h*60 + m
 }
+// IsChannelInPauseWindow 判断渠道当前是否处于其配置的定时暂停窗口内。
+// 供健康监测等模块复用：窗口内不要主动把渠道拉回启用，避免暂停窗口被绕过。
+func IsChannelInPauseWindow(ch *model.Channel) bool {
+	settings := ch.GetOtherSettings()
+	if !settings.SchedulePauseEnabled || len(settings.SchedulePauseRules) == 0 {
+		return false
+	}
+	inWindow, _ := isInAnyPauseWindowWithRule(time.Now(), settings.SchedulePauseRules)
+	return inWindow
+}
+
 // hasPendingRecovery 判断自动禁用的渠道是否带有未到期的配额恢复时间（recovery_at）。
 // 有则说明禁用原因是额度耗尽（如 429「已达到使用上限」），应等待 recovery_at 到期后
 // 由配额恢复逻辑处理，而不是被定时暂停模块提前拉回启用。

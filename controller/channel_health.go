@@ -26,6 +26,7 @@ type channelHealthState struct {
 	ConsecutiveFailures int       // 连续失败次数
 	LastCheckAt         time.Time // 上次检测时间
 	CooldownUntil       time.Time // 冷却到期时间（避免频繁探活失败时反复测）
+	LastSkipLogAt       time.Time // 上次记录「该渠道已关闭监测」的时间（节流用）
 }
 
 func getHealthState(channelId int) *channelHealthState {
@@ -79,12 +80,19 @@ func checkAllChannelsHealth() {
 		}
 
 		settings := ch.GetOtherSettings()
-		// opt-out 语义：默认参与自动恢复，只有显式设置 health_check_disabled=true 才跳过
+		state := getHealthState(ch.Id)
+
+		// opt-out 语义：默认参与自动恢复，只有显式设置 health_check_disabled=true 才跳过。
+		// 这种渠道会永久停在「自动禁用」且原先没有任何日志，只能靠人发现——必须有日志留痕。
 		if settings.HealthCheckDisabled {
+			if time.Since(state.LastSkipLogAt) >= 30*time.Minute {
+				state.LastSkipLogAt = time.Now()
+				info := ch.GetOtherInfo()
+				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 处于自动禁用，但该渠道已关闭健康监测，不会自动恢复（原因：%v）",
+					healthMonitorLogPrefix, ch.Name, ch.Id, info["status_reason"]))
+			}
 			continue
 		}
-
-		state := getHealthState(ch.Id)
 
 		// 冷却期内跳过
 		if time.Now().Before(state.CooldownUntil) {
@@ -140,6 +148,13 @@ func checkSingleChannelHealth(ch *model.Channel, state *channelHealthState, test
 			if recoveryAt > 0 {
 				// 有恢复时间：到时间后直接恢复（不需探测，因为额度已重置）
 				if time.Now().Unix() >= recoveryAt {
+					// 但当前若处于定时暂停窗口内，不抢跑：窗口结束后由定时暂停模块拉回，
+					// 否则暂停窗口会被绕过（渠道在维护时段内重新接流）。
+					if service.IsChannelInPauseWindow(ch) {
+						common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度恢复时间已到，但当前处于定时暂停窗口，暂不恢复",
+							healthMonitorLogPrefix, ch.Name, ch.Id))
+						return
+					}
 					service.EnableChannel(ch.Id, "", ch.Name)
 					common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度已重置，自动恢复", healthMonitorLogPrefix, ch.Name, ch.Id))
 					return
