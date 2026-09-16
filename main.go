@@ -105,6 +105,9 @@ func main() {
 	// 渠道定时暂停任务（自动根据配置的时间窗口切换状态 1↔4）
 	service.StartChannelSchedulePauseTask()
 
+	// 渠道按恢复时间自动恢复任务（other_info.recovery_at 到点即启用，不依赖探活）
+	service.StartChannelRecoveryTask()
+
 	// 一次性：给现有 models 表行补齐模型能力参数（max_in/out/tool/vision/reasoning）
 	// 只对 max_input_tokens=0 的行起效，幂等，跑过一次后不再命中
 	if common.IsMasterNode {

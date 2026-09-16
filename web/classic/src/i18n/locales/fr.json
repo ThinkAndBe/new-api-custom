@@ -3855,6 +3855,10 @@
     "缓存命中率": "Taux de hit cache",
     "批量改分组": "Changer de groupe par lot",
     "批量修改分组（已选 {{count}} 个用户）": "Changer le groupe par lot ({{count}} utilisateurs sélectionnés)",
-    "修改后立即生效；用户在令牌中另行指定分组的，仍以令牌分组为准。": "Prise d'effet immédiate. Si un jeton spécifie son propre groupe, le groupe du jeton reste prioritaire."
+    "修改后立即生效；用户在令牌中另行指定分组的，仍以令牌分组为准。": "Prise d'effet immédiate. Si un jeton spécifie son propre groupe, le groupe du jeton reste prioritaire.",
+    "开启探活": "Activer la détection",
+    "已开启探活": "Détection activée",
+    "关闭探活（上游始终失败时不再靠探活恢复；带恢复时间的渠道仍会在到点时自动恢复）": "Désactiver la détection (un canal dont l'amont échoue en continu ne sera plus rétabli par détection ; les canaux ayant une heure de rétablissement restent rétablis automatiquement à cette heure)",
+    "已关闭探活（带恢复时间的渠道仍会到点自动恢复）": "Détection désactivée (les canaux avec une heure de rétablissement sont toujours rétablis automatiquement)"
   }
 }

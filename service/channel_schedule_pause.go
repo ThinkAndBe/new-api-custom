@@ -215,21 +215,5 @@ func IsChannelInPauseWindow(ch *model.Channel) bool {
 // 有则说明禁用原因是额度耗尽（如 429「已达到使用上限」），应等待 recovery_at 到期后
 // 由配额恢复逻辑处理，而不是被定时暂停模块提前拉回启用。
 func hasPendingRecovery(ch *model.Channel) bool {
-	info := ch.GetOtherInfo()
-	raw, ok := info["recovery_at"]
-	if !ok {
-		return false
-	}
-	var recoveryAt int64
-	switch v := raw.(type) {
-	case float64: // JSON 反序列化后的数字
-		recoveryAt = int64(v)
-	case int64:
-		recoveryAt = v
-	case int:
-		recoveryAt = int64(v)
-	default:
-		return false
-	}
-	return recoveryAt > time.Now().Unix()
+	return ChannelRecoveryAt(ch) > time.Now().Unix()
 }

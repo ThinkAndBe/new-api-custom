@@ -4387,6 +4387,10 @@
     "缓存命中率": "Tỷ lệ trúng cache",
     "批量改分组": "Đổi nhóm hàng loạt",
     "批量修改分组（已选 {{count}} 个用户）": "Đổi nhóm hàng loạt (đã chọn {{count}} người dùng)",
-    "修改后立即生效；用户在令牌中另行指定分组的，仍以令牌分组为准。": "Có hiệu lực ngay. Nếu token đã chỉ định nhóm riêng thì nhóm của token vẫn được ưu tiên."
+    "修改后立即生效；用户在令牌中另行指定分组的，仍以令牌分组为准。": "Có hiệu lực ngay. Nếu token đã chỉ định nhóm riêng thì nhóm của token vẫn được ưu tiên.",
+    "开启探活": "Bật kiểm tra",
+    "已开启探活": "Đã bật kiểm tra",
+    "关闭探活（上游始终失败时不再靠探活恢复；带恢复时间的渠道仍会在到点时自动恢复）": "Tắt kiểm tra (kênh liên tục lỗi phía trên sẽ không còn được khôi phục bằng kiểm tra; kênh có thời gian khôi phục vẫn tự động khôi phục khi đến hạn)",
+    "已关闭探活（带恢复时间的渠道仍会到点自动恢复）": "Đã tắt kiểm tra (kênh có thời gian khôi phục vẫn tự động khôi phục)"
   }
 }

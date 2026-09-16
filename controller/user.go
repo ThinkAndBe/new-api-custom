@@ -926,15 +926,7 @@ func GetUserModelsRecovery(c *gin.Context) {
 			}
 		} else {
 			// 其它禁用形态：读 other_info.recovery_at（若没有则 0）
-			info := ch.GetOtherInfo()
-			switch v := info["recovery_at"].(type) {
-			case float64:
-				recoveryAt = int64(v)
-			case int64:
-				recoveryAt = v
-			case int:
-				recoveryAt = int64(v)
-			}
+			recoveryAt = service.ChannelRecoveryAt(ch)
 		}
 		for _, m := range strings.Split(ch.Models, ",") {
 			m = strings.TrimSpace(m)

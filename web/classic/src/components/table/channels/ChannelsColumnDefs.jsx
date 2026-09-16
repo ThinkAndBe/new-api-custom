@@ -368,7 +368,8 @@ const toggleHeadroom = async (record, refresh, t) => {
   }
 };
 
-// 快速切换渠道的健康监测开关（opt-out 语义：默认开启，关闭=禁止自动恢复）
+// 快速切换渠道的探活开关（opt-out 语义：默认开启）。关闭仅停止探活恢复；
+// 带 other_info.recovery_at 的渠道由「按恢复时间自动恢复」任务独立处理，不受此开关影响。
 const toggleHealthCheck = async (record, refresh, t) => {
   const currentEnabled = isHealthCheckEnabled(record);
   let settings = {};
@@ -390,8 +391,8 @@ const toggleHealthCheck = async (record, refresh, t) => {
     if (res.data.success) {
       showSuccess(
         currentEnabled
-          ? t('已关闭自动恢复')
-          : t('已开启自动恢复'),
+          ? t('已关闭探活（带恢复时间的渠道仍会到点自动恢复）')
+          : t('已开启探活'),
       );
       refresh();
     } else {
@@ -1013,7 +1014,14 @@ export const getChannelsColumns = ({
                     />
                   </span>
                 </Tooltip>
-                <Tooltip content={isHealthCheckEnabled(record) ? t('关闭自动恢复') : t('开启自动恢复')} position='bottom'>
+                <Tooltip
+                  content={
+                    isHealthCheckEnabled(record)
+                      ? t('关闭探活（上游始终失败时不再靠探活恢复；带恢复时间的渠道仍会在到点时自动恢复）')
+                      : t('开启探活')
+                  }
+                  position='bottom'
+                >
                   <span className='inline-flex items-center gap-0.5'>
                     <span className='text-xs text-muted-foreground'>{t('恢复')}</span>
                     <Switch

@@ -4011,6 +4011,10 @@
     "已选 {{count}} 个用户": "{{count}} users selected",
     "批量改分组": "Batch Change Group",
     "批量修改分组（已选 {{count}} 个用户）": "Batch change group ({{count}} users selected)",
-    "修改后立即生效；用户在令牌中另行指定分组的，仍以令牌分组为准。": "Takes effect immediately. If a token specifies its own group, the token group still takes priority."
+    "修改后立即生效；用户在令牌中另行指定分组的，仍以令牌分组为准。": "Takes effect immediately. If a token specifies its own group, the token group still takes priority.",
+    "开启探活": "Enable probing",
+    "已开启探活": "Probing enabled",
+    "关闭探活（上游始终失败时不再靠探活恢复；带恢复时间的渠道仍会在到点时自动恢复）": "Disable probing (a channel that keeps failing upstream will no longer recover via probing; channels that carry a recovery time still recover automatically when it arrives)",
+    "已关闭探活（带恢复时间的渠道仍会到点自动恢复）": "Probing disabled (channels with a recovery time still recover automatically)"
   }
 }

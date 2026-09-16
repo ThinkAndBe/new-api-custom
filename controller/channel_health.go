@@ -129,42 +129,23 @@ func checkSingleChannelHealth(ch *model.Channel, state *channelHealthState, test
 		}
 
 		// 检查是否有预设恢复时间（429 额度重置）
-		// recovery_at 存储为 JSON number，从 other_info 解析出来是 float64
-		recoveryAt := int64(0)
-		if r, ok := info["recovery_at"].(float64); ok {
-			recoveryAt = int64(r)
-		} else if r, ok := info["recovery_at"].(int64); ok {
-			recoveryAt = r
-		} else if r, ok := info["recovery_at"].(int); ok {
-			recoveryAt = int64(r)
-		}
+		recoveryAt := service.ChannelRecoveryAt(ch)
 
 		isQuota := isQuotaExhaustedReason(reason)
 		common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 检查恢复: reason=%s, isQuota=%v, recoveryAt=%d, now=%d, otherInfo=%v",
 			healthMonitorLogPrefix, ch.Name, ch.Id,
 			common.LocalLogPreview(reason), isQuota, recoveryAt, time.Now().Unix(), info))
 
+		// 有恢复时间的渠道由「按恢复时间自动恢复」任务负责（到点即启用，不探测）。
+		// 这里不再处理，避免两个模块抢着改状态、也避免探活成功但真实额度仍耗尽时的启动→429→禁用回环。
+		if recoveryAt > 0 {
+			common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 带恢复时间 %s，交由按恢复时间恢复任务处理，跳过探活",
+				healthMonitorLogPrefix, ch.Name, ch.Id,
+				time.Unix(recoveryAt, 0).Format("2006-01-02 15:04:05")))
+			return
+		}
+
 		if isQuota {
-			if recoveryAt > 0 {
-				// 有恢复时间：到时间后直接恢复（不需探测，因为额度已重置）
-				if time.Now().Unix() >= recoveryAt {
-					// 但当前若处于定时暂停窗口内，不抢跑：窗口结束后由定时暂停模块拉回，
-					// 否则暂停窗口会被绕过（渠道在维护时段内重新接流）。
-					if service.IsChannelInPauseWindow(ch) {
-						common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度恢复时间已到，但当前处于定时暂停窗口，暂不恢复",
-							healthMonitorLogPrefix, ch.Name, ch.Id))
-						return
-					}
-					service.EnableChannel(ch.Id, "", ch.Name)
-					common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度已重置，自动恢复", healthMonitorLogPrefix, ch.Name, ch.Id))
-					return
-				}
-				// 没到恢复时间，跳过探测
-				common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 额度未到恢复时间，跳过探测 (剩余 %s)",
-					healthMonitorLogPrefix, ch.Name, ch.Id,
-					time.Unix(recoveryAt, 0).Sub(time.Now()).Truncate(time.Second)))
-				return
-			}
 			// 没有恢复时间的额度用尽（如 Kimi 的 "next billing cycle" 无具体时间），
 			// 不跳过探活：走下面的真实探活逻辑，额度恢复后探活成功即可自动恢复
 			// 探活失败会进入冷却期（指数退避），不会频繁浪费请求
