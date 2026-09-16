@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"sync"
 	"time"
 
@@ -126,7 +127,9 @@ func acquireSingleInstance() bool {
 
 // processAlive Windows 下用 tasklist /FI PID 判断
 func processAlive(pid int) bool {
-	out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH").Output()
+	cmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	out, err := cmd.Output()
 	if err != nil {
 		return false
 	}
@@ -184,7 +187,11 @@ func productProcessName(product string) string {
 
 // isProcessRunning 通过 tasklist 判断进程是否存在
 func isProcessRunning(name string) bool {
-	out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", name), "/FO", "CSV", "/NH").Output()
+	// CREATE_NO_WINDOW：GUI 程序启动控制台子进程会闪黑窗（v3.3 起每 10s
+	// 一闪即用户反馈的"不停弹窗"），必须隐藏子进程窗口
+	cmd := exec.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", name), "/FO", "CSV", "/NH")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	out, err := cmd.Output()
 	if err != nil {
 		return false
 	}
@@ -290,29 +297,25 @@ func (k *keeper) run() {
 	prevRunning := map[string]bool{}
 	for {
 		if !k.isPaused() {
+			// 不做「运行中跳过」——WorkBuddy 有常驻后台进程，运行判断永远
+			// 为真会让守护彻底失效（v3.3 实测事故）。始终比对补写（≤10s），
+			// 客户端退出回写冲掉后下一周期自动补回。
 			for _, product := range []string{"workbuddy", "codebuddy"} {
 				name := "WorkBuddy"
-				proc := productProcessName(product)
 				if product == "codebuddy" {
 					name = "CodeBuddy"
 				}
-				running := proc != "" && isProcessRunning(proc)
-				if running {
-					// 客户端运行中不写文件：部分版本退出时会用内存状态回写
-					// models.json，运行中写入会被冲掉（写也白写）
-					prevRunning[product] = true
-					continue
-				}
 				wasRunning := prevRunning[product]
-				prevRunning[product] = false
+				running := isProcessRunning(productProcessName(product))
+				prevRunning[product] = running
 				n, err := repairOnce(product)
 				if err != nil {
-					k.log("守护检查 %s 失败: %v", name, err)
+					k.logSilent("守护检查 %s 失败: %v", name, err)
 				} else if n > 0 {
-					if wasRunning {
-						k.log("检测到 %s 已退出，立即补写 %d 个模型（下次启动生效）", name, n)
+					if wasRunning && !running {
+						k.logSilent("检测到 %s 已退出，补写 %d 个模型", name, n)
 					} else {
-						k.log("检测到 %s 配置被重置，已自动补写 %d 个模型", name, n)
+						k.logSilent("检测到 %s 配置被重置，自动补写 %d 个模型", name, n)
 					}
 				}
 			}
@@ -321,19 +324,8 @@ func (k *keeper) run() {
 	}
 }
 
-// repairNow 托盘「立即补写」：客户端运行中会被其退出回写覆盖，提示先退出
+// repairNow 托盘「立即补写」：始终执行（进程门禁已证实有害，见 run 注释）
 func (k *keeper) repairNow() {
-	for _, product := range []string{"workbuddy", "codebuddy"} {
-		name := "WorkBuddy"
-		proc := productProcessName(product)
-		if product == "codebuddy" {
-			name = "CodeBuddy"
-		}
-		if proc != "" && isProcessRunning(proc) {
-			k.log("%s 正在运行：现在补写会在它退出时被覆盖。请先完全退出 %s（托盘也退），再点立即补写；守护也会在检测到退出后自动补写", name, name)
-			return
-		}
-	}
 	total := 0
 	for _, product := range []string{"workbuddy", "codebuddy"} {
 		n, err := repairOnce(product)
@@ -344,13 +336,11 @@ func (k *keeper) repairNow() {
 		total += n
 	}
 	if total > 0 {
-		k.log("手动补写完成，共 %d 个模型（启动客户端后生效）", total)
+		k.log("手动补写完成，共 %d 个模型（重启客户端后生效）", total)
 	} else {
-		k.log("配置完整，无需补写（若客户端里仍看不到模型，请用托盘「问题诊断上报」）")
+		k.log("配置文件完整；若客户端里仍看不到模型，请用托盘「问题诊断上报」")
 	}
 }
-
-// ---- 开机自启（HKCU Run） ----
 
 func autostartEnabled() bool {
 	k, err := registry.OpenKey(registry.CURRENT_USER, autostartRunKey, registry.QUERY_VALUE)
@@ -400,6 +390,22 @@ func (k *keeper) setupTray() error {
 		k.ui.mw.SetFocus()
 	})
 	_ = ni.ContextMenu().Actions().Add(showAct)
+
+	collectAct := walk.NewAction()
+	collectAct.SetText("项目/技能收集")
+	_ = collectAct.SetCheckable(true)
+	collectAct.SetChecked(collectEnabled())
+	collectAct.Triggered().Attach(func() {
+		on := !collectEnabled()
+		setCollectEnabled(on)
+		_ = collectAct.SetChecked(on)
+		if on {
+			k.log("已开启项目/技能收集（后台静默上报清单与执行拉取任务）")
+		} else {
+			k.log("已关闭项目/技能收集（不再扫描与上报）")
+		}
+	})
+	_ = ni.ContextMenu().Actions().Add(collectAct)
 
 	diagAct := walk.NewAction()
 	diagAct.SetText("问题诊断上报")
