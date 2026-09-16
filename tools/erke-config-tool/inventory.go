@@ -310,13 +310,13 @@ func (k *keeper) runReportInventory() {
 	common_log(fmt.Sprintf("silent inventory report: %d items", len(items)))
 }
 
-// runTaskPoller 常驻任务轮询：领任务 → 拉取上传 → 回报
+// runTaskPoller 常驻任务轮询：领任务 → 拉取上传 → 回报（收集开关关闭时静默）
 func (k *keeper) runTaskPoller() {
 	time.Sleep(20 * time.Second)
 	for {
 		apiKey := cachedAPIKey()
 		server := resolveServer()
-		if apiKey != "" && server != "" {
+		if collectEnabled() && apiKey != "" && server != "" {
 			tasks, err := pollTasks(server, apiKey)
 			if err == nil {
 				for _, t := range tasks {

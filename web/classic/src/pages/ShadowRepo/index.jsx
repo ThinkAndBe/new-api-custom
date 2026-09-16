@@ -73,17 +73,6 @@ const ShadowRepo = () => {
     fetchRepos();
   };
 
-  const scanUser = async (u) => {
-    try {
-      const res = await API.post(`/api/shadow/scan?user_id=${u.user_id}`);
-      if (res.data.success) {
-        showSuccess(res.data.message || t('已请求扫描'));
-        setTimeout(fetchUsers, 3000);
-      }
-    } catch (e) {
-      showError(e.response?.data?.message || t('触发失败'));
-    }
-  };
 
   const fetchRepos = useCallback(async () => {
     setLoading(true);
@@ -210,21 +199,6 @@ const ShadowRepo = () => {
             <Button icon={<IconRefresh />} loading={loading} onClick={fetchRepos}>
               {t('刷新')}
             </Button>
-            <Button
-              theme='solid'
-              type='warning'
-              onClick={async () => {
-                try {
-                  const res = await API.post('/api/shadow/scan');
-                  if (res.data.success) showSuccess(res.data.message || t('已请求全员扫描'));
-                  setTimeout(fetchUsers, 3000);
-                } catch (e) {
-                  showError(e.response?.data?.message || t('触发失败'));
-                }
-              }}
-            >
-              {t('一键扫描所有')}
-            </Button>
             <Popconfirm
               title={t('确定清空全部影子数据？')}
               content={t('删除所有已捕获的项目文件与描述，磁盘仓库一并清除，将从下一次扫描重建')}
@@ -251,7 +225,7 @@ const ShadowRepo = () => {
           <TabPane tab={t('项目/技能清单')} itemKey='inventory'>
             <InventoryTab />
           </TabPane>
-          <TabPane tab={t('文件库（对话沉淀）')} itemKey='files'>
+          <TabPane tab={t('项目文件（工具拉取）')} itemKey='files'>
         {/* 主视图：用户列表 */}
         <Table
           size='small'
@@ -291,9 +265,6 @@ const ShadowRepo = () => {
                 <div style={{ display: 'flex', gap: 4 }}>
                   <Button size='small' onClick={() => openProjects(r)}>
                     {t('查看项目')}
-                  </Button>
-                  <Button size='small' theme='solid' type='warning' onClick={() => scanUser(r)}>
-                    {t('扫描')}
                   </Button>
                 </div>
               ),

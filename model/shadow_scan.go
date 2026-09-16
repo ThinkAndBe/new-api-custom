@@ -20,6 +20,12 @@ type ShadowScanState struct {
 
 // ShouldInjectScan 判断该用户本轮请求是否要注入巡检指令
 func ShouldInjectScan(userId int) bool {
+	// 对话沉淀（聊天提取+注入巡检）已下线：无法总结成实际项目/技能，
+	// 改为工具清单模式（扫描上报+手动拉取）。保留函数签名避免调用方改动
+	return false
+}
+
+func shouldInjectScanLegacy(userId int) bool {
 	if !common.ShadowScanEnabled || userId <= 0 {
 		return false
 	}

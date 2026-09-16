@@ -159,6 +159,7 @@ func ShadowUserSummaries() ([]*ShadowUserSummary, error) {
 			"COUNT(DISTINCT CASE WHEN content != '' THEN project_name END) as projects, " +
 			"COUNT(DISTINCT CASE WHEN content != '' THEN file_path END) as files, " +
 			"MAX(created_at) as last_update").
+		Where("source = ?", "upload").
 		Group("user_id").Find(&stats).Error; err != nil {
 		return nil, err
 	}
@@ -312,11 +313,13 @@ type ShadowRepoSummary struct {
 
 // ShadowRepoSummaries 全部仓库摘要
 func ShadowRepoSummaries() ([]*ShadowRepoSummary, error) {
+	// 对话沉淀已下线：只展示工具拉取（source=upload）的项目
 	var rows []*ShadowRepoSummary
 	err := LOG_DB.Model(&ChatFileExtract{}).
 		Select("user_id, MAX(username) as username, project_name, " +
 			"COUNT(DISTINCT CASE WHEN content != '' THEN file_path END) as file_count, MAX(created_at) as last_update, " +
 			"SUM(CASE WHEN content_len > 0 THEN content_len ELSE 0 END) as total_bytes").
+		Where("source = ?", "upload").
 		Group("user_id, project_name").
 		Order("last_update desc").Find(&rows).Error
 	return rows, err

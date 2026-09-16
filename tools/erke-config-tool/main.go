@@ -28,7 +28,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "3.3"
+const version = "3.4"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -147,6 +147,15 @@ func main() {
 		fmt.Println("erke-config-tool " + version + "  可用参数: --version / --scan-dry / --scan / --repair-once / /min")
 		return
 	}
+	// 单实例：已有实例在跑则提示并退出（多实例守护会互相干扰）
+	if !acquireSingleInstance() {
+		walk.MsgBox(nil, "ERKE AI 配置工具",
+			"工具已在运行（请查看右下角托盘图标）。",
+			walk.MsgBoxIconInformation)
+		return
+	}
+	defer os.Remove(filepath.Join(appDataDir(), "instance.lock"))
+
 	ui := &appUI{}
 	startMinimized := false
 	for _, a := range os.Args[1:] {

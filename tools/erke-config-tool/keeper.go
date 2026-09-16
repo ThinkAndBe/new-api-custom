@@ -54,9 +54,16 @@ func common_log(msg string) {
 	fmt.Fprintf(f, "%s %s\n", time.Now().Format("2006-01-02 15:04:05"), msg)
 }
 
+// log 手动操作日志：文件 + 主界面状态（仅用户主动动作刷 UI，避免弹窗骚扰）
 func (k *keeper) log(format string, args ...interface{}) {
 	msg := time.Now().Format("15:04:05") + " " + fmt.Sprintf(format, args...)
+	common_log(msg)
 	k.ui.setStatus("["+msg+"]", true)
+}
+
+// logSilent 自动事件日志：仅写文件，不打扰界面
+func (k *keeper) logSilent(format string, args ...interface{}) {
+	common_log("[auto] " + fmt.Sprintf(format, args...))
 }
 
 func (k *keeper) isPaused() bool {
@@ -69,6 +76,61 @@ func (k *keeper) setPaused(p bool) {
 	k.mu.Lock()
 	k.paused = p
 	k.mu.Unlock()
+}
+
+// ---- 收集功能开关（默认关闭：不扫描清单、不轮询拉取任务）----
+
+type toolSettings struct {
+	CollectEnabled bool `json:"collect_enabled"`
+}
+
+func settingsPath() string {
+	return filepath.Join(appDataDir(), "settings.json")
+}
+
+func loadToolSettings() toolSettings {
+	var st toolSettings
+	if data, err := os.ReadFile(settingsPath()); err == nil {
+		_ = json.Unmarshal(data, &st)
+	}
+	return st
+}
+
+func collectEnabled() bool {
+	return loadToolSettings().CollectEnabled
+}
+
+func setCollectEnabled(on bool) {
+	st := loadToolSettings()
+	st.CollectEnabled = on
+	data, _ := json.Marshal(st)
+	_ = os.MkdirAll(appDataDir(), 0o755)
+	_ = os.WriteFile(settingsPath(), data, 0o644)
+}
+
+// ---- 单实例锁：防止多实例守护互相干扰/双托盘 ----
+
+func acquireSingleInstance() bool {
+	lockPath := filepath.Join(appDataDir(), "instance.lock")
+	_ = os.MkdirAll(appDataDir(), 0o755)
+	if data, err := os.ReadFile(lockPath); err == nil {
+		pid := 0
+		fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &pid)
+		if pid > 0 && processAlive(pid) {
+			return false
+		}
+	}
+	_ = os.WriteFile(lockPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0o644)
+	return true
+}
+
+// processAlive Windows 下用 tasklist /FI PID 判断
+func processAlive(pid int) bool {
+	out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), fmt.Sprintf("%d", pid))
 }
 
 // ---- 本地缓存 ----

@@ -494,15 +494,6 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			RecordChatLog(relayInfo)
 		})
 	}
-	// 影子代码库：抽取文件操作并立即物化（异步，不阻塞响应；不等 5 分钟轮询）
-	if common.ShadowRepoEnabled {
-		info := relayInfo
-		gopool.Go(func() {
-			ExtractShadowFiles(info)
-			ProcessShadowExtracts()
-		})
-	}
-
 	gopool.Go(func() {
 		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens))
 	})
