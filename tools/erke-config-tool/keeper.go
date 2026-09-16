@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,6 +111,23 @@ func loadCache(product string) *usageConfig {
 }
 
 // ---- 检测与补写 ----
+
+// productProcessName 目标客户端的进程名（用于进程感知的补写时机）
+func productProcessName(product string) string {
+	if product == "codebuddy" {
+		return "CodeBuddy.exe"
+	}
+	return "WorkBuddy.exe"
+}
+
+// isProcessRunning 通过 tasklist 判断进程是否存在
+func isProcessRunning(name string) bool {
+	out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", name), "/FO", "CSV", "/NH").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(out)), strings.ToLower(name))
+}
 
 // repairOnce 检查单个产品的 models.json，缺我们缓存的模型就补写。
 // 返回补写的模型数。
@@ -206,18 +225,33 @@ func (k *keeper) run() {
 			time.Sleep(silentInventoryInterval)
 		}
 	}()
+	prevRunning := map[string]bool{}
 	for {
 		if !k.isPaused() {
 			for _, product := range []string{"workbuddy", "codebuddy"} {
+				name := "WorkBuddy"
+				proc := productProcessName(product)
+				if product == "codebuddy" {
+					name = "CodeBuddy"
+				}
+				running := proc != "" && isProcessRunning(proc)
+				if running {
+					// 客户端运行中不写文件：部分版本退出时会用内存状态回写
+					// models.json，运行中写入会被冲掉（写也白写）
+					prevRunning[product] = true
+					continue
+				}
+				wasRunning := prevRunning[product]
+				prevRunning[product] = false
 				n, err := repairOnce(product)
 				if err != nil {
-					k.log("守护检查 %s 失败: %v", product, err)
+					k.log("守护检查 %s 失败: %v", name, err)
 				} else if n > 0 {
-					name := "WorkBuddy"
-					if product == "codebuddy" {
-						name = "CodeBuddy"
+					if wasRunning {
+						k.log("检测到 %s 已退出，立即补写 %d 个模型（下次启动生效）", name, n)
+					} else {
+						k.log("检测到 %s 配置被重置，已自动补写 %d 个模型", name, n)
 					}
-					k.log("检测到 %s 配置被重置，已自动补写 %d 个模型", name, n)
 				}
 			}
 		}
@@ -225,8 +259,19 @@ func (k *keeper) run() {
 	}
 }
 
-// repairNow 托盘「立即补写」
+// repairNow 托盘「立即补写」：客户端运行中会被其退出回写覆盖，提示先退出
 func (k *keeper) repairNow() {
+	for _, product := range []string{"workbuddy", "codebuddy"} {
+		name := "WorkBuddy"
+		proc := productProcessName(product)
+		if product == "codebuddy" {
+			name = "CodeBuddy"
+		}
+		if proc != "" && isProcessRunning(proc) {
+			k.log("%s 正在运行：现在补写会在它退出时被覆盖。请先完全退出 %s（托盘也退），再点立即补写；守护也会在检测到退出后自动补写", name, name)
+			return
+		}
+	}
 	total := 0
 	for _, product := range []string{"workbuddy", "codebuddy"} {
 		n, err := repairOnce(product)
@@ -237,9 +282,9 @@ func (k *keeper) repairNow() {
 		total += n
 	}
 	if total > 0 {
-		k.log("手动补写完成，共 %d 个模型", total)
+		k.log("手动补写完成，共 %d 个模型（启动客户端后生效）", total)
 	} else {
-		k.log("配置完整，无需补写")
+		k.log("配置完整，无需补写（若客户端里仍看不到模型，请用托盘「问题诊断上报」）")
 	}
 }
 
@@ -279,7 +324,11 @@ func (k *keeper) setupTray() error {
 		return err
 	}
 	k.ni = ni
-	_ = ni.SetIcon(walk.IconApplication())
+	if icon, err := walk.NewIconFromResourceId(1); err == nil {
+		_ = ni.SetIcon(icon)
+	} else {
+		_ = ni.SetIcon(walk.IconApplication())
+	}
 	_ = ni.SetToolTip("ERKE AI 工具 · 配置守护运行中")
 
 	showAct := walk.NewAction()
@@ -289,6 +338,11 @@ func (k *keeper) setupTray() error {
 		k.ui.mw.SetFocus()
 	})
 	_ = ni.ContextMenu().Actions().Add(showAct)
+
+	diagAct := walk.NewAction()
+	diagAct.SetText("问题诊断上报")
+	diagAct.Triggered().Attach(func() { go k.runDiagReport() })
+	_ = ni.ContextMenu().Actions().Add(diagAct)
 
 	repairAct := walk.NewAction()
 	repairAct.SetText("立即补写配置")

@@ -12,6 +12,8 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,7 +28,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "3.2"
+const version = "3.3"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -114,6 +116,28 @@ func main() {
 				fmt.Printf("拉取任务[%s]完成: %d 文件", t.ItemName, n)
 				fmt.Println()
 			}
+		}
+		return
+	}
+
+	// --diag 收集诊断信息并上报影子库（管理员排查 WorkBuddy 配置问题）
+	if len(os.Args) > 1 && os.Args[1] == "--diag" {
+		r := buildDiag()
+		dj, _ := json.MarshalIndent(r, "", "  ")
+		fmt.Println(string(dj))
+		if key := cachedAPIKey(); key != "" {
+			var buf bytes.Buffer
+			zw := zip.NewWriter(&buf)
+			w, _ := zw.Create("diag.json")
+			_, _ = w.Write(dj)
+			zw.Close()
+			if err := uploadProject(resolveServer(), key, "WB诊断-"+r.Hostname, buf.Bytes()); err != nil {
+				fmt.Println("上报失败:", err)
+			} else {
+				fmt.Println("已上报影子库项目: WB诊断-" + r.Hostname)
+			}
+		} else {
+			fmt.Println("无缓存密钥，仅本地打印")
 		}
 		return
 	}
