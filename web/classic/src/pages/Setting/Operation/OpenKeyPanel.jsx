@@ -205,7 +205,7 @@ const OpenKeyPanel = () => {
         <br />
         <Text code>{`Authorization: Bearer sk-open-xxxx`}</Text>
         <br />
-        {t('stats=1 返回按用户汇总（次数/token）；默认返回明细分页（page/page_size，单页≤100）；username/model_name 可过滤；时间跨度受密钥回看天数限制')}
+        {t('三种用法：stats=1 按用户汇总（次数/token）；format=csv 直接下载与对话日志页「导出CSV」同列的报表；默认返回明细分页（page/page_size，单页≤100）。过滤参数：username / model_name / token_name / group / start / end；时间跨度受密钥回看天数限制')}
       </Paragraph>
 
       <Modal

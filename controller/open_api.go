@@ -8,6 +8,7 @@ package controller
 // 数据权限由密钥 Scope 决定（分组/用户/是否含内容/回看天数上限）。
 
 import (
+	"encoding/csv"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -213,6 +214,8 @@ func OpenQueryChatLogs(c *gin.Context) {
 		StartTime: start.Unix(),
 		EndTime:   end.Unix(),
 		ModelName: strings.TrimSpace(c.Query("model_name")),
+		TokenName: strings.TrimSpace(c.Query("token_name")),
+		Group:     strings.TrimSpace(c.Query("group")),
 	}
 
 	// 权限：scope 限定用户集合
@@ -251,6 +254,42 @@ func OpenQueryChatLogs(c *gin.Context) {
 	}
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 50
+	}
+
+	// format=csv：与对话日志页「导出CSV」同列同序（顾问可直接拉报表）
+	if c.Query("format") == "csv" {
+		c.Writer.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		c.Writer.Header().Set("Content-Disposition",
+			fmt.Sprintf("attachment; filename=chat_logs_%s.csv", time.Now().Format("20060102_150405")))
+		c.Writer.Write([]byte{0xEF, 0xBB, 0xBF}) // UTF-8 BOM（Excel 兼容）
+		csvw := csv.NewWriter(c.Writer)
+		header := []string{"日志ID", "时间", "用户ID", "用户名", "令牌", "渠道ID", "模型", "分组", "请求ID", "流式"}
+		if scope.IncludeContent {
+			header = append(header, "请求内容")
+		}
+		if err := csvw.Write(header); err != nil {
+			return
+		}
+		_ = model.StreamAllChatLogs(filter, func(l *model.ChatLog) error {
+			row := []string{
+				strconv.Itoa(l.Id),
+				time.Unix(l.CreatedAt, 0).Format("2006-01-02 15:04:05"),
+				strconv.Itoa(l.UserId),
+				l.Username,
+				l.TokenName,
+				strconv.Itoa(l.ChannelId),
+				l.ModelName,
+				l.Group,
+				l.RequestId,
+				strconv.FormatBool(l.IsStream),
+			}
+			if scope.IncludeContent {
+				row = append(row, l.RequestContent)
+			}
+			return csvw.Write(row)
+		})
+		csvw.Flush()
+		return
 	}
 
 	// stats=1：按用户汇总（顾问做使用总结的主形态）
