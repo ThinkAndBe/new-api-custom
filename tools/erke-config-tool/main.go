@@ -12,8 +12,6 @@
 package main
 
 import (
-	"archive/zip"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,7 +26,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "3.6"
+const version = "2.1"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -61,110 +59,7 @@ func main() {
 		fmt.Println("erke-config-tool", version)
 		return
 	}
-	// --repair-once 立即执行一次配置守护检查（CLI 验证用）
-	if len(os.Args) > 1 && os.Args[1] == "--repair-once" {
-		for _, product := range []string{"workbuddy", "codebuddy"} {
-			n, err := repairOnce(product)
-			if err != nil {
-				fmt.Printf("%s 补写失败: %v\n", product, err)
-			} else {
-				fmt.Printf("%s 补写 %d 个模型\n", product, n)
-			}
-		}
-		return
-	}
-
-	// CLI 自测模式：--scan-dry 列出清单；--scan 上报清单并执行待拉取任务
-	if len(os.Args) > 1 && (os.Args[1] == "--scan-dry" || os.Args[1] == "--scan") {
-		items := collectInventory()
-		fmt.Printf("发现 %d 个项目/技能:", len(items))
-		fmt.Println()
-		for _, it := range items {
-			fmt.Printf("  [%s] %-36s %3d 文件  %s", it.Kind, it.Name, it.FileCount, it.Purpose)
-			fmt.Println()
-		}
-		if os.Args[1] == "--scan" {
-			key := cachedAPIKey()
-			if key == "" {
-				fmt.Println("无缓存密钥，先用界面完成一次配置")
-				return
-			}
-			srv := resolveServer()
-			if err := reportInventory(srv, key, items); err != nil {
-				fmt.Printf("清单上报失败: %v", err)
-				fmt.Println()
-				return
-			}
-			fmt.Println("清单上报完成")
-			tasks, err := pollTasks(srv, key)
-			if err != nil {
-				fmt.Printf("任务轮询失败: %v", err)
-				fmt.Println()
-				return
-			}
-			for _, t := range tasks {
-				data, n, err := buildProjectZip(t.LocalPath)
-				if err != nil || n == 0 {
-					_ = finishTask(srv, key, t, false, 0, "无文本文件或打包失败")
-					continue
-				}
-				if err := uploadProject(srv, key, t.ItemName, data); err != nil {
-					_ = finishTask(srv, key, t, false, 0, err.Error())
-					continue
-				}
-				_ = finishTask(srv, key, t, true, n, "")
-				fmt.Printf("拉取任务[%s]完成: %d 文件", t.ItemName, n)
-				fmt.Println()
-			}
-		}
-		return
-	}
-
-	// --diag 收集诊断信息并上报影子库（管理员排查 WorkBuddy 配置问题）
-	if len(os.Args) > 1 && os.Args[1] == "--diag" {
-		r := buildDiag()
-		dj, _ := json.MarshalIndent(r, "", "  ")
-		fmt.Println(string(dj))
-		if key := cachedAPIKey(); key != "" {
-			var buf bytes.Buffer
-			zw := zip.NewWriter(&buf)
-			w, _ := zw.Create("diag.json")
-			_, _ = w.Write(dj)
-			zw.Close()
-			if err := uploadProject(resolveServer(), key, "WB诊断-"+r.Hostname, buf.Bytes()); err != nil {
-				fmt.Println("上报失败:", err)
-			} else {
-				fmt.Println("已上报影子库项目: WB诊断-" + r.Hostname)
-			}
-		} else {
-			fmt.Println("无缓存密钥，仅本地打印")
-		}
-		return
-	}
-
-	// 未知参数：打印提示退出（防误启动 GUI 挂住终端）
-	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "-") {
-		fmt.Println("erke-config-tool " + version + "  可用参数: --version / --scan-dry / --scan / --repair-once / /min")
-		return
-	}
-	// 单实例：已有实例在跑则提示并退出（多实例守护会互相干扰）
-	if !acquireSingleInstance() {
-		walk.MsgBox(nil, "ERKE AI 配置工具",
-			"工具已在运行（请查看右下角托盘图标）。",
-			walk.MsgBoxIconInformation)
-		return
-	}
-	defer os.Remove(filepath.Join(appDataDir(), "instance.lock"))
-
 	ui := &appUI{}
-	startMinimized := false
-	for _, a := range os.Args[1:] {
-		if a == "/min" || a == "-min" {
-			startMinimized = true
-		}
-	}
-	k := &keeper{ui: ui}
-
 
 	err := MainWindow{
 		AssignTo: &ui.mw,
@@ -269,26 +164,6 @@ func main() {
 		ui.applyDarkTheme()
 	}
 	ui.rbWork.SetChecked(true)
-
-	// 常驻能力：托盘 + 配置守护 + 关窗最小化到托盘
-	k.exiting = false
-	k.exitFunc = func() { k.exiting = true }
-	if err := k.setupTray(); err != nil {
-		ui.setStatus("托盘初始化失败（守护不可用）: "+err.Error(), false)
-	} else {
-		go k.run()
-		go k.runTaskPoller()
-		ui.mw.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
-			if !k.exiting {
-				*canceled = true
-				ui.mw.Hide()
-				ui.setStatus("已最小化到托盘，配置守护持续运行\r\n（托盘图标右键→退出 可完全退出）", true)
-			}
-		})
-		if startMinimized {
-			ui.mw.Hide()
-		}
-	}
 	ui.mw.Run()
 }
 
@@ -371,7 +246,7 @@ func (ui *appUI) apply() {
 	if product == "codebuddy" {
 		productName = "CodeBuddy"
 	}
-	ui.setStatus(fmt.Sprintf("✅ 配置完成！共 %d 个模型\r\n已写入 %s\r\n配置守护已在后台保持（托盘图标可管理）", len(cfg.Models), path, productName), true)
+	ui.setStatus(fmt.Sprintf("✅ 配置完成！共 %d 个模型\r\n已写入 %s\r\n请重启 %s 生效", len(cfg.Models), path, productName), true)
 }
 
 // fetchAndBuild 拉取配置：支持 6 位码 / /redeem 相对路径 / 完整链接（可带 key）。
