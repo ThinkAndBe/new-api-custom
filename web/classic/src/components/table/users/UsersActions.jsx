@@ -26,6 +26,7 @@ const UsersActions = ({
   setShowImportUser,
   exportUsers,
   syncEmployeeIds,
+  openATrustImport,
   t,
 }) => {
   return (
@@ -53,6 +54,13 @@ const UsersActions = ({
         size='small'
       >
         {t('导出用户')}
+      </Button>
+      <Button
+        className='w-full md:w-auto'
+        size='small'
+        onClick={openATrustImport}
+      >
+        {t('零信任导入')}
       </Button>
       <Popconfirm
         title={t('从零信任指定角色的成员按姓名匹配回填工号，同名歧义会跳过并列出')}

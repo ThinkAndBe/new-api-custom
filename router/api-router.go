@@ -151,6 +151,9 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.POST("/manage", controller.ManageUser)
 				adminRoute.POST("/manage_batch", controller.ManageUserBatch)
 				adminRoute.POST("/import", controller.ImportUsers)
+				// 零信任目录预建用户（SSO 登录前配置分组/额度）
+				adminRoute.GET("/atrust_directory", controller.GetATrustDirectory)
+				adminRoute.POST("/import_atrust", controller.ImportATrustUsers)
 				adminRoute.POST("/sync_employee_ids", controller.SyncEmployeeIds)
 				adminRoute.GET("/export", controller.ExportUsers)
 				adminRoute.PUT("/", controller.UpdateUser)

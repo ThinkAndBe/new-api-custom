@@ -43,6 +43,7 @@ export const useUsersData = () => {
   const [showAddUser, setShowAddUser] = useState(false);
   const [showEditUser, setShowEditUser] = useState(false);
   const [showImportUser, setShowImportUser] = useState(false);
+  const [showATrustImport, setShowATrustImport] = useState(false);
   const [editingUser, setEditingUser] = useState({
     id: undefined,
   });
@@ -381,6 +382,7 @@ export const useUsersData = () => {
 
   const closeImportUser = () => {
     setShowImportUser(false);
+    setShowATrustImport(false);
   };
 
   // Initialize data on component mount
@@ -413,6 +415,8 @@ export const useUsersData = () => {
     setShowAddUser,
     setShowEditUser,
     setShowImportUser,
+    showATrustImport,
+    setShowATrustImport,
     setEditingUser,
 
     // Form state
