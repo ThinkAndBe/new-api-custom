@@ -43,7 +43,6 @@ export const useUsersData = () => {
   const [showAddUser, setShowAddUser] = useState(false);
   const [showEditUser, setShowEditUser] = useState(false);
   const [showImportUser, setShowImportUser] = useState(false);
-  const [showATrustImport, setShowATrustImport] = useState(false);
   const [editingUser, setEditingUser] = useState({
     id: undefined,
   });
@@ -184,7 +183,8 @@ export const useUsersData = () => {
     await exportFromAPI(`/api/user/export${qs ? '?' + qs : ''}`, 'users');
   };
 
-  // 从零信任在线用户批量同步工号
+  // 零信任同步：角色成员自动建号 + 工号回填；若有早期误建账号（不在
+  // 角色内的已绑工号账号）一并提示清理
   const syncEmployeeIds = async () => {
     setLoading(true);
     try {
@@ -194,29 +194,60 @@ export const useUsersData = () => {
         showError(message);
         return;
       }
+      // 查误建账号
+      let orphans = [];
+      try {
+        const ores = await API.get('/api/user/atrust_orphans');
+        if (ores.data.success) orphans = ores.data.data.users || [];
+      } catch (e) {
+        /* 忽略 */
+      }
       const list = (arr, label) =>
         arr && arr.length
           ? `\n【${label}】(${arr.length})\n` + arr.join('、') + '\n'
           : '';
       Modal.info({
-        title: t('零信任工号同步完成'),
-        width: 520,
+        title: t('零信任同步完成'),
+        width: 560,
         content: (
           <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
             {t('角色成员')}：{data.role_members}
             {'  '}
-            {t('同步账号')}：{data.target_users}
+            {t('新建账号')}：{data.created}
             {'  '}
-            {t('新绑定')}：{data.synced}
+            {t('回填工号')}：{data.backfilled}
             {'  '}
-            {t('更新')}：{data.overwritten}
-            {'  '}
-            {t('已一致')}：{data.skipped_same}
-            {list(data.ambiguous, t('角色成员同名歧义（需人工处理）'))}
-            {list(data.unmatched, t('角色成员中未找到同名员工'))}
+            {t('已存在跳过')}：{data.skipped}
+            {data.errors && data.errors.length
+              ? list(data.errors, t('失败'))
+              : ''}
+            {orphans.length > 0 && (
+              <>
+                {'\n\n⚠ '}
+                {t('发现')} {orphans.length} {t('个不在角色内的已建账号（早期误同步产生），可清理：')}
+                {'\n'}
+                {orphans
+                  .slice(0, 30)
+                  .map((o) => `${o.display_name}(${o.employee_id})`)
+                  .join('、')}
+                {orphans.length > 30 ? ' …' : ''}
+              </>
+            )}
           </div>
         ),
-        onOk: () => refresh(),
+        okText: orphans.length > 0 ? t('前往清理') : t('知道了'),
+        onOk: async () => {
+          if (orphans.length > 0) {
+            const ids = orphans.map((o) => o.id);
+            const dres = await API.post('/api/user/atrust_orphans/cleanup', { ids });
+            if (dres.data.success) {
+              showSuccess(t('已清理') + ' ' + dres.data.data.deleted + ' ' + t('个账号'));
+            } else {
+              showError(dres.data.message);
+            }
+          }
+          refresh();
+        },
       });
     } catch (e) {
       showError(e?.response?.data?.message || t('操作失败，请重试'));
@@ -382,7 +413,6 @@ export const useUsersData = () => {
 
   const closeImportUser = () => {
     setShowImportUser(false);
-    setShowATrustImport(false);
   };
 
   // Initialize data on component mount
@@ -415,8 +445,6 @@ export const useUsersData = () => {
     setShowAddUser,
     setShowEditUser,
     setShowImportUser,
-    showATrustImport,
-    setShowATrustImport,
     setEditingUser,
 
     // Form state

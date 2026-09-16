@@ -26,7 +26,6 @@ import UsersDescription from './UsersDescription';
 import AddUserModal from './modals/AddUserModal';
 import EditUserModal from './modals/EditUserModal';
 import ImportUsersModal from './modals/ImportUsersModal';
-import ATrustImportModal from './modals/ATrustImportModal';
 import { useUsersData } from '../../../hooks/users/useUsersData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -40,11 +39,9 @@ const UsersPage = () => {
     showAddUser,
     showEditUser,
     showImportUser,
-    showATrustImport,
     editingUser,
     setShowAddUser,
     setShowImportUser,
-    setShowATrustImport,
     closeAddUser,
     closeEditUser,
     closeImportUser,
@@ -93,12 +90,6 @@ const UsersPage = () => {
         groupOptions={groupOptions}
       />
 
-      <ATrustImportModal
-        visible={showATrustImport}
-        handleClose={() => setShowATrustImport(false)}
-        refresh={refresh}
-        groupOptions={groupOptions}
-      />
 
       <CardPro
         type='type1'
@@ -116,7 +107,6 @@ const UsersPage = () => {
               setShowImportUser={setShowImportUser}
               exportUsers={exportUsers}
               syncEmployeeIds={syncEmployeeIds}
-              openATrustImport={() => setShowATrustImport(true)}
               t={t}
             />
 

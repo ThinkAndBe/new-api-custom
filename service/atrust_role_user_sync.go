@@ -95,3 +95,56 @@ func SyncATrustRoleUsers() (*ATrustRoleUserSyncResult, error) {
 	}
 	return result, nil
 }
+
+// ListATrustOrphanUsers 列出孤儿账号：已绑工号但工号不在当前角色成员中。
+// 早期用 queryAll 的 roleIdList 判成员导致把非成员也建了号（532 vs 90），
+// 本接口用于找出并清理这些账号。
+type ATrustOrphanUser struct {
+	Id          int    `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	EmployeeId  string `json:"employee_id"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+func ListATrustOrphanUsers() ([]ATrustOrphanUser, error) {
+	members, err := ATrustQueryRoleMembers(system_setting.ATrustSyncRole)
+	if err != nil {
+		return nil, fmt.Errorf("拉取角色成员失败: %v", err)
+	}
+	valid := make(map[string]bool, len(members))
+	for _, m := range members {
+		valid[strings.TrimSpace(m.Name)] = true
+	}
+
+	var users []ATrustOrphanUser
+	err = model.DB.Model(&model.User{}).
+		Select("id, username, display_name, employee_id, created_at").
+		Where("employee_id != ''").
+		Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ATrustOrphanUser, 0)
+	for _, u := range users {
+		if !valid[strings.TrimSpace(u.EmployeeId)] {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
+// DeleteUsersByIds 软删除指定用户（与用户管理删除行为一致）
+func DeleteUsersByIds(ids []int) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	res := model.DB.Where("id IN ?", ids).Delete(&model.User{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	for _, id := range ids {
+		_ = model.InvalidateUserCache(id)
+	}
+	return int(res.RowsAffected), nil
+}

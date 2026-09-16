@@ -155,6 +155,9 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/atrust_directory", controller.GetATrustDirectory)
 				adminRoute.POST("/import_atrust", controller.ImportATrustUsers)
 				adminRoute.POST("/sync_employee_ids", controller.SyncEmployeeIds)
+				// 零信任误建账号清理（早期 roleIdList 语义误判产生的非成员）
+				adminRoute.GET("/atrust_orphans", controller.ListATrustOrphans)
+				adminRoute.POST("/atrust_orphans/cleanup", controller.CleanupATrustOrphans)
 				adminRoute.GET("/export", controller.ExportUsers)
 				adminRoute.PUT("/", controller.UpdateUser)
 				adminRoute.POST("/:id/reactivate", controller.ReactivateUser)
