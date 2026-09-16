@@ -18,7 +18,6 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,7 +26,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "2.2"
+const version = "2.1"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -215,23 +214,6 @@ func (ui *appUI) setStatus(text string, ok bool) {
 	})
 }
 
-// productProcessName 目标客户端的进程名（用于写入前的运行检测）
-func productProcessName(product string) string {
-	if product == "codebuddy" {
-		return "CodeBuddy.exe"
-	}
-	return "WorkBuddy.exe"
-}
-
-// isProcessRunning 通过 tasklist 判断进程是否存在（Go 标准库无进程枚举）
-func isProcessRunning(name string) bool {
-	out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", name), "/FO", "CSV", "/NH").Output()
-	if err != nil {
-		return false // 查询失败不拦截，按可写处理
-	}
-	return strings.Contains(strings.ToLower(string(out)), strings.ToLower(name))
-}
-
 func (ui *appUI) apply() {
 	ui.mw.Synchronize(func() {
 		ui.applyBtn.SetEnabled(false)
@@ -249,13 +231,6 @@ func (ui *appUI) apply() {
 		return
 	}
 	target := code
-
-	// 进程守卫：目标客户端运行中时它会在退出时用内存状态回写 models.json，
-	// 把我们刚写入的条目冲掉（表现为「重启后配置丢失」）。必须先完全退出再写。
-	if procName := productProcessName(product); procName != "" && isProcessRunning(procName) {
-		ui.setStatus(fmt.Sprintf("检测到 %s 正在运行，请先完全退出（右下角托盘图标右键→退出），再点一键配置", procName), false)
-		return
-	}
 
 	cfg, err := fetchAndBuild(target, product)
 	if err != nil {
