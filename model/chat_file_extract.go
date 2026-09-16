@@ -180,24 +180,10 @@ func ShadowUserSummaries() ([]*ShadowUserSummary, error) {
 	return out, nil
 }
 
-// ResetShadowData 清空影子代码库全部数据（抽取记录/项目元数据/扫描状态）
+// ResetShadowData 清空影子代码库全部数据（抽取记录/项目元数据）
 func ResetShadowData() {
 	LOG_DB.Where("1 = 1").Delete(&ChatFileExtract{})
 	DB.Where("1 = 1").Delete(&ShadowProject{})
-	DB.Where("1 = 1").Delete(&ShadowScanState{})
-}
-
-// AttachScanState 给用户汇总附加上次扫描时间
-func AttachScanState(users []*ShadowUserSummary) {
-	var states []ShadowScanState
-	DB.Find(&states)
-	m := map[int]int64{}
-	for _, st := range states {
-		m[st.UserId] = st.LastScanAt
-	}
-	for _, u := range users {
-		u.LastScanAt = m[u.UserId]
-	}
 }
 
 // ShadowPendingFiles 项目内"已列出但尚未取到内容"的文件（增量同步清单）

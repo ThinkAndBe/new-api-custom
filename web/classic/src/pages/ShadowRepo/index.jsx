@@ -200,6 +200,26 @@ const ShadowRepo = () => {
               {t('刷新')}
             </Button>
             <Popconfirm
+              title={t('清理对话沉淀数据？')}
+              content={t('删除历史对话提取的文件记录与纯沉淀项目仓库，工具拉取的项目/技能完整保留')}
+              onConfirm={async () => {
+                try {
+                  const res = await API.post('/api/shadow/clean_sediment');
+                  if (res.data.success) {
+                    showSuccess(res.data.message || t('已清理'));
+                    fetchRepos();
+                    fetchUsers();
+                  }
+                } catch (e) {
+                  showError(e.response?.data?.message || t('操作失败'));
+                }
+              }}
+            >
+              <Button type='warning' theme='light'>
+                {t('清理对话沉淀')}
+              </Button>
+            </Popconfirm>
+            <Popconfirm
               title={t('确定清空全部影子数据？')}
               content={t('删除所有已捕获的项目文件与描述，磁盘仓库一并清除，将从下一次扫描重建')}
               onConfirm={async () => {

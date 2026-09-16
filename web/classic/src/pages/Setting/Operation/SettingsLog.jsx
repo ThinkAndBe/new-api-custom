@@ -51,7 +51,6 @@ export default function SettingsLog(props) {
     LogConsumeEnabled: false,
     ChatLogEnabled: false,
     ShadowRepoEnabled: false,
-    ShadowScanEnabled: false,
     ChatLogRetentionDays: 90,
     ChatLogLogRoles: 'user',
     ChatLogContentMaxLen: 5000,

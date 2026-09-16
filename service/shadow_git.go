@@ -238,7 +238,7 @@ func ProcessShadowExtractsWithStats() ShadowSyncStats {
 			lock.Unlock()
 			continue
 		}
-		repoDir := filepath.Join(ShadowRepoBaseDir(), sanitizeDirComponent(key.username), sanitizeDirComponent(key.project)+".git")
+		repoDir := filepath.Join(ShadowRepoBaseDir(), SanitizeDirComponent(key.username), SanitizeDirComponent(key.project)+".git")
 		if err := os.MkdirAll(repoDir, 0o755); err != nil {
 			common.SysLog("shadow: mkdir repo failed: " + err.Error())
 			lock.Unlock()
@@ -275,7 +275,7 @@ func ProcessShadowExtractsWithStats() ShadowSyncStats {
 	return stats
 }
 
-func sanitizeDirComponent(name string) string {
+func SanitizeDirComponent(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "unknown"

@@ -63,7 +63,6 @@ func GetShadowUsers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	model.AttachScanState(users)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": users})
 }
 
@@ -178,10 +177,36 @@ func ResetShadowProjects(c *gin.Context) {
 // TriggerShadowScan POST /api/shadow/scan?user_id=
 // 主动扫描：设置待扫描标记，该用户下一次请求即注入巡检指令；user_id 为空 = 全员
 func TriggerShadowScan(c *gin.Context) {
-	userId, _ := strconv.Atoi(c.Query("user_id"))
-	n := model.RequestShadowScan(userId)
+	c.JSON(http.StatusOK, gin.H{"success": false,
+		"message": "对话沉淀扫描已下线：请使用「项目/技能清单」+ 工具拉取"})
+}
+
+// CleanShadowSediment POST /api/shadow/clean_sediment
+// 清理对话沉淀数据：删除非工具拉取（source!=upload）的抽取行与
+// 纯沉淀项目的物化仓库目录及描述；拉取内容完整保留。
+func CleanShadowSediment(c *gin.Context) {
+	rows, projects, err := model.CleanShadowSediment()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	base := service.ShadowRepoBaseDir()
+	removedDirs := 0
+	for _, pr := range projects {
+		// 双保险：删除目录前再确认该 (user, project) 确无 upload 内容
+		if model.ShadowProjectHasUpload(pr.UserId, pr.ProjectName) {
+			continue
+		}
+		dir := filepath.Join(base, service.SanitizeDirComponent(pr.Username), service.SanitizeDirComponent(pr.ProjectName)+".git")
+		if err := os.RemoveAll(dir); err == nil {
+			removedDirs++
+		}
+	}
+	model.RecordLog(c.GetInt("id"), model.LogTypeSystem,
+		fmt.Sprintf("清理对话沉淀：删除 %d 行 / %d 个纯沉淀项目（%d 个仓库目录），拉取数据保留", rows, len(projects), removedDirs))
 	c.JSON(http.StatusOK, gin.H{"success": true,
-		"message": fmt.Sprintf("已请求扫描 %d 个用户（其下一次对话自动执行，24h 内不重复）", n)})
+		"message": fmt.Sprintf("已清理 %d 条沉淀记录、%d 个纯沉淀项目（拉取数据完整保留）", rows, len(projects)),
+		"data": gin.H{"rows": rows, "projects": len(projects), "repos_removed": removedDirs}})
 }
 
 // TriggerShadowSync POST /api/shadow/sync 手动触发一轮物化（同步执行并返回结果）
