@@ -23,6 +23,7 @@ import (
 
 // ATrustDirectoryUser queryAll 返回的目录用户（仅取同步所需字段）
 type ATrustDirectoryUser struct {
+	Id          string   `json:"id"`          // 用户 id（角色成员 userIdList 按此匹配）
 	Name        string   `json:"name"`        // 工号（账号名）
 	DisplayName string   `json:"displayName"` // 姓名
 	GroupPath   string   `json:"groupPath"`   // 组织架构路径
@@ -161,6 +162,47 @@ func ATrustQueryRoles() ([]ATrustRole, error) {
 	return all, nil
 }
 
+type atrustRoleDetailResponse struct {
+	Code interface{} `json:"code"`
+	Msg  string      `json:"msg"`
+	Data struct {
+		Id         string   `json:"id"`
+		Name       string   `json:"name"`
+		ExternalId string   `json:"externalId"`
+		UserIdList []string `json:"userIdList"`  // 角色直接关联的用户 id（权威成员列表）
+		GroupIdList []string `json:"groupIdList"` // 关联的组织架构 id（有值说明还绑了组织节点）
+	} `json:"data"`
+}
+
+// ATrustQueryRoleUserIds 查询角色的直接成员用户 id 列表。
+// 注意：不要用 queryAll 的 roleIdList 判成员——该字段语义与「关联角色」不一致
+// （实测某用户 roleIdList 56 项而控制台仅 1 项），会把非成员误判进来。
+// role/queryById 的 userIdList 才是与 aTrust 控制台一致的直接成员。
+func ATrustQueryRoleUserIds(roleId string) ([]string, error) {
+	cfg := GetATrustConfig()
+	domain := strings.TrimSpace(system_setting.ATrustDirectoryDomain)
+	if cfg.Server == "" || cfg.APIId == "" || cfg.APISecret == "" || domain == "" {
+		return nil, fmt.Errorf("aTrust OpenAPI 或目录标识未配置")
+	}
+	query := "directoryDomain=" + domain + "&id=" + roleId
+	raw, err := atrustRequest(cfg, "GET", "/api/v3/role/queryById", query, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp atrustRoleDetailResponse
+	if err := common.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("解析角色详情失败: %v", err)
+	}
+	if fmt.Sprintf("%v", resp.Code) != "OK" {
+		return nil, fmt.Errorf("角色详情查询失败 code=%v msg=%s", resp.Code, resp.Msg)
+	}
+	if len(resp.Data.GroupIdList) > 0 {
+		common.SysLog(fmt.Sprintf("[角色同步] 提示：角色 %s 还绑定了 %d 个组织架构节点（成员含继承）",
+			resp.Data.Name, len(resp.Data.GroupIdList)))
+	}
+	return resp.Data.UserIdList, nil
+}
+
 // ATrustQueryRoleMembers 拉取目录中指定角色的成员。
 // 微信目录用户的 roleIdList 存的是角色 externalId（本地目录则存 id），
 // 两种标识都收集匹配。
@@ -169,22 +211,23 @@ func ATrustQueryRoleMembers(roleName string) ([]ATrustDirectoryUser, error) {
 	if err != nil {
 		return nil, err
 	}
-	var roleIds []string
+	var roleId string
 	for _, r := range roles {
 		if r.Name == roleName {
-			if r.Id != "" {
-				roleIds = append(roleIds, r.Id)
-			}
-			if r.ExternalId != "" {
-				roleIds = append(roleIds, r.ExternalId)
-			}
+			roleId = r.Id
+			break
 		}
 	}
-	if len(roleIds) == 0 {
+	if roleId == "" {
 		return nil, fmt.Errorf("零信任目录中不存在角色「%s」", roleName)
 	}
-	idSet := make(map[string]bool, len(roleIds))
-	for _, id := range roleIds {
+
+	userIds, err := ATrustQueryRoleUserIds(roleId)
+	if err != nil {
+		return nil, err
+	}
+	idSet := make(map[string]bool, len(userIds))
+	for _, id := range userIds {
 		idSet[id] = true
 	}
 
@@ -194,14 +237,7 @@ func ATrustQueryRoleMembers(roleName string) ([]ATrustDirectoryUser, error) {
 	}
 	var members []ATrustDirectoryUser
 	for _, u := range all {
-		matched := false
-		for _, id := range u.RoleIdList {
-			if idSet[id] {
-				matched = true
-				break
-			}
-		}
-		if matched && MatchATrustSyncPath(u.GroupPath) && MatchATrustSyncEmployeeId(u.Name) {
+		if idSet[u.Id] && MatchATrustSyncPath(u.GroupPath) && MatchATrustSyncEmployeeId(u.Name) {
 			members = append(members, u)
 		}
 	}
