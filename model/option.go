@@ -416,6 +416,10 @@ func updateOptionMap(key string, value string) (err error) {
 		system_setting.ATrustDirectoryDomain = value
 	case "ATrustSyncRole":
 		system_setting.ATrustSyncRole = value
+	case "ATrustSyncPaths":
+		system_setting.ATrustSyncPaths = value
+	case "ATrustSyncEmployeeIds":
+		system_setting.ATrustSyncEmployeeIds = value
 	case "ATrustSyncGroups":
 		system_setting.ATrustSyncGroups = value
 	case "WeChatWorkCorpID":

@@ -25,9 +25,41 @@ import (
 type ATrustDirectoryUser struct {
 	Name        string   `json:"name"`        // 工号（账号名）
 	DisplayName string   `json:"displayName"` // 姓名
+	GroupPath   string   `json:"groupPath"`   // 组织架构路径
 	Status      int      `json:"status"`      // 0-禁用 1-启用
 	IsDeleted   int      `json:"isDeleted"`
 	RoleIdList  []string `json:"roleIdList"` // 关联角色（微信目录存角色的 externalId，本地目录存 id）
+}
+
+// MatchATrustSyncEmployeeId 工号白名单过滤（ATrustSyncEmployeeIds 空=不过滤）。
+// 用于收敛「角色被绑定到组织节点后继承出的大量成员」，只保留控制台
+// 直接成员对应的工号名单。
+func MatchATrustSyncEmployeeId(employeeId string) bool {
+	raw := strings.TrimSpace(system_setting.ATrustSyncEmployeeIds)
+	if raw == "" {
+		return true
+	}
+	for _, id := range strings.Split(raw, ",") {
+		if strings.TrimSpace(id) == employeeId {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchATrustSyncPath 组织路径白名单过滤（ATrustSyncPaths 空=不过滤）
+func MatchATrustSyncPath(groupPath string) bool {
+	raw := strings.TrimSpace(system_setting.ATrustSyncPaths)
+	if raw == "" {
+		return true
+	}
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" && strings.HasPrefix(groupPath, p) {
+			return true
+		}
+	}
+	return false
 }
 
 type atrustDirectoryResponse struct {
@@ -162,11 +194,15 @@ func ATrustQueryRoleMembers(roleName string) ([]ATrustDirectoryUser, error) {
 	}
 	var members []ATrustDirectoryUser
 	for _, u := range all {
+		matched := false
 		for _, id := range u.RoleIdList {
 			if idSet[id] {
-				members = append(members, u)
+				matched = true
 				break
 			}
+		}
+		if matched && MatchATrustSyncPath(u.GroupPath) && MatchATrustSyncEmployeeId(u.Name) {
+			members = append(members, u)
 		}
 	}
 	return members, nil

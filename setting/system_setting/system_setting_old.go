@@ -31,6 +31,9 @@ var (
 var (
 	ATrustDirectoryDomain = "wechat33610" // 目录标识（企业微信同步目录；getUserStatus 响应的 domain 字段）
 	ATrustSyncRole        = "AI用户"       // 只同步该零信任角色的成员（tokenhub 访问白名单）
+	ATrustSyncPaths       = ""            // 组织路径过滤（逗号分隔前缀，如 /鸿星尔克实业/信息管理中心；空=不过滤）
+	ATrustSyncEmployeeIds = ""            // 工号白名单（逗号分隔；非空时只同步名单内成员，用于收敛角色继承导致的超范围）
+
 	ATrustSyncGroups      = ""            // 额外限定本地分组（逗号分隔；留空=全部，范围已由角色决定）
 )
 

@@ -92,7 +92,17 @@ const ATrustImportModal = ({ visible, handleClose, refresh, groupOptions }) => {
         width: 120,
         render: (v) => <Text strong>{v}</Text>,
       },
-      { title: t('工号'), dataIndex: 'employee_id', width: 130 },
+      { title: t('工号'), dataIndex: 'employee_id', width: 120 },
+      {
+        title: t('组织架构'),
+        dataIndex: 'group_path',
+        ellipsis: true,
+        render: (v) => (
+          <Text type='tertiary' size='small'>
+            {v || '-'}
+          </Text>
+        ),
+      },
       {
         title: t('状态'),
         dataIndex: 'exists_local',
@@ -114,8 +124,8 @@ const ATrustImportModal = ({ visible, handleClose, refresh, groupOptions }) => {
 
   const resultColumns = useMemo(
     () => [
-      { title: t('姓名'), dataIndex: 'display_name', width: 110 },
-      { title: t('工号'), dataIndex: 'employee_id', width: 120 },
+      { title: t('姓名'), dataIndex: 'display_name', width: 100 },
+      { title: t('工号'), dataIndex: 'employee_id', width: 110 },
       {
         title: t('结果'),
         dataIndex: 'status',

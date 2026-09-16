@@ -81,7 +81,7 @@ const AddUserModal = (props) => {
     setAtrustOptions(
       hits.map((u) => ({
         value: u.display_name,
-        label: `${u.display_name}（${t('工号')} ${u.employee_id}${u.exists_local ? ' · ' + t('已存在') : ''}）`,
+        label: `${u.display_name}（${t('工号')} ${u.employee_id}${u.exists_local ? ' · ' + t('已存在') : ''}）${u.group_path ? ' · ' + u.group_path.split('/').filter(Boolean).slice(-1)[0] : ''}`,
         raw: u,
       })),
     );

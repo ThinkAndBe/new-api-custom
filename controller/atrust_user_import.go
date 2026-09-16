@@ -81,7 +81,7 @@ func GetATrustDirectory(c *gin.Context) {
 		item := ATrustDirectoryUser{
 			EmployeeId:  u.Name,
 			DisplayName: u.DisplayName,
-			GroupPath:   "",
+			GroupPath:   u.GroupPath,
 		}
 		if un, ok := byEmp[u.Name]; ok {
 			item.ExistsLocal, item.MatchedUser = true, un

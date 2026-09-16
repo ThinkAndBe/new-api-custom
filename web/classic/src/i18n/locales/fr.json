@@ -577,6 +577,7 @@
     "搜索姓名/工号": "Rechercher",
     "预建账号后，员工首次零信任登录将按工号命中该账号，分组与额度即刻生效（无需登录后再调整）": "Les comptes pré-créés sont trouvés par matricule au premier SSO",
     "从零信任目录导入用户": "Importer depuis répertoire Zero Trust",
+    "组织架构": "Organisation",
     "同步零信任工号": "Synchroniser les matricules (Zero Trust)",
     "使用 零信任账号 继续": "Continuer avec SSO Zero Trust",
     "使用 企业微信 扫码继续": "Continuer avec WeCom (QR code)",
