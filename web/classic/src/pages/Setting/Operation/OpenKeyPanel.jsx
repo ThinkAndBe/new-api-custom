@@ -48,25 +48,27 @@ const OpenKeyPanel = () => {
     setModalVisible(true);
   };
 
-  const openEdit = (record) => {
-    setEditing(record);
-    setNewKey('');
-    setModalVisible(true);
+  // 编辑时用 key 重挂载 Form + initValues 初始化，不依赖 formApi 回填时序
+  const buildInitValues = (record) => {
     let scope = {};
     try {
       scope = JSON.parse(record.scope || '{}');
     } catch (e) {}
-    setTimeout(() => {
-      formApi?.setValues({
-        name: record.name,
-        groups: (scope.groups || []).join(','),
-        usernames: (scope.usernames || []).join(','),
-        include_content: !!scope.include_content,
-        max_days: scope.max_days || 30,
-        enabled: record.enabled,
-        expire_days: 0,
-      });
-    }, 50);
+    return {
+      name: record.name,
+      groups: (scope.groups || []).join(','),
+      usernames: (scope.usernames || []).join(','),
+      include_content: !!scope.include_content,
+      max_days: scope.max_days || 30,
+      enabled: record.enabled,
+      expire_days: 0,
+    };
+  };
+
+  const openEdit = (record) => {
+    setEditing(record);
+    setNewKey('');
+    setModalVisible(true);
   };
 
   const submit = async () => {
@@ -222,7 +224,13 @@ const OpenKeyPanel = () => {
             <Text code copyable>{newKey}</Text>
           </Paragraph>
         )}
-        <Form getFormApi={(api) => setFormApi(api)}>
+        <Form
+          key={editing ? 'edit-' + editing.id : 'create'}
+          initValues={
+            editing ? buildInitValues(editing) : { max_days: 30, expire_days: 0, enabled: true }
+          }
+          getFormApi={(api) => setFormApi(api)}
+        >
           <Form.Input field='name' label={t('名称')} placeholder={t('如：顾问团队-张三')} />
           <Form.Input
             field='groups'
