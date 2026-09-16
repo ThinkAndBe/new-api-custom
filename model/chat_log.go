@@ -31,6 +31,7 @@ type ChatLog struct {
 type ChatLogFilter struct {
 	UserId    int
 	Username  string
+	Usernames []string // 精确匹配集合（数据开放 scope 用，优先于 LIKE）
 	ModelName string
 	TokenName string
 	Group     string
@@ -132,7 +133,9 @@ func GetChatLogUserStats(filter ChatLogFilter) ([]*ChatLogUserStat, error) {
 	if filter.UserId != 0 {
 		tx = tx.Where("user_id = ?", filter.UserId)
 	}
-	if filter.Username != "" {
+	if len(filter.Usernames) > 0 {
+		tx = tx.Where("username IN ?", filter.Usernames)
+	} else if filter.Username != "" {
 		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
 	}
 	if filter.ModelName != "" {
@@ -168,7 +171,9 @@ func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, e
 	if filter.UserId != 0 {
 		tx = tx.Where("user_id = ?", filter.UserId)
 	}
-	if filter.Username != "" {
+	if len(filter.Usernames) > 0 {
+		tx = tx.Where("username IN ?", filter.Usernames)
+	} else if filter.Username != "" {
 		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
 	}
 	if filter.ModelName != "" {
@@ -245,7 +250,9 @@ func StreamAllChatLogs(filter ChatLogFilter, callback func(*ChatLog) error) erro
 	if filter.UserId != 0 {
 		tx = tx.Where("user_id = ?", filter.UserId)
 	}
-	if filter.Username != "" {
+	if len(filter.Usernames) > 0 {
+		tx = tx.Where("username IN ?", filter.Usernames)
+	} else if filter.Username != "" {
 		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
 	}
 	if filter.ModelName != "" {

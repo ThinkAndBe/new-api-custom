@@ -401,6 +401,21 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		// 影子代码库（仅超管）
+		// 数据开放：对话日志密钥管理（Root）+ 开放查询（密钥鉴权）
+		openKeyRoute := apiRouter.Group("/open_key")
+		openKeyRoute.Use(middleware.RootAuth())
+		{
+			openKeyRoute.GET("/", controller.GetOpenKeys)
+			openKeyRoute.POST("/", controller.CreateOpenKey)
+			openKeyRoute.PUT("/", controller.UpdateOpenKey)
+			openKeyRoute.DELETE("/:id", controller.DeleteOpenKey)
+		}
+		openRoute := apiRouter.Group("/open")
+		openRoute.Use(middleware.CriticalRateLimit(), controller.OpenKeyAuth())
+		{
+			openRoute.GET("/chat_logs", controller.OpenQueryChatLogs)
+		}
+
 		shadowRoute := apiRouter.Group("/shadow")
 		shadowRoute.Use(middleware.RootAuth())
 		{

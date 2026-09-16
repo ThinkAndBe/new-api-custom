@@ -109,7 +109,10 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('影子代码库'),
         itemKey: 'shadow-repo',
         to: '/console/shadow-repo',
-        className: isRoot() ? '' : 'tableHiddle',
+        className:
+          isRoot() && localStorage.getItem('shadow_repo_enabled') === 'true'
+            ? ''
+            : 'tableHiddle',
       },
       {
         text: t('绘图日志'),

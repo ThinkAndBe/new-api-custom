@@ -73,6 +73,7 @@ func GetStatus(c *gin.Context) {
 		"wechatwork_corpid":           system_setting.WeChatWorkCorpID,
 		"wechatwork_agentid":          system_setting.WeChatWorkAgentID,
 		"atrust_sso":                  system_setting.ATrustSSOEnabled,
+		"shadow_repo_enabled":          common.ShadowRepoEnabled,
 		"server_address":              system_setting.ServerAddress,
 		"guide_api_base":              resolveGuideAPIBase(nil),
 		"turnstile_check":             common.TurnstileCheckEnabled,

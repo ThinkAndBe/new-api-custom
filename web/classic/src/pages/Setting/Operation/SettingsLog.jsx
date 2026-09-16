@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useEffect, useState, useRef } from 'react';
+import OpenKeyPanel from './OpenKeyPanel';
 import {
   Button,
   Col,
@@ -214,7 +215,13 @@ export default function SettingsLog(props) {
     const currentInputs = {};
     for (let key in props.options) {
       if (Object.keys(inputs).includes(key)) {
-        currentInputs[key] = props.options[key];
+        let v = props.options[key];
+        // 开关状态归一：option 可能以 'true'/'false' 字符串或布尔返回，
+        // 统一转布尔，避免开关显示错位、保存时误报未修改
+        if (typeof inputs[key] === 'boolean') {
+          v = v === true || v === 'true';
+        }
+        currentInputs[key] = v;
       }
     }
     currentInputs['historyTimestamp'] = inputs.historyTimestamp;
@@ -429,6 +436,10 @@ export default function SettingsLog(props) {
               </Button>
             </Row>
           </Form.Section>
+          <Form.Section text={t('数据开放接口')}>
+            <OpenKeyPanel />
+          </Form.Section>
+
         </Form>
       </Spin>
     </>

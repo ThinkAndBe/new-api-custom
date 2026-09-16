@@ -27,6 +27,7 @@ export function setStatusData(data) {
   localStorage.setItem('display_in_currency', data.display_in_currency);
   localStorage.setItem('quota_display_type', data.quota_display_type || 'USD');
   localStorage.setItem('enable_drawing', data.enable_drawing);
+  localStorage.setItem('shadow_repo_enabled', data.shadow_repo_enabled);
   localStorage.setItem('enable_task', data.enable_task);
   localStorage.setItem('enable_data_export', data.enable_data_export);
   localStorage.setItem('chats', JSON.stringify(data.chats));
