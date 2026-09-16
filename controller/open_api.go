@@ -144,6 +144,10 @@ func OpenKeyAuth() gin.HandlerFunc {
 		key := c.Request.Header.Get("Authorization")
 		key = strings.TrimPrefix(strings.TrimPrefix(key, "Bearer "), "bearer ")
 		key = strings.TrimSpace(key)
+		// ?key= 兜底：便于在已登录浏览器直接打开验证（正式调用建议用 Header）
+		if key == "" {
+			key = strings.TrimSpace(c.Query("key"))
+		}
 		if key == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "缺少 Authorization: Bearer <开放密钥>"})
 			c.Abort()
