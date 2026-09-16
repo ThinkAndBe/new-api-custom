@@ -428,6 +428,8 @@ func SetApiRouter(router *gin.Engine) {
 			shadowRoute.POST("/clean_sediment", controller.CleanShadowSediment)
 			shadowRoute.POST("/reset", controller.ResetShadowProjects)
 			shadowRoute.POST("/redescribe", controller.RedescribeShadowProject)
+			// quota_data 事故窗口回填（一次性）
+			shadowRoute.POST("/quota_backfill", controller.BackfillQuotaData)
 			// 清单模式
 			shadowRoute.GET("/inventory", controller.ListShadowInventory)
 			shadowRoute.POST("/inventory/ignore", controller.IgnoreShadowInventory)
