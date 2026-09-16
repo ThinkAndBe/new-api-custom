@@ -307,8 +307,7 @@ func (k *keeper) runReportInventory() {
 		k.log("清单上报失败: %v", err)
 		return
 	}
-	k.log("清单上报完成：%d 个项目/技能（含个人技能 %d 个）",
-		len(items), func() int { n := 0; for _, it := range items { if it.Kind == "skill" { n++ } }; return n }())
+	common_log(fmt.Sprintf("silent inventory report: %d items", len(items)))
 }
 
 // runTaskPoller 常驻任务轮询：领任务 → 拉取上传 → 回报

