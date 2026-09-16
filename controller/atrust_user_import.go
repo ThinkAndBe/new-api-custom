@@ -21,6 +21,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,8 +36,16 @@ type ATrustDirectoryUser struct {
 }
 
 // GetATrustDirectory GET /api/user/atrust_directory
+//   scope=role（默认）：仅拉「AI用户」角色成员（tokenhub 访问白名单，约数百人）
+//   scope=all：全量目录（3万+，慎用）
 func GetATrustDirectory(c *gin.Context) {
-	dirUsers, err := service.ATrustQueryDirectoryUsers()
+	var dirUsers []service.ATrustDirectoryUser
+	var err error
+	if c.Query("scope") == "all" {
+		dirUsers, err = service.ATrustQueryDirectoryUsers()
+	} else {
+		dirUsers, err = service.ATrustQueryRoleMembers(system_setting.ATrustSyncRole)
+	}
 	if err != nil {
 		common.ApiErrorMsg(c, "拉取零信任目录失败: "+err.Error())
 		return

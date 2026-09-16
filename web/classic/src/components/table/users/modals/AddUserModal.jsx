@@ -17,10 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { API, showError, showSuccess } from '../../../../helpers';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
+  AutoComplete,
   Button,
   SideSheet,
   Space,
@@ -46,10 +47,50 @@ const AddUserModal = (props) => {
   // 创建成功后的邀请信息弹窗
   const [credentials, setCredentials] = useState(null);
   const isMobile = useIsMobile();
+  // 零信任搜索：拉「AI用户」角色成员，选中自动填充
+  const [atrustOptions, setAtrustOptions] = useState([]);
+  const [atrustLoading, setAtrustLoading] = useState(false);
+  const atrustCache = useRef([]);
+
+  const searchAtrust = useCallback(async (kw) => {
+    if (!kw || kw.length < 1) return;
+    setAtrustLoading(true);
+    try {
+      const res = await API.get(
+        `/api/user/atrust_directory?keyword=${encodeURIComponent(kw)}`,
+      );
+      if (res.data.success) {
+        const users = res.data.data.users || [];
+        atrustCache.current = users;
+        setAtrustOptions(
+          users.slice(0, 20).map((u) => ({
+            value: u.display_name,
+            label: `${u.display_name}（${t('工号')} ${u.employee_id}${u.exists_local ? ' · ' + t('已存在') : ''}）`,
+            raw: u,
+          })),
+        );
+      }
+    } catch (e) {
+      /* 静默 */
+    }
+    setAtrustLoading(false);
+  }, [t]);
+
+  const pickAtrust = useCallback((value) => {
+    const hit = atrustCache.current.find((u) => u.display_name === value);
+    if (!hit) return;
+    // 自动填充：显示名=姓名，用户名=姓名，工号存入隐藏字段
+    formApiRef.current?.setValues({
+      display_name: hit.display_name,
+      username: hit.display_name,
+      employee_id: hit.employee_id,
+    });
+  }, []);
 
   const getInitValues = () => ({
     username: '',
     display_name: '',
+    employee_id: '',
     password: '',
     remark: '',
   });
@@ -164,6 +205,32 @@ const AddUserModal = (props) => {
                 </div>
 
                 <Row gutter={12}>
+                  <Col span={24}>
+                    <div style={{ marginBottom: 12 }}>
+                      <Text className='text-sm font-medium'>{t('从零信任搜索（AI用户角色）')}</Text>
+                      <AutoComplete
+                        data={atrustOptions}
+                        loading={atrustLoading}
+                        placeholder={t('输入姓名搜索，选中后自动填充')}
+                        onChange={(v) => { if (v && v.length >= 1) searchAtrust(v); }}
+                        onSelect={(v) => pickAtrust(v)}
+                        showClear
+                        style={{ width: '100%', marginTop: 4 }}
+                      />
+                      <Text type='tertiary' size='small'>
+                        {t('选中后自动填充用户名/显示名/工号，SSO 登录按工号命中')}
+                      </Text>
+                    </div>
+                  </Col>
+                  <Col span={24}>
+                    <Form.Input
+                      field='employee_id'
+                      label={t('工号') + '（' + t('零信任自动带出') + '）'
+                      }
+                      placeholder={t('零信任搜索选中后自动填充，也可手动填')}
+                      showClear
+                    />
+                  </Col>
                   <Col span={24}>
                     <Form.Input
                       field='username'

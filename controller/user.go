@@ -1342,6 +1342,10 @@ func CreateUser(c *gin.Context) {
 	if user.Remark != "" {
 		cleanUser.Remark = user.Remark
 	}
+	// 零信任工号：从新建表单「零信任搜索」带过来，SSO 登录按工号命中
+	if strings.TrimSpace(user.EmployeeId) != "" {
+		cleanUser.EmployeeId = strings.TrimSpace(user.EmployeeId)
+	}
 	if err := cleanUser.Insert(0); err != nil {
 		common.ApiError(c, err)
 		return
