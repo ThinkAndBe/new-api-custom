@@ -68,9 +68,6 @@ func SetRelayRouter(router *gin.Engine) {
 	}
 	// 配置码兑换走 /v1/ 路径（3000 端口只放行 /v1/*，不加 TokenAuth）
 	router.GET("/v1/usage/guide_redeem", middleware.CriticalRateLimit(), controller.RedeemGuideShortCode)
-	// 数据开放查询（密钥鉴权）：3000 端口只放行 /v1/*，顾问脚本非浏览器
-	// 调用 443 会被零信任拦截，故同步注册 /v1 通道
-	router.GET("/v1/open/chat_logs", middleware.CriticalRateLimit(), controller.OpenKeyAuth(), controller.OpenQueryChatLogs)
 
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
