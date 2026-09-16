@@ -183,18 +183,18 @@ func checkSingleChannelHealth(ch *model.Channel, state *channelHealthState, test
 		state.ConsecutiveFailures, threshold,
 		formatTestError(result.newAPIError, result.localErr)))
 
-if state.ConsecutiveFailures >= threshold {
-			// 达到阈值，禁用渠道（健康监测开启时无视 auto_ban 设置）
-			chName := ch.Name
-			chId := ch.Id
-			chKey := ""
+	if state.ConsecutiveFailures >= threshold {
+		// 达到阈值，禁用渠道（健康监测开启时无视 auto_ban 设置）
+		chName := ch.Name
+		chId := ch.Id
+		chKey := ""
 
-			service.DisableChannel(
-				*types.NewChannelError(chId, ch.Type, chName, false, chKey, true),
-				fmt.Sprintf("健康监测：连续 %d 次探活失败", state.ConsecutiveFailures),
-			)
-			common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 已自动禁用（连续%d次失败）",
-				healthMonitorLogPrefix, chName, chId, state.ConsecutiveFailures))
+		service.DisableChannel(
+			*types.NewChannelError(chId, ch.Type, chName, false, chKey, true),
+			fmt.Sprintf("健康监测：连续 %d 次探活失败", state.ConsecutiveFailures),
+		)
+		common.SysLog(fmt.Sprintf("%s 渠道「%s」(#%d) 已自动禁用（连续%d次失败）",
+			healthMonitorLogPrefix, chName, chId, state.ConsecutiveFailures))
 
 		// 设置退避冷却（指数退避：60s→120s→300s，上限30min）
 		backoff := []time.Duration{time.Minute, 2 * time.Minute, 5 * time.Minute}

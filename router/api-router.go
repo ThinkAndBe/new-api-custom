@@ -419,7 +419,12 @@ func SetApiRouter(router *gin.Engine) {
 		openRoute := apiRouter.Group("/open")
 		openRoute.Use(middleware.CriticalRateLimit(), controller.OpenKeyAuth())
 		{
+			// 明细/兼容：对话日志（stats=1 汇总、format=csv 报表、默认明细分页）
 			openRoute.GET("/chat_logs", controller.OpenQueryChatLogs)
+			// 面向顾问的主形态：一次调用拿到做总结/合规审查所需数据
+			openRoute.GET("/usage", controller.OpenQueryUsage)
+			openRoute.GET("/contents", controller.OpenQueryContents)
+			openRoute.GET("/report", controller.OpenQueryReport)
 		}
 
 		shadowRoute := apiRouter.Group("/shadow")

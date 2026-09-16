@@ -24,14 +24,14 @@ import (
 // ---- 开放密钥管理（RootAuth） ----
 
 type openKeyReq struct {
-	Id            int      `json:"id"`
-	Name          string   `json:"name"`
-	Groups        []string `json:"groups"`
-	Usernames     []string `json:"usernames"`
-	IncludeContent bool    `json:"include_content"`
-	MaxDays       int      `json:"max_days"`
-	Enabled       bool     `json:"enabled"`
-	ExpireDays    int      `json:"expire_days"` // 0=永久
+	Id             int      `json:"id"`
+	Name           string   `json:"name"`
+	Groups         []string `json:"groups"`
+	Usernames      []string `json:"usernames"`
+	IncludeContent bool     `json:"include_content"`
+	MaxDays        int      `json:"max_days"`
+	Enabled        bool     `json:"enabled"`
+	ExpireDays     int      `json:"expire_days"` // 0=永久
 }
 
 func buildScopeJSON(req *openKeyReq) (string, error) {
@@ -76,10 +76,10 @@ func CreateOpenKey(c *gin.Context) {
 		expiresAt = time.Now().Unix() + int64(req.ExpireDays)*86400
 	}
 	k := &model.OpenAPIKey{
-		Name: strings.TrimSpace(req.Name),
-		Key:  "sk-open-" + common.GetUUID(),
-		Scope: scope,
-		Enabled: true,
+		Name:      strings.TrimSpace(req.Name),
+		Key:       "sk-open-" + common.GetUUID(),
+		Scope:     scope,
+		Enabled:   true,
 		ExpiresAt: expiresAt,
 	}
 	if err := model.CreateOpenAPIKey(k); err != nil {
@@ -173,41 +173,11 @@ func OpenKeyAuth() gin.HandlerFunc {
 func OpenQueryChatLogs(c *gin.Context) {
 	scope := c.MustGet("open_scope").(*model.OpenKeyScope)
 
-	// 时间窗：默认最近 7 天；跨度受 max_days 限制；start/end 支持 2006-01-02 或 2006-01-02 15:04:05
-	now := time.Now()
-	startStr, endStr := c.Query("start"), c.Query("end")
-	var start, end time.Time
-	var err error
-	parse := func(s string, def time.Time) (time.Time, error) {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			return def, nil
-		}
-		for _, layout := range []string{"2006-01-02 15:04:05", "2006-01-02", time.RFC3339} {
-			if t, e := time.ParseInLocation(layout, s, time.Local); e == nil {
-				return t, nil
-			}
-		}
-		return time.Time{}, fmt.Errorf("时间格式应为 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss")
-	}
-	if start, err = parse(startStr, now.AddDate(0, 0, -7)); err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "start " + err.Error()})
+	// 时间窗：默认最近 7 天；start/end 支持 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss；跨度受 max_days 限制
+	start, end, msg := openParseRange(c, scope, 7)
+	if msg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
 		return
-	}
-	if end, err = parse(endStr, now); err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "end " + err.Error()})
-		return
-	}
-	if end.Before(start) {
-		start, end = end, start
-	}
-	// 回看上限
-	earliest := now.AddDate(0, 0, -scope.MaxDays)
-	if start.Before(earliest) {
-		start = earliest
-	}
-	if end.After(now) {
-		end = now
 	}
 
 	filter := model.ChatLogFilter{
@@ -218,33 +188,19 @@ func OpenQueryChatLogs(c *gin.Context) {
 		Group:     strings.TrimSpace(c.Query("group")),
 	}
 
-	// 权限：scope 限定用户集合
+	// 权限：scope 限定用户集合（usernames 下推 SQL，保证分页/total 正确）
 	allowed, err := model.ScopeAllowedUsernames(scope)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "权限解析失败: " + err.Error()})
 		return
 	}
-	queryUsername := strings.TrimSpace(c.Query("username"))
-	if allowed != nil {
-		if queryUsername != "" {
-			inScope := false
-			for _, u := range allowed {
-				if u == queryUsername {
-					inScope = true
-					break
-				}
-			}
-			if !inScope {
-				c.JSON(http.StatusOK, gin.H{"success": false, "message": "该用户不在密钥数据范围内"})
-				return
-			}
-			filter.Usernames = []string{queryUsername}
-		} else {
-			// scope 集合下推 SQL，保证分页/total 正确
-			filter.Usernames = allowed
-		}
-	} else if queryUsername != "" {
-		filter.Username = queryUsername
+	names, msg := openRequestedUsernames(c, allowed)
+	if msg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+		return
+	}
+	if names != nil {
+		filter.Usernames = names
 	}
 
 	page, _ := strconv.Atoi(c.Query("page"))
@@ -303,9 +259,9 @@ func OpenQueryChatLogs(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data": gin.H{
-				"stats":  stats,
-				"start":  start.Format("2006-01-02 15:04:05"),
-				"end":    end.Format("2006-01-02 15:04:05"),
+				"stats": stats,
+				"start": start.Format("2006-01-02 15:04:05"),
+				"end":   end.Format("2006-01-02 15:04:05"),
 			},
 		})
 		return
@@ -326,13 +282,13 @@ func OpenQueryChatLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"items":     logs,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
+			"items":           logs,
+			"total":           total,
+			"page":            page,
+			"page_size":       pageSize,
 			"include_content": scope.IncludeContent,
-			"start":     start.Format("2006-01-02 15:04:05"),
-			"end":       end.Format("2006-01-02 15:04:05"),
+			"start":           start.Format("2006-01-02 15:04:05"),
+			"end":             end.Format("2006-01-02 15:04:05"),
 		},
 	})
 }

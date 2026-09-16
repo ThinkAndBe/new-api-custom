@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Card,
   Table,
   Tag,
   Button,
@@ -41,6 +42,40 @@ const OpenKeyPanel = () => {
   useEffect(() => {
     fetchKeys();
   }, [fetchKeys]);
+
+  // 生成一份可转发的接入文档（含三个接口示例与审查提示词）
+  const buildDoc = () => {
+    const base = window.location.origin;
+    return [
+      t('数据开放接口使用说明'),
+      '',
+      t('鉴权：请求头 Authorization: Bearer <开放密钥>'),
+      '',
+      t('1) 模型调用情况'),
+      `GET ${base}/api/open/usage?start=2026-09-01&end=2026-09-30&group_by=user_model`,
+      t('参数：start/end（YYYY-MM-DD，默认最近 7 天）、users（逗号分隔）、model、group、group_by=user|model|user_model、limit、format=json|text|csv'),
+      t('返回：每个用户/模型的调用次数、输入输出 token、费用（元）、首次与最后调用时间'),
+      '',
+      t('2) 调用内容（提问与回复原文）'),
+      `GET ${base}/api/open/contents?users=张三&start=2026-09-01&end=2026-09-30&limit=50&max_chars=2000`,
+      t('参数：max_chars 控制每条内容截断长度（0=不截断）、format=json|text'),
+      '',
+      t('3) 一站式报告（推荐：一次调用拿到用量+明细+内容样本）'),
+      `GET ${base}/api/open/report?start=2026-09-01&end=2026-09-30&top_users=20&samples=3&max_chars=1200&format=text`,
+      t('返回按费用降序的用户汇总、各模型明细、每人最近若干条内容样本，并附审查提示词，可直接连同输出发给 AI'),
+      '',
+      t('说明：数据范围由密钥限定（分组/用户/回看天数/是否含内容）；users 只能填授权范围内的用户'),
+    ].join('\n');
+  };
+
+  const copyDoc = async () => {
+    try {
+      await navigator.clipboard.writeText(buildDoc());
+      showSuccess(t('接入说明已复制，可直接发给顾问'));
+    } catch (e) {
+      showError(t('复制失败，请手动选择文本复制'));
+    }
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -196,17 +231,45 @@ const OpenKeyPanel = () => {
         </Button>
       </div>
       <Table size='small' columns={columns} dataSource={keys} rowKey='id' loading={loading} pagination={false} />
-      <Paragraph type='tertiary' size='small' style={{ marginTop: 8 }}>
-        {t('调用方式（供顾问方）：')}
-        <br />
-        <Text code>
-          {`GET {站点}/api/open/chat_logs?start=2026-01-01&end=2026-01-31&stats=1`}
-        </Text>
-        <br />
-        <Text code>{`Authorization: Bearer sk-open-xxxx`}</Text>
-        <br />
-        {t('三种用法：stats=1 按用户汇总（次数/token）；format=csv 直接下载与对话日志页「导出CSV」同列的报表；默认返回明细分页（page/page_size，单页≤100）。过滤参数：username / model_name / token_name / group / start / end；时间跨度受密钥回看天数限制')}
-      </Paragraph>
+      <Card
+        className='!rounded-2xl shadow-sm border-0'
+        style={{ marginTop: 8 }}
+        bodyStyle={{ padding: 12 }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Text strong>{t('顾问接入说明（含示例与审查提示词）')}</Text>
+          <Space>
+            <Button size='small' theme='light' onClick={copyDoc}>
+              {t('复制完整说明')}
+            </Button>
+          </Space>
+        </div>
+        <Paragraph type='tertiary' size='small' style={{ marginTop: 8, marginBottom: 0 }}>
+          {t('所有接口都用同一个请求头鉴权：')}
+          <Text code>{`Authorization: Bearer sk-open-xxxx`}</Text>
+          <br />
+          {t('① 模型调用情况（次数/token/费用，可按用户、模型、用户×模型汇总）：')}
+          <Text code>{`GET {站点}/api/open/usage?start=2026-09-01&end=2026-09-30&group_by=user_model`}</Text>
+          <br />
+          {t('② 调用内容（提问与回复原文，max_chars 截断便于喂给 AI）：')}
+          <Text code>{`GET {站点}/api/open/contents?users=张三,李四&limit=50&max_chars=2000`}</Text>
+          <br />
+          {t('③ 一站式报告（用量 + 模型明细 + 内容样本 + 现成审查提示词，format=text 直接发给 AI）：')}
+          <Text code>{`GET {站点}/api/open/report?start=2026-09-01&end=2026-09-30&top_users=20&samples=3&format=text`}</Text>
+          <br />
+          {t('通用参数：start / end（支持 YYYY-MM-DD，默认最近 7 天）、users（逗号分隔，缺省=授权范围内全部）、model、group、format=json|text|csv、limit。时间跨度受密钥「最多回看天数」限制；需要内容时密钥必须勾选「包含对话内容」')}
+          <br />
+          {t('原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）')}
+        </Paragraph>
+      </Card>
 
       <Modal
         title={editing ? t('编辑开放密钥') : t('新建开放密钥')}

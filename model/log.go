@@ -639,6 +639,90 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	return stat, nil
 }
 
+// ---- 数据开放接口：用量汇总（跨库可移植，只用 COUNT/SUM/MIN/MAX + CASE WHEN） ----
+
+// OpenUsageFilter 数据开放用量汇总筛选条件
+type OpenUsageFilter struct {
+	StartTime int64
+	EndTime   int64
+	Usernames []string // 精确集合（密钥 scope 下推，优先）
+	Username  string   // 模糊匹配
+	Model     string   // 模糊匹配
+	Group     string   // 精确匹配
+	GroupBy   string   // user | model | user_model
+	Limit     int
+}
+
+// OpenUsageRow 用量汇总行（按用户/模型分组）
+type OpenUsageRow struct {
+	Username         string `json:"username"`
+	ModelName        string `json:"model_name"`
+	Group            string `json:"group"`
+	Requests         int64  `json:"requests"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+	TotalTokens      int64  `json:"total_tokens"`
+	Quota            int64  `json:"quota"`
+	FirstAt          int64  `json:"first_at"`
+	LastAt           int64  `json:"last_at"`
+}
+
+// GetOpenUsageStats 按用户/模型汇总消费日志（次数 / token / 额度 / 首末调用时间）。
+// 仅统计 type=2（消费）日志，即真实模型调用；排序按额度倒序（费用高者在前，便于做资源浪费审查）。
+func GetOpenUsageStats(f OpenUsageFilter) ([]*OpenUsageRow, error) {
+	promptSum := "SUM(CASE WHEN prompt_tokens > 0 THEN prompt_tokens ELSE 0 END)"
+	completionSum := "SUM(CASE WHEN completion_tokens > 0 THEN completion_tokens ELSE 0 END)"
+	quotaSum := "SUM(CASE WHEN quota > 0 THEN quota ELSE 0 END)"
+
+	selects := []string{"MAX(username) as username", "COUNT(*) as requests",
+		promptSum + " as prompt_tokens", completionSum + " as completion_tokens",
+		quotaSum + " as quota", "MIN(created_at) as first_at", "MAX(created_at) as last_at",
+		"MAX(" + logGroupCol + ") as " + logGroupCol}
+	groupBy := ""
+	switch f.GroupBy {
+	case "model":
+		selects = append(selects, "model_name as model_name")
+		groupBy = "model_name"
+	case "user_model":
+		selects = append(selects, "model_name as model_name")
+		groupBy = "username, model_name"
+	default: // user
+		selects = append(selects, "'' as model_name")
+		groupBy = "username"
+	}
+
+	tx := LOG_DB.Table("logs").Select(strings.Join(selects, ", ")).Where("type = ?", LogTypeConsume)
+	if len(f.Usernames) > 0 {
+		tx = tx.Where("username IN ?", f.Usernames)
+	} else if f.Username != "" {
+		tx = tx.Where("username LIKE ?", "%"+f.Username+"%")
+	}
+	if f.Model != "" {
+		tx = tx.Where("model_name LIKE ?", "%"+f.Model+"%")
+	}
+	if f.Group != "" {
+		tx = tx.Where(logGroupCol+" = ?", f.Group)
+	}
+	if f.StartTime != 0 {
+		tx = tx.Where("created_at >= ?", f.StartTime)
+	}
+	if f.EndTime != 0 {
+		tx = tx.Where("created_at <= ?", f.EndTime)
+	}
+	limit := f.Limit
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	var rows []*OpenUsageRow
+	if err := tx.Group(groupBy).Order("quota desc").Limit(limit).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		r.TotalTokens = r.PromptTokens + r.CompletionTokens
+	}
+	return rows, nil
+}
+
 func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string) (token int) {
 	tx := LOG_DB.Table("logs").Select("ifnull(sum(prompt_tokens),0) + ifnull(sum(completion_tokens),0)")
 	if username != "" {

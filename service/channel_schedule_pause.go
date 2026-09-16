@@ -200,6 +200,7 @@ func parseTimeToMinutes(t string) int {
 	}
 	return h*60 + m
 }
+
 // IsChannelInPauseWindow 判断渠道当前是否处于其配置的定时暂停窗口内。
 // 供健康监测等模块复用：窗口内不要主动把渠道拉回启用，避免暂停窗口被绕过。
 func IsChannelInPauseWindow(ch *model.Channel) bool {
