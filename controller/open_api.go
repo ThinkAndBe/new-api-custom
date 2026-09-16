@@ -101,17 +101,19 @@ func UpdateOpenKey(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	expiresAt := int64(0)
-	if req.ExpireDays > 0 {
-		expiresAt = time.Now().Unix() + int64(req.ExpireDays)*86400
-	}
 	k := &model.OpenAPIKey{
 		Id: req.Id, Name: strings.TrimSpace(req.Name), Scope: scope,
-		Enabled: req.Enabled, ExpiresAt: expiresAt,
+		Enabled: req.Enabled,
 	}
-	if err := model.UpdateOpenAPIKey(k); err != nil {
-		common.ApiError(c, err)
-		return
+	if req.ExpireDays > 0 {
+		// 正数=从现在重新计算；0=保持当前有效期（避免编辑时误重置为永久）
+		k.ExpiresAt = time.Now().Unix() + int64(req.ExpireDays)*86400
+		model.UpdateOpenAPIKeyPreserveExpire(k)
+	} else {
+		if err := model.UpdateOpenAPIKey(k); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 	common.ApiSuccess(c, nil)
 }

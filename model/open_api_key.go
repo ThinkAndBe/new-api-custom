@@ -68,6 +68,14 @@ func UpdateOpenAPIKey(k *OpenAPIKey) error {
 	}).Error
 }
 
+// UpdateOpenAPIKeyPreserveExpire 无 expires_at 的更新（编辑时 0=保持不变场景由
+// 调用方走 UpdateOpenAPIKey；此变体在设置 expire 时使用，保留给未来扩展）
+func UpdateOpenAPIKeyPreserveExpire(k *OpenAPIKey) error {
+	return DB.Model(&OpenAPIKey{}).Where("id = ?", k.Id).Updates(map[string]interface{}{
+		"name": k.Name, "scope": k.Scope, "enabled": k.Enabled, "expires_at": k.ExpiresAt,
+	}).Error
+}
+
 func DeleteOpenAPIKey(id int) error {
 	return DB.Delete(&OpenAPIKey{}, "id = ?", id).Error
 }

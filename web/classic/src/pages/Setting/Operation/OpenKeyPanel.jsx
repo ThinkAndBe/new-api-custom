@@ -253,13 +253,12 @@ const OpenKeyPanel = () => {
             extraText={t('1-366，默认 30')}
             min={1}
             max={366}
-            initValue={30}
           />
           <Form.InputNumber
             field='expire_days'
-            label={t('有效期（天，0=永久）')}
+            label={t('有效期（天，0=保持不变）')}
+            extraText={t('新建时 0=永久；编辑时 0=保持当前有效期，输入正数则从现在重新计算')}
             min={0}
-            initValue={0}
           />
           {editing && <Form.Switch field='enabled' label={t('启用')} initValue={true} />}
         </Form>
