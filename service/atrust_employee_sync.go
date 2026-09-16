@@ -301,9 +301,24 @@ func runATrustEmployeeSync() {
 	report, err := SyncEmployeeIdsFromATrust()
 	if err != nil {
 		common.SysError("[工号定时同步] " + err.Error())
+	} else {
+		common.SysLog(fmt.Sprintf("[工号定时同步] 角色成员 %d 新绑定 %d 更新 %d 一致 %d",
+			report.RoleMembers, report.Synced, report.Overwritten, report.SkippedSame))
+	}
+
+	// AI用户角色成员自动建号：加入角色即自动创建账号（含工号）
+	rr, err := SyncATrustRoleUsers()
+	if err != nil {
+		common.SysError("[角色用户同步] " + err.Error())
 		return
 	}
-	common.SysLog(fmt.Sprintf("[工号定时同步] 角色成员 %d 目标 %d 新绑定 %d 更新 %d 一致 %d 歧义 %d 未匹配 %d",
-		report.RoleMembers, report.TargetUsers, report.Synced, report.Overwritten,
-		report.SkippedSame, len(report.Ambiguous), len(report.Unmatched)))
+	if rr.Created > 0 || rr.Failed > 0 {
+		common.SysLog(fmt.Sprintf("[角色用户同步] 成员 %d 新建 %d 跳过 %d 失败 %d",
+			rr.RoleMembers, rr.Created, rr.Skipped, rr.Failed))
+		for _, e := range rr.Errors {
+			if len(rr.Errors) <= 5 || rr.Failed <= 5 {
+				common.SysLog("[角色用户同步] " + e)
+			}
+		}
+	}
 }

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { API, showError, showSuccess } from '../../../../helpers';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
@@ -47,33 +47,44 @@ const AddUserModal = (props) => {
   // 创建成功后的邀请信息弹窗
   const [credentials, setCredentials] = useState(null);
   const isMobile = useIsMobile();
-  // 零信任搜索：拉「AI用户」角色成员，选中自动填充
+  // 零信任搜索：打开时一次拉全量「AI用户」角色成员（约500+），输入时
+  // 纯本地过滤（姓名/工号模糊），不发请求——修复逐键击后端导致搜索慢
   const [atrustOptions, setAtrustOptions] = useState([]);
-  const [atrustLoading, setAtrustLoading] = useState(false);
   const atrustCache = useRef([]);
+  const [atrustReady, setAtrustReady] = useState(false);
 
-  const searchAtrust = useCallback(async (kw) => {
-    if (!kw || kw.length < 1) return;
-    setAtrustLoading(true);
-    try {
-      const res = await API.get(
-        `/api/user/atrust_directory?keyword=${encodeURIComponent(kw)}`,
-      );
-      if (res.data.success) {
-        const users = res.data.data.users || [];
-        atrustCache.current = users;
-        setAtrustOptions(
-          users.slice(0, 20).map((u) => ({
-            value: u.display_name,
-            label: `${u.display_name}（${t('工号')} ${u.employee_id}${u.exists_local ? ' · ' + t('已存在') : ''}）`,
-            raw: u,
-          })),
-        );
-      }
-    } catch (e) {
-      /* 静默 */
+  useEffect(() => {
+    if (!props.visible || atrustReady) return;
+    setAtrustReady(true);
+    API.get('/api/user/atrust_directory')
+      .then((res) => {
+        if (res.data.success) {
+          atrustCache.current = res.data.data.users || [];
+        }
+      })
+      .catch(() => {});
+  }, [props.visible]);
+
+  const searchAtrust = useCallback((kw) => {
+    if (!kw || kw.length < 1) {
+      setAtrustOptions([]);
+      return;
     }
-    setAtrustLoading(false);
+    const lower = kw.toLowerCase();
+    const hits = atrustCache.current
+      .filter(
+        (u) =>
+          u.display_name.toLowerCase().includes(lower) ||
+          u.employee_id.toLowerCase().includes(lower),
+      )
+      .slice(0, 20);
+    setAtrustOptions(
+      hits.map((u) => ({
+        value: u.display_name,
+        label: `${u.display_name}（${t('工号')} ${u.employee_id}${u.exists_local ? ' · ' + t('已存在') : ''}）`,
+        raw: u,
+      })),
+    );
   }, [t]);
 
   const pickAtrust = useCallback((value) => {
@@ -210,9 +221,8 @@ const AddUserModal = (props) => {
                       <Text className='text-sm font-medium'>{t('从零信任搜索（AI用户角色）')}</Text>
                       <AutoComplete
                         data={atrustOptions}
-                        loading={atrustLoading}
                         placeholder={t('输入姓名搜索，选中后自动填充')}
-                        onChange={(v) => { if (v && v.length >= 1) searchAtrust(v); }}
+                        onChange={(v) => searchAtrust(v)}
                         onSelect={(v) => pickAtrust(v)}
                         showClear
                         style={{ width: '100%', marginTop: 4 }}
