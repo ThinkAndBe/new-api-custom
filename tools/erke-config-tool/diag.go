@@ -107,8 +107,12 @@ func buildDiag() *diagReport {
 func (k *keeper) runDiagReport() {
 	apiKey := cachedAPIKey()
 	server := resolveServer()
-	if apiKey == "" || server == "" {
-		k.log("诊断上报需要先完成一次配置（拿不到密钥）")
+	if apiKey == "" {
+		k.log("诊断上报失败：守护缓存为空——请在教程页生成配置码，重新点「一键配置」后再试")
+		return
+	}
+	if server == "" {
+		k.log("诊断上报失败：未配置服务器地址")
 		return
 	}
 	r := buildDiag()

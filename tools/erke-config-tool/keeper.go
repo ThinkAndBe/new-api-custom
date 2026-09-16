@@ -337,8 +337,32 @@ func (k *keeper) repairNow() {
 	}
 	if total > 0 {
 		k.log("手动补写完成，共 %d 个模型（重启客户端后生效）", total)
-	} else {
-		k.log("配置文件完整；若客户端里仍看不到模型，请用托盘「问题诊断上报」")
+		return
+	}
+	// n=0 时给出可区分的真实状态，不再一律「配置完整」误导排查
+	for _, product := range []string{"workbuddy", "codebuddy"} {
+		dirName := ".workbuddy"
+		if product == "codebuddy" {
+			dirName = ".codebuddy"
+		}
+		home, _ := os.UserHomeDir()
+		filePath := filepath.Join(home, dirName, "models.json")
+		fileEmpty := true
+		if data, err := os.ReadFile(filePath); err == nil {
+			var cfg usageConfig
+			if json.Unmarshal(data, &cfg) == nil && len(cfg.Models) > 0 {
+				fileEmpty = false
+			}
+		}
+		cacheExists := loadCache(product) != nil
+		switch {
+		case !cacheExists:
+			k.log("【%s】守护缓存为空：请在教程页生成配置码，重新点「一键配置」建立缓存", product)
+		case fileEmpty:
+			k.log("【%s】异常：缓存有内容但补写仍为 0，请点托盘「问题诊断上报」", product)
+		default:
+			k.log("【%s】配置文件完整（含 %s 模型）；若客户端里仍看不到，请点「问题诊断上报」", product, dirName)
+		}
 	}
 }
 
@@ -390,22 +414,6 @@ func (k *keeper) setupTray() error {
 		k.ui.mw.SetFocus()
 	})
 	_ = ni.ContextMenu().Actions().Add(showAct)
-
-	collectAct := walk.NewAction()
-	collectAct.SetText("项目/技能收集")
-	_ = collectAct.SetCheckable(true)
-	collectAct.SetChecked(collectEnabled())
-	collectAct.Triggered().Attach(func() {
-		on := !collectEnabled()
-		setCollectEnabled(on)
-		_ = collectAct.SetChecked(on)
-		if on {
-			k.log("已开启项目/技能收集（后台静默上报清单与执行拉取任务）")
-		} else {
-			k.log("已关闭项目/技能收集（不再扫描与上报）")
-		}
-	})
-	_ = ni.ContextMenu().Actions().Add(collectAct)
 
 	diagAct := walk.NewAction()
 	diagAct.SetText("问题诊断上报")
