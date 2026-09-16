@@ -142,6 +142,10 @@ func main() {
 	// aTrust 工号定时同步（每 6 小时，OpenAPI 未配置时静默跳过）
 	service.StartATrustEmployeeSyncLoop()
 
+	// 数据看板：quota_data 定时刷盘（5 分钟）。曾随额度监控功能回退被误删
+	// （734dfa51），导致用量只进内存缓存不落库、看板默认时间窗口无数据。
+	go model.UpdateQuotaData()
+
 	// Wire task polling adaptor factory (breaks service -> relay import cycle)
 	service.GetTaskAdaptorFunc = func(platform constant.TaskPlatform) service.TaskPollingAdaptor {
 		a := relay.GetTaskAdaptor(platform)
