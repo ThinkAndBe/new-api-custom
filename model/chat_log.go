@@ -87,11 +87,9 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 	if len(tokenDisplay) > 12 {
 		tokenDisplay = tokenDisplay[:8] + "..." + tokenDisplay[len(tokenDisplay)-4:]
 	}
-	// 优先使用 UsingGroup（本次请求实际使用的分组），其次 UserGroup
-	group := info.UsingGroup
-	if group == "" {
-		group = info.UserGroup
-	}
+	// 按用户管理要求：日志分组统一显示用户分组（UserGroup），
+	// 不再取令牌/auto 解析后的 UsingGroup
+	group := info.UserGroup
 	log := &ChatLog{
 		UserId:           info.UserId,
 		Username:         username,
