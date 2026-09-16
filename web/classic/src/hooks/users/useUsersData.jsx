@@ -224,7 +224,7 @@ export const useUsersData = () => {
             {orphans.length > 0 && (
               <>
                 {'\n\n⚠ '}
-                {t('发现')} {orphans.length} {t('个不在角色内的账号（含已注销），点确认将彻底删除：')}
+                {t('发现')} {orphans.length} {t('个不在角色内的账号（含已注销）。为避免误删，请到用户管理搜索姓名勾选后「批量彻底删除」：')}
                 {'\n'}
                 {orphans
                   .slice(0, 30)
@@ -235,19 +235,8 @@ export const useUsersData = () => {
             )}
           </div>
         ),
-        okText: orphans.length > 0 ? t('彻底删除') : t('知道了'),
-        onOk: async () => {
-          if (orphans.length > 0) {
-            const ids = orphans.map((o) => o.id);
-            const dres = await API.post('/api/user/atrust_orphans/cleanup', { ids });
-            if (dres.data.success) {
-              showSuccess(t('已清理') + ' ' + dres.data.data.deleted + ' ' + t('个账号'));
-            } else {
-              showError(dres.data.message);
-            }
-          }
-          refresh();
-        },
+        okText: t('知道了'),
+        onOk: () => refresh(),
       });
     } catch (e) {
       showError(e?.response?.data?.message || t('操作失败，请重试'));

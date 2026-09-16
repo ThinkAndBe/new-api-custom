@@ -240,7 +240,7 @@ func formatUnixTime(ts int64) string {
 // ManageUserBatchRequest 批量管理请求
 type ManageUserBatchRequest struct {
 	Ids    []int  `json:"ids"`
-	Action string `json:"action"` // disable | enable | delete
+	Action string `json:"action"` // disable | enable | delete | purge(彻底删除)
 	Value  int    `json:"value"`  // add_quota 时的额度（quota 单位）
 	Mode   string `json:"mode"`   // add_quota 时的模式
 }
@@ -300,6 +300,13 @@ func ManageUserBatch(c *gin.Context) {
 			} else {
 				err = user.Delete()
 			}
+		case "purge":
+			// 彻底删除（误建账号清理用）：Unscoped 硬删，不经 7 天软删等待
+			if user.Role == common.RoleRootUser {
+				err = fmt.Errorf("不能删除 Root 用户")
+			} else {
+				err = model.DB.Unscoped().Where("id = ?", user.Id).Delete(&model.User{}).Error
+			}
 		case "add_quota":
 			switch req.Mode {
 			case "add":
@@ -327,7 +334,7 @@ func ManageUserBatch(c *gin.Context) {
 			continue
 		}
 		// 禁用/注销后失效缓存，避免 TTL 内仍可用
-		if req.Action == "disable" || req.Action == "delete" {
+		if req.Action == "disable" || req.Action == "delete" || req.Action == "purge" {
 			if err := model.InvalidateUserCache(user.Id); err != nil {
 				common.SysLog(fmt.Sprintf("batch: invalidate user cache %d failed: %s", user.Id, err.Error()))
 			}

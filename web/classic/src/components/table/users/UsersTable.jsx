@@ -298,6 +298,19 @@ const UsersTable = (usersData) => {
             <Button size='small' type='danger' theme='light' onClick={() => confirmBatch('delete', '批量注销用户', '将注销所选的 {{count}} 个用户（软删除，可恢复）。')}>
               {t('批量注销')}
             </Button>
+            <Button
+              size='small'
+              type='danger'
+              onClick={() =>
+                confirmBatch(
+                  'purge',
+                  '批量彻底删除用户',
+                  '将彻底删除所选的 {{count}} 个用户（不可恢复），请确认这些账号确为误建。',
+                )
+              }
+            >
+              {t('批量彻底删除')}
+            </Button>
             <Button size='small' onClick={showBatchQuotaModal}>
               {t('批量调额度')}
             </Button>
