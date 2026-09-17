@@ -112,6 +112,33 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 	}
 }
 
+// GetChatLogUserCounts 按用户统计对话日志条数（数据开放接口 report 用：告诉调用方共多少条）。
+// usernames 为空 = 全部用户。
+func GetChatLogUserCounts(startTime, endTime int64, usernames []string) (map[string]int64, error) {
+	tx := LOG_DB.Model(&ChatLog{}).Select("username, COUNT(*) as count")
+	if len(usernames) > 0 {
+		tx = tx.Where("username IN ?", usernames)
+	}
+	if startTime != 0 {
+		tx = tx.Where("created_at >= ?", startTime)
+	}
+	if endTime != 0 {
+		tx = tx.Where("created_at <= ?", endTime)
+	}
+	var rows []struct {
+		Username string
+		Count    int64
+	}
+	if err := tx.Group("username").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		out[r.Username] = r.Count
+	}
+	return out, nil
+}
+
 // GetChatLogs 分页查询对话日志
 // ChatLogUserStat 对话日志按用户汇总行
 type ChatLogUserStat struct {

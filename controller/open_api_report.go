@@ -26,6 +26,17 @@ import (
 
 var openTimeLayouts = []string{"2006-01-02 15:04:05", "2006-01-02", time.RFC3339}
 
+// isDateOnly 判断参数是否只写了日期（YYYY-MM-DD），没有时分秒
+func isDateOnly(raw string) bool {
+	if len(raw) != 10 {
+		return false
+	}
+	if _, err := time.ParseInLocation("2006-01-02", raw, time.Local); err != nil {
+		return false
+	}
+	return true
+}
+
 // openParseRange 解析 start/end（缺省=最近 defDays 天到今天），并按密钥回看天数上限裁剪。
 func openParseRange(c *gin.Context, scope *model.OpenKeyScope, defDays int) (time.Time, time.Time, string) {
 	now := time.Now()
@@ -41,13 +52,20 @@ func openParseRange(c *gin.Context, scope *model.OpenKeyScope, defDays int) (tim
 		}
 		return time.Time{}, fmt.Errorf("时间格式应为 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss")
 	}
-	start, err := parse(c.Query("start"), now.AddDate(0, 0, -defDays))
+	startRaw := strings.TrimSpace(c.Query("start"))
+	endRaw := strings.TrimSpace(c.Query("end"))
+	start, err := parse(startRaw, now.AddDate(0, 0, -defDays))
 	if err != nil {
 		return start, start, "start " + err.Error()
 	}
-	end, err := parse(c.Query("end"), now)
+	end, err := parse(endRaw, now)
 	if err != nil {
 		return start, start, "end " + err.Error()
+	}
+	// 只写日期（YYYY-MM-DD）时，语义是"那一天"：end 补到当天 23:59:59。
+	// 否则 start=end=2026-09-16 会变成零点到零点的空区间——顾问最容易踩的坑。
+	if isDateOnly(endRaw) {
+		end = end.Add(24*time.Hour - time.Second)
 	}
 	if end.Before(start) {
 		start, end = end, start
@@ -462,6 +480,7 @@ type openReportUser struct {
 	CostCNY          float64           `json:"cost_cny"`
 	FirstAt          string            `json:"first_at"`
 	LastAt           string            `json:"last_at"`
+	LogCount         int64             `json:"log_count"`
 	Models           []map[string]any  `json:"models"`
 	Samples          []openContentItem `json:"samples,omitempty"`
 }
@@ -485,7 +504,7 @@ func OpenQueryReport(c *gin.Context) {
 		return
 	}
 	topUsers := openIntParam(c, "top_users", 20, 1, 50)
-	samples := openIntParam(c, "samples", 3, 0, 20)
+	samples := openIntParam(c, "samples", 3, 0, 200)
 	maxChars := openIntParam(c, "max_chars", 1200, 0, 100000)
 
 	rows, err := model.GetOpenUsageStats(model.OpenUsageFilter{
@@ -534,21 +553,39 @@ func OpenQueryReport(c *gin.Context) {
 		users = users[:topUsers]
 	}
 
-	// 内容样本：仅在有内容权限且 samples>0 时取（每个用户取最近 N 条）
+	// 对话日志总数（按用户聚合，一次查询）：让调用方知道「共多少条、本报告附了多少条」
+	if counts, err := model.GetChatLogUserCounts(start.Unix(), end.Unix(), names); err == nil {
+		for _, u := range users {
+			u.LogCount = counts[u.Username]
+		}
+	}
+
+	// 内容：按 samples 取每个用户的对话日志（最近 N 条）。总量设上限，避免一次拉爆响应体。
 	contentNote := ""
 	if samples > 0 {
 		if !scope.IncludeContent {
-			contentNote = "该密钥未开放对话内容（include_content=false），未附带内容样本"
+			contentNote = "该密钥未开放对话内容（include_content=false），未附带对话日志内容"
 		} else {
+			const maxTotalLogs = 500
+			fetched := 0
 			for _, u := range users {
+				if fetched >= maxTotalLogs {
+					contentNote = fmt.Sprintf("对话日志条数超过单次上限 %d 条，已截断；完整日志请用 /api/open/contents 按用户分页获取", maxTotalLogs)
+					break
+				}
+				want := samples
+				if remaining := maxTotalLogs - fetched; want > remaining {
+					want = remaining
+				}
 				c2 := c.Copy()
-				c2.Request.URL.RawQuery = fmt.Sprintf("limit=%d", samples)
-				items, errMsg := loadOpenContents(c2, scope, start, end, []string{u.Username}, samples, maxChars)
+				c2.Request.URL.RawQuery = fmt.Sprintf("limit=%d", want)
+				items, errMsg := loadOpenContents(c2, scope, start, end, []string{u.Username}, want, maxChars)
 				if errMsg != "" {
 					contentNote = errMsg
 					break
 				}
 				u.Samples = items
+				fetched += len(items)
 			}
 		}
 	}
@@ -581,8 +618,12 @@ func OpenQueryReport(c *gin.Context) {
 			for _, m := range u.Models {
 				fmt.Fprintf(&b, "  - %v：%v 次，%v tokens，¥%.4f\n", m["model"], m["requests"], m["total_tokens"], m["cost_cny"])
 			}
+			if u.LogCount > 0 {
+				fmt.Fprintf(&b, "对话日志：区间内共 %d 条，以下为最近 %d 条\n", u.LogCount, len(u.Samples))
+			}
 			for j, s := range u.Samples {
-				fmt.Fprintf(&b, "  [样本 %d] %s %s\n  【提问】%s\n  【回复】%s\n", j+1, s.Time, s.ModelName, s.Request, s.Response)
+				fmt.Fprintf(&b, "  ── 日志 %d ── %s | %s | tokens %d/%d\n  【提问】%s\n  【回复】%s\n",
+					j+1, s.Time, s.ModelName, s.PromptTokens, s.CompletionTokens, s.Request, s.Response)
 			}
 			b.WriteString("\n")
 		}
