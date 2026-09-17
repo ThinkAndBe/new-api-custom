@@ -296,7 +296,11 @@ func GetUsageGuideConfig(c *gin.Context) {
 	// raw=1：直接以 models.json 文件体返回（macOS 配置脚本 curl -o 直接落盘，
 	// 免去脚本端 JSON 解析）
 	if c.Query("raw") == "1" {
-		data, err := common.Marshal(cfg)
+		// 必须输出**裸数组** [{...}]：WorkBuddy 主进程的硬件门限清理函数
+		// purgeLocalModelsOnGateFail() 只认裸数组，遇到 {"models":[...]} 会判定为空
+		// 并把整个 models.json 原子重写为 []（用户配置丢失）。macOS 脚本 curl -o 直接
+		// 落盘的就是这里的响应体，所以这里必须是安全格式。
+		data, err := common.Marshal(cfg.Models)
 		if err != nil {
 			common.ApiError(c, fmt.Errorf("marshal config failed"))
 			return

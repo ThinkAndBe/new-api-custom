@@ -39,12 +39,29 @@ if ! curl -fsSL "$URL" -o "$TMP"; then
   exit 1
 fi
 
-# 4. 基本校验后落盘
-if ! head -c 1 "$TMP" | grep -q '{' || ! grep -q '"models"' "$TMP"; then
-  echo "[错误] 服务端返回内容异常："
-  head -c 300 "$TMP"; echo
+# 4. 校验：必须是**裸数组**格式（顶层 [）
+#    WorkBuddy 启动时的硬件门限会清空对象包裹格式 {"models":[...]}，
+#    所以这里只接受裸数组；服务端 raw=1 已按裸数组返回。
+FIRST=$(tr -d '[:space:]' < "$TMP" | head -c 1)
+if [ "$FIRST" != "[" ]; then
+  echo "[错误] 服务端返回的不是裸数组格式（顶层应为 [，实际为 '${FIRST}'）。"
+  echo "        该格式会被 WorkBuddy 重启时的硬件门限清空，已中止写入以免丢配置。"
+  echo "        请让管理员升级服务端到包含裸数组修复的版本后重试。"
+  echo "        返回内容预览："
+  head -c 200 "$TMP"; echo
   rm -f "$TMP"
   exit 1
+fi
+if ! grep -q '"id"' "$TMP"; then
+  echo "[错误] 返回内容里没有模型条目："
+  head -c 200 "$TMP"; echo
+  rm -f "$TMP"
+  exit 1
+fi
+
+# 5. 落盘（先备份原文件）
+if [ -f "$DIR/models.json" ]; then
+  cp -f "$DIR/models.json" "$DIR/models.json.bak-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
 fi
 mv "$TMP" "$DIR/models.json"
 

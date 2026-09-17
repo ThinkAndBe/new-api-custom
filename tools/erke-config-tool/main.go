@@ -26,7 +26,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "2.1"
+const version = "2.2"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -55,9 +55,41 @@ type appUI struct {
 }
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "--version" {
-		fmt.Println("erke-config-tool", version)
-		return
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--version":
+			fmt.Println("erke-config-tool", version)
+			return
+		case "--normalize":
+			// 把既有 models.json 归一化为裸数组（修复"对象包裹格式被清空"的存量问题）
+			product := cliProduct(os.Args[2:])
+			path, n, changed, bak, err := normalizeModelsFile(product)
+			if err != nil {
+				fmt.Println("[失败]", err)
+				os.Exit(1)
+			}
+			if !changed {
+				fmt.Printf("[无需处理] %s（已是裸数组或文件不存在，共 %d 个模型）\n", path, n)
+				return
+			}
+			fmt.Printf("[已修复] %s\n  条数：%d\n  原文件备份：%s\n  说明：已改为裸数组格式（顶层 [），不会再被 WorkBuddy 硬件门限清理\n", path, n, bak)
+			return
+		case "--check":
+			product := cliProduct(os.Args[2:])
+			path, format, n, err := inspectModelsFile(product)
+			if err != nil {
+				fmt.Println("[异常]", err)
+				os.Exit(1)
+			}
+			risk := "安全"
+			if format == "object" {
+				risk = "危险（对象包裹格式，重启可能被清空，请执行 --normalize）"
+			} else if format == "empty" {
+				risk = "空文件（未配置）"
+			}
+			fmt.Printf("文件：%s\n格式：%s\n模型数：%d\n风险：%s\n", path, format, n, risk)
+			return
+		}
 	}
 	ui := &appUI{}
 
@@ -237,7 +269,7 @@ func (ui *appUI) apply() {
 		ui.setStatus(err.Error(), false)
 		return
 	}
-	path, err := writeModelsFile(product, cfg)
+	path, total, changed, bak, err := writeModelsFileMerged(product, cfg)
 	if err != nil {
 		ui.setStatus("写入文件失败: "+err.Error(), false)
 		return
@@ -246,7 +278,11 @@ func (ui *appUI) apply() {
 	if product == "codebuddy" {
 		productName = "CodeBuddy"
 	}
-	ui.setStatus(fmt.Sprintf("✅ 配置完成！共 %d 个模型\r\n已写入 %s\r\n请重启 %s 生效", len(cfg.Models), path, productName), true)
+	msg := fmt.Sprintf("✅ 配置完成！本次写入/更新 %d 个模型（文件内共 %d 个）\r\n已写入 %s\r\n格式：裸数组（不会再被重启清空）\r\n请重启 %s 生效", changed, total, path, productName)
+	if bak != "" {
+		msg += "\r\n原文件已备份：" + filepath.Base(bak)
+	}
+	ui.setStatus(msg, true)
 }
 
 // fetchAndBuild 拉取配置：支持 6 位码 / /redeem 相对路径 / 完整链接（可带 key）。
@@ -324,28 +360,17 @@ type usageConfig struct {
 	Models []usageModel `json:"models"`
 }
 
-func writeModelsFile(product string, cfg *usageConfig) (string, error) {
-	dirName := ".workbuddy"
-	if product == "codebuddy" {
-		dirName = ".codebuddy"
+// cliProduct 解析 --product 参数（默认 workbuddy）
+func cliProduct(args []string) string {
+	for i, a := range args {
+		if a == "--product" && i+1 < len(args) {
+			return strings.TrimSpace(args[i+1])
+		}
+		if strings.HasPrefix(a, "--product=") {
+			return strings.TrimSpace(strings.TrimPrefix(a, "--product="))
+		}
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	dir := filepath.Join(home, dirName)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	target := filepath.Join(dir, "models.json")
-	out, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(target, out, 0o644); err != nil {
-		return "", err
-	}
-	return target, nil
+	return "workbuddy"
 }
 
 // resolveServer 返回服务器地址：环境变量 ERKE_CONFIG_SERVER 优先（便于测试），
