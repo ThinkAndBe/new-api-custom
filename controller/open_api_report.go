@@ -493,7 +493,7 @@ type openContentItem struct {
 	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int    `json:"completion_tokens"`
 	Request          string `json:"request"`
-	Response         string `json:"response"`
+	Response         string `json:"response,omitempty"` // 默认不返回模型回复
 	Truncated        bool   `json:"truncated"`
 }
 
@@ -895,8 +895,11 @@ func OpenQueryReport(c *gin.Context) {
 				fmt.Fprintf(&b, "对话日志：区间内共 %d 条，以下为最近 %d 条\n", u.LogCount, len(u.Samples))
 			}
 			for j, s := range u.Samples {
-				fmt.Fprintf(&b, "  ── 日志 %d ── %s | %s | tokens %d/%d\n  【提问】%s\n  【回复】%s\n",
-					j+1, s.Time, s.ModelName, s.PromptTokens, s.CompletionTokens, s.Request, s.Response)
+				fmt.Fprintf(&b, "  ── 日志 %d ── %s | %s | tokens %d/%d\n  【提问】%s\n",
+					j+1, s.Time, s.ModelName, s.PromptTokens, s.CompletionTokens, s.Request)
+				if s.Response != "" {
+					fmt.Fprintf(&b, "  【回复】%s\n", s.Response)
+				}
 			}
 			b.WriteString("\n")
 		}
