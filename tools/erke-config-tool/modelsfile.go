@@ -10,7 +10,7 @@ package main
 // daemon / CoreServices / CLI 读取侧都兼容两种格式，只有这一个清理函数不兼容。
 //
 // 因此本工具统一按**裸数组**落盘（顶层必须是 `[`），并且在写入前把既有的对象包裹格式
-// 归一化过来；同时保留用户自己的其它模型条目（按 id 合并，不整文件覆盖），写入前留备份。
+// 归一化过来；同时保留用户自己的其它模型条目（按 id 合并，不整文件覆盖）。
 
 import (
 	"bytes"
@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // workbuddyDir 返回目标客户端的数据目录（~/.workbuddy 或 ~/.codebuddy）
@@ -111,22 +110,6 @@ func sameModel(a, b usageModel) bool {
 		a.SupportsReasoning == b.SupportsReasoning
 }
 
-// backupModelsFile 备份现有文件，返回备份路径（文件不存在时返回空）
-func backupModelsFile(target string) (string, error) {
-	if _, err := os.Stat(target); err != nil {
-		return "", nil
-	}
-	raw, err := os.ReadFile(target)
-	if err != nil || len(bytes.TrimSpace(raw)) == 0 {
-		return "", nil
-	}
-	bak := fmt.Sprintf("%s.bak-%s", target, time.Now().Format("20060102-150405"))
-	if err := os.WriteFile(bak, raw, 0o644); err != nil {
-		return "", err
-	}
-	return bak, nil
-}
-
 // writeModelsBareArray 以**裸数组**格式原子写入（临时文件 + rename），写完自检首字符为 `[`。
 func writeModelsBareArray(target string, models []usageModel) error {
 	if models == nil {
@@ -163,54 +146,43 @@ func writeModelsBareArray(target string, models []usageModel) error {
 	return nil
 }
 
-// writeModelsFile 写入配置：读取既有内容（兼容两种格式）→ 按 id 合并 → 裸数组原子写入。
-// 返回 (文件路径, 合并后总条数, 新写入/更新的条数, 备份路径)
-func writeModelsFileMerged(product string, cfg *usageConfig) (string, int, int, string, error) {
+// writeModelsFileMerged 写入配置：读取既有内容（兼容两种格式）→ 按 id 合并 → 裸数组原子写入。
+// 返回 (文件路径, 合并后总条数, 新写入/更新的条数)
+// 说明：写入是「临时文件 + rename」的原子替换且写完自检，不再额外留 .bak 备份文件。
+func writeModelsFileMerged(product string, cfg *usageConfig) (string, int, int, error) {
 	target, err := modelsFilePath(product)
 	if err != nil {
-		return "", 0, 0, "", err
+		return "", 0, 0, err
 	}
-	existing, format, err := loadModelsAnyFormat(target)
+	existing, _, err := loadModelsAnyFormat(target)
 	if err != nil {
-		return "", 0, 0, "", err
-	}
-	bak, err := backupModelsFile(target)
-	if err != nil {
-		return "", 0, 0, "", fmt.Errorf("备份失败（已中止写入，避免丢配置）: %w", err)
+		return "", 0, 0, err
 	}
 	merged, changed := mergeModelsByID(existing, cfg.Models)
 	if err := writeModelsBareArray(target, merged); err != nil {
-		return target, 0, 0, bak, err
+		return target, 0, 0, err
 	}
-	_ = format // 保留了原格式信息，仅用于日志语义
-	return target, len(merged), changed, bak, nil
+	return target, len(merged), changed, nil
 }
 
 // normalizeModelsFile 把既有 models.json 归一化为裸数组（无需配置码，纯修复）。
-// 返回 (路径, 条数, 是否发生了改动, 备份路径)
-func normalizeModelsFile(product string) (string, int, bool, string, error) {
+// 返回 (路径, 条数, 是否发生了改动)
+func normalizeModelsFile(product string) (string, int, bool, error) {
 	target, err := modelsFilePath(product)
 	if err != nil {
-		return "", 0, false, "", err
+		return "", 0, false, err
 	}
 	models, format, err := loadModelsAnyFormat(target)
 	if err != nil {
-		return target, 0, false, "", err
+		return target, 0, false, err
 	}
-	if format == "array" {
-		return target, len(models), false, "", nil
-	}
-	if format == "empty" {
-		return target, 0, false, "", nil
-	}
-	bak, err := backupModelsFile(target)
-	if err != nil {
-		return target, 0, false, "", fmt.Errorf("备份失败: %w", err)
+	if format == "array" || format == "empty" {
+		return target, len(models), false, nil
 	}
 	if err := writeModelsBareArray(target, models); err != nil {
-		return target, 0, false, bak, err
+		return target, 0, false, err
 	}
-	return target, len(models), true, bak, nil
+	return target, len(models), true, nil
 }
 
 // inspectModelsFile 返回 (路径, 格式 array/object/empty, 条数)

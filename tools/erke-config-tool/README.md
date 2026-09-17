@@ -24,13 +24,12 @@ ERKE AI 一键配置工具：**原生 Windows 界面**（Win32 控件，非浏�
 - 写入统一用**裸数组**（原子写 + 写完自检首字符为 `[`）
 - 写入前把既有的对象包裹格式**归一化**过来
 - 按 `id` 合并：只更新配置码里的模型，**不会删掉用户自己加的其它模型**
-- 写入前自动备份为 `models.json.bak-YYYYmmdd-HHMMSS`
 
 命令行（修复存量 / 体检，不需要配置码）：
 
 ```bash
 erke-config-tool.exe --check                 # 体检：报告当前格式与风险
-erke-config-tool.exe --normalize             # 把对象包裹格式就地修复为裸数组（自动备份）
+erke-config-tool.exe --normalize             # 把对象包裹格式就地修复为裸数组
 erke-config-tool.exe --normalize --product codebuddy
 ```
 

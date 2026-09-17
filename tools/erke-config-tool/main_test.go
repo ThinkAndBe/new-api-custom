@@ -44,7 +44,7 @@ func TestWriteProducesBareArray(t *testing.T) {
 	dir := withTempHome(t)
 	cfg := &usageConfig{Models: []usageModel{sampleModel("glm-5.3"), sampleModel("deepseek-flash")}}
 
-	path, total, changed, _, err := writeModelsFileMerged("workbuddy", cfg)
+	path, total, changed, err := writeModelsFileMerged("workbuddy", cfg)
 	if err != nil {
 		t.Fatalf("writeModelsFileMerged: %v", err)
 	}
@@ -80,21 +80,22 @@ func TestNormalizeObjectWrapper(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path, n, changed, bak, err := normalizeModelsFile("workbuddy")
+	path, n, changed, err := normalizeModelsFile("workbuddy")
 	if err != nil {
 		t.Fatalf("normalizeModelsFile: %v", err)
 	}
 	if !changed || n != 1 {
 		t.Fatalf("期望发生改动且保留 1 条，实际 changed=%v n=%d", changed, n)
 	}
-	if bak == "" {
-		t.Fatal("应生成备份")
+	// 不应留下 .bak 备份文件（用户要求不生成备份）
+	if m, _ := filepath.Glob(filepath.Join(dirPath, "models.json.bak*")); len(m) != 0 {
+		t.Fatalf("不应生成备份文件: %v", m)
 	}
 	if body := strings.TrimSpace(readFile(t, path)); !strings.HasPrefix(body, "[") {
 		t.Fatalf("归一化后仍不是裸数组: %s", body)
 	}
 	// 幂等：再跑一次不应改动
-	if _, _, changed2, _, err := normalizeModelsFile("workbuddy"); err != nil || changed2 {
+	if _, _, changed2, err := normalizeModelsFile("workbuddy"); err != nil || changed2 {
 		t.Fatalf("重复归一化应无改动: changed=%v err=%v", changed2, err)
 	}
 }
@@ -115,7 +116,7 @@ func TestMergeKeepsOtherModels(t *testing.T) {
 
 	updated := sampleModel("glm-5.3")
 	updated.Name = "ERKE glm-5.3（新）"
-	path, total, changed, _, err := writeModelsFileMerged("workbuddy", &usageConfig{Models: []usageModel{updated}})
+	path, total, changed, err := writeModelsFileMerged("workbuddy", &usageConfig{Models: []usageModel{updated}})
 	if err != nil {
 		t.Fatalf("merge write: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestFetchAndWrite(t *testing.T) {
 	if len(cfg.Models) == 0 {
 		t.Fatal("no models")
 	}
-	path, total, _, _, err := writeModelsFileMerged("workbuddy", cfg)
+	path, total, _, err := writeModelsFileMerged("workbuddy", cfg)
 	if err != nil {
 		t.Fatalf("writeModelsFileMerged: %v", err)
 	}

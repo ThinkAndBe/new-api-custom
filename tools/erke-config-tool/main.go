@@ -18,7 +18,6 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -26,7 +25,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "2.3"
+const version = "2.4"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -63,7 +62,7 @@ func main() {
 		case "--normalize":
 			// 把既有 models.json 归一化为裸数组（修复"对象包裹格式被清空"的存量问题）
 			product := cliProduct(os.Args[2:])
-			path, n, changed, bak, err := normalizeModelsFile(product)
+			path, n, changed, err := normalizeModelsFile(product)
 			if err != nil {
 				fmt.Println("[失败]", err)
 				os.Exit(1)
@@ -72,7 +71,7 @@ func main() {
 				fmt.Printf("[无需处理] %s（已是裸数组或文件不存在，共 %d 个模型）\n", path, n)
 				return
 			}
-			fmt.Printf("[已修复] %s\n  条数：%d\n  原文件备份：%s\n  说明：已改为裸数组格式（顶层 [），不会再被 WorkBuddy 硬件门限清理\n", path, n, bak)
+			fmt.Printf("[已修复] %s\n  条数：%d\n  说明：已改为裸数组格式（顶层 [），不会再被 WorkBuddy 硬件门限清理\n", path, n)
 			return
 		case "--server":
 			fmt.Printf("生效地址：%s\n候选列表（按顺序尝试）：\n", resolveServer())
@@ -278,7 +277,7 @@ func (ui *appUI) apply() {
 		ui.setStatus(err.Error(), false)
 		return
 	}
-	path, total, changed, bak, err := writeModelsFileMerged(product, cfg)
+	path, total, changed, err := writeModelsFileMerged(product, cfg)
 	if err != nil {
 		ui.setStatus("写入文件失败: "+err.Error(), false)
 		return
@@ -287,11 +286,7 @@ func (ui *appUI) apply() {
 	if product == "codebuddy" {
 		productName = "CodeBuddy"
 	}
-	msg := fmt.Sprintf("✅ 配置完成！本次写入/更新 %d 个模型（文件内共 %d 个）\r\n已写入 %s\r\n格式：裸数组（不会再被重启清空）\r\n请重启 %s 生效", changed, total, path, productName)
-	if bak != "" {
-		msg += "\r\n原文件已备份：" + filepath.Base(bak)
-	}
-	ui.setStatus(msg, true)
+	ui.setStatus(fmt.Sprintf("✅ 配置完成！本次写入/更新 %d 个模型（文件内共 %d 个）\r\n已写入 %s\r\n请重启 %s 生效", changed, total, path, productName), true)
 }
 
 type usageModel struct {

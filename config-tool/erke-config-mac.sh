@@ -59,10 +59,7 @@ if ! grep -q '"id"' "$TMP"; then
   exit 1
 fi
 
-# 5. 落盘（先备份原文件）
-if [ -f "$DIR/models.json" ]; then
-  cp -f "$DIR/models.json" "$DIR/models.json.bak-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
-fi
+# 5. 落盘（不留备份文件）
 mv "$TMP" "$DIR/models.json"
 
 N=$(grep -o '"id"' "$DIR/models.json" | wc -l | tr -d ' ')
