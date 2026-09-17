@@ -646,11 +646,16 @@ type OpenUsageFilter struct {
 	StartTime int64
 	EndTime   int64
 	Usernames []string // 精确集合（密钥 scope 下推，优先）
-	Username  string   // 模糊匹配
-	Model     string   // 模糊匹配
-	Group     string   // 精确匹配
-	GroupBy   string   // user | model | user_model
-	Limit     int
+	// Restricted=true 且 Usernames 为空 => 拒绝全部。密钥范围解析为空时必须拒绝，
+	// 绝不允许退化成「不过滤=看全部」。
+	Restricted  bool
+	Username    string   // 模糊匹配
+	Groups      []string // 分组白名单（IN）
+	Model       string   // 模糊匹配
+	Group       string   // 单分组精确匹配
+	GroupBy     string   // user | model | user_model | group | all
+	Granularity string   // "" | day | hour（东八区分桶）
+	Limit       int
 }
 
 // OpenUsageRow 用量汇总行（按用户/模型分组）
@@ -658,6 +663,7 @@ type OpenUsageRow struct {
 	Username         string `json:"username"`
 	ModelName        string `json:"model_name"`
 	Group            string `json:"group"`
+	BucketStart      int64  `json:"bucket_start"` // 分桶起点（unix 秒）；无粒度时为 0
 	Requests         int64  `json:"requests"`
 	PromptTokens     int64  `json:"prompt_tokens"`
 	CompletionTokens int64  `json:"completion_tokens"`
@@ -678,24 +684,55 @@ func GetOpenUsageStats(f OpenUsageFilter) ([]*OpenUsageRow, error) {
 		promptSum + " as prompt_tokens", completionSum + " as completion_tokens",
 		quotaSum + " as quota", "MIN(created_at) as first_at", "MAX(created_at) as last_at",
 		"MAX(" + logGroupCol + ") as " + logGroupCol}
-	groupBy := ""
+	groupParts := []string{}
+
+	// 时间粒度：按东八区分桶。整数除法在 PG/SQLite 直接截断，MySQL 的 / 返回小数，
+	// 需 CAST AS SIGNED（这是 AGENTS 规则 2 允许的方言分支，不用 DB 专有函数）。
+	bucketUnit := 0
+	switch f.Granularity {
+	case "day":
+		bucketUnit = 86400
+	case "hour":
+		bucketUnit = 3600
+	}
+	if bucketUnit > 0 {
+		castType := "BIGINT"
+		if common.UsingMySQL {
+			castType = "SIGNED"
+		}
+		bucketExpr := fmt.Sprintf("CAST((created_at + 28800) / %d AS %s)", bucketUnit, castType)
+		selects = append(selects, bucketExpr+" as bucket_start")
+		groupParts = append(groupParts, bucketExpr)
+	} else {
+		selects = append(selects, "0 as bucket_start")
+	}
+
 	switch f.GroupBy {
 	case "model":
 		selects = append(selects, "model_name as model_name")
-		groupBy = "model_name"
+		groupParts = append(groupParts, "model_name")
 	case "user_model":
 		selects = append(selects, "model_name as model_name")
-		groupBy = "username, model_name"
+		groupParts = append(groupParts, "username", "model_name")
+	case "group":
+		groupParts = append(groupParts, logGroupCol)
+	case "all":
+		// 不按实体维度分组：只看时间桶或整体合计
 	default: // user
 		selects = append(selects, "'' as model_name")
-		groupBy = "username"
+		groupParts = append(groupParts, "username")
 	}
 
 	tx := LOG_DB.Table("logs").Select(strings.Join(selects, ", ")).Where("type = ?", LogTypeConsume)
-	if len(f.Usernames) > 0 {
+	if f.Restricted && len(f.Usernames) == 0 {
+		tx = tx.Where("1 = 0")
+	} else if len(f.Usernames) > 0 {
 		tx = tx.Where("username IN ?", f.Usernames)
 	} else if f.Username != "" {
 		tx = tx.Where("username LIKE ?", "%"+f.Username+"%")
+	}
+	if len(f.Groups) > 0 {
+		tx = tx.Where(logGroupCol+" IN ?", f.Groups)
 	}
 	if f.Model != "" {
 		tx = tx.Where("model_name LIKE ?", "%"+f.Model+"%")
@@ -710,11 +747,15 @@ func GetOpenUsageStats(f OpenUsageFilter) ([]*OpenUsageRow, error) {
 		tx = tx.Where("created_at <= ?", f.EndTime)
 	}
 	limit := f.Limit
-	if limit <= 0 || limit > 1000 {
+	if limit <= 0 || limit > 5000 {
 		limit = 200
 	}
+	order := "quota desc"
+	if bucketUnit > 0 {
+		order = "bucket_start asc, quota desc" // 时间序列：按时间正序返回
+	}
 	var rows []*OpenUsageRow
-	if err := tx.Group(groupBy).Order("quota desc").Limit(limit).Scan(&rows).Error; err != nil {
+	if err := tx.Group(strings.Join(groupParts, ", ")).Order(order).Limit(limit).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	for _, r := range rows {

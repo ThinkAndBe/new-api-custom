@@ -1370,11 +1370,14 @@ type OpenUserRow struct {
 
 // GetOpenUsers 查询用户额度概览（数据开放接口用）。
 // groups/usernames 均空 = 全部用户；两者都非空时取并集。
-func GetOpenUsers(groups []string, usernames []string) ([]*OpenUserRow, error) {
+func GetOpenUsers(groups []string, usernames []string, restricted bool) ([]*OpenUserRow, error) {
 	tx := DB.Model(&User{}).Select("id, username, display_name, employee_id, " +
 		commonGroupCol + ", status, quota, used_quota, request_count, created_at, last_login_at")
-	if len(usernames) > 0 && len(groups) > 0 {
-		tx = tx.Where("username IN ? OR "+commonGroupCol+" IN ?", usernames, groups)
+	if restricted && len(usernames) == 0 && len(groups) == 0 {
+		// 密钥范围解析为空：拒绝全部，绝不退化成「不过滤=所有人」
+		tx = tx.Where("1 = 0")
+	} else if len(usernames) > 0 && len(groups) > 0 {
+		tx = tx.Where("(username IN ? OR "+commonGroupCol+" IN ?)", usernames, groups)
 	} else if len(usernames) > 0 {
 		tx = tx.Where("username IN ?", usernames)
 	} else if len(groups) > 0 {

@@ -188,20 +188,19 @@ func OpenQueryChatLogs(c *gin.Context) {
 		Group:     strings.TrimSpace(c.Query("group")),
 	}
 
-	// 权限：scope 限定用户集合（usernames 下推 SQL，保证分页/total 正确）
-	allowed, err := model.ScopeAllowedUsernames(scope)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "权限解析失败: " + err.Error()})
+	// 权限：密钥范围（权威）+ 请求侧收窄。空范围 => 返回空集，绝不退化成不过滤。
+	sf := resolveOpenScope(c, scope)
+	if sf.ErrMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": sf.ErrMsg})
 		return
 	}
-	names, msg := openRequestedUsernames(c, allowed)
-	if msg != "" {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+	if sf.DenyAll {
+		openScopeEmpty(c, "对话日志")
 		return
 	}
-	if names != nil {
-		filter.Usernames = names
-	}
+	filter.Usernames = sf.Users
+	filter.UsernamesRestricted = sf.Restricted
+	filter.Groups = sf.Groups
 
 	page, _ := strconv.Atoi(c.Query("page"))
 	pageSize, _ := strconv.Atoi(c.Query("page_size"))
@@ -255,7 +254,7 @@ func OpenQueryChatLogs(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 			return
 		}
-		stats = filterStatsByScope(stats, allowed)
+		stats = filterStatsByScope(stats, sf.Users)
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data": gin.H{

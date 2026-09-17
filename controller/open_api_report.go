@@ -79,39 +79,95 @@ func openParseRange(c *gin.Context, scope *model.OpenKeyScope, defDays int) (tim
 	return start, end, ""
 }
 
-// openRequestedUsernames 解析 username（单个，模糊）/ users（逗号分隔，精确）并做权限校验。
-// 返回 nil 表示「不做用户过滤」。
-func openRequestedUsernames(c *gin.Context, allowed []string) ([]string, string) {
+// openScopeFilter 解析并校验数据范围：密钥范围（权威）+ 请求侧收窄条件。
+//
+// 安全契约（务必保持）：
+//   - Restricted=true 且 Users 为空 => DenyAll，任何查询都必须返回空，不得退化成"不过滤"；
+//   - Users 非 nil 时，SQL 必须按 Users 过滤（即密钥能看的人是白名单）；
+//   - Groups 只允许在密钥已按分组授权时收窄，且必须是密钥分组的子集，绝不允许扩大。
+type openScopeFilter struct {
+	Users      []string // nil = 不限制用户
+	Groups     []string // 请求侧分组收窄（已校验 ⊆ 密钥分组）
+	Restricted bool
+	DenyAll    bool
+	ErrMsg     string
+}
+
+func resolveOpenScope(c *gin.Context, keyScope *model.OpenKeyScope) openScopeFilter {
+	out := openScopeFilter{}
+	allowed, err := model.ScopeAllowedUsernames(keyScope)
+	if err != nil {
+		out.ErrMsg = "权限解析失败: " + err.Error()
+		return out
+	}
+	out.Restricted = allowed != nil
+
 	raw := strings.TrimSpace(c.Query("users"))
 	single := strings.TrimSpace(c.Query("username"))
-	if raw == "" && single == "" {
-		if allowed == nil {
-			return nil, ""
-		}
-		return allowed, "" // 密钥限定了范围：把范围下推成过滤条件
-	}
-	var names []string
+	var requested []string
 	if raw != "" {
 		for _, n := range strings.Split(raw, ",") {
 			if n = strings.TrimSpace(n); n != "" {
-				names = append(names, n)
+				requested = append(requested, n)
 			}
 		}
+	} else if single != "" {
+		requested = []string{single}
+	}
+	if len(requested) > 0 {
+		if out.Restricted {
+			inScope := make(map[string]bool, len(allowed))
+			for _, u := range allowed {
+				inScope[u] = true
+			}
+			for _, u := range requested {
+				if !inScope[u] {
+					out.ErrMsg = fmt.Sprintf("用户「%s」不在该密钥的数据范围内", u)
+					return out
+				}
+			}
+		}
+		out.Users = requested
 	} else {
-		names = []string{single}
+		out.Users = allowed // nil=不限；受限时可能是空集合（此时 DenyAll）
 	}
-	if allowed != nil {
-		set := make(map[string]bool, len(allowed))
-		for _, u := range allowed {
-			set[u] = true
-		}
-		for _, n := range names {
-			if !set[n] {
-				return nil, fmt.Sprintf("用户「%s」不在该密钥的数据范围内", n)
+
+	if gRaw := strings.TrimSpace(c.Query("groups")); gRaw != "" {
+		var reqGroups []string
+		for _, g := range strings.Split(gRaw, ",") {
+			if g = strings.TrimSpace(g); g != "" {
+				reqGroups = append(reqGroups, g)
 			}
 		}
+		if len(reqGroups) > 0 {
+			if len(keyScope.Groups) == 0 {
+				out.ErrMsg = "该密钥未按分组授权，不能使用 groups 参数"
+				return out
+			}
+			valid := make(map[string]bool, len(keyScope.Groups))
+			for _, g := range keyScope.Groups {
+				valid[g] = true
+			}
+			for _, g := range reqGroups {
+				if !valid[g] {
+					out.ErrMsg = fmt.Sprintf("分组「%s」不在该密钥的数据范围内", g)
+					return out
+				}
+			}
+			out.Groups = reqGroups
+		}
 	}
-	return names, ""
+
+	out.DenyAll = out.Restricted && len(out.Users) == 0
+	return out
+}
+
+// openScopeEmpty 统一的"范围内无数据"响应（受限密钥解析为空时使用）
+func openScopeEmpty(c *gin.Context, what string) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"count": 0, "items": []any{},
+		"message": "该密钥的数据范围内当前没有" + what,
+	}})
 }
 
 func openCostCNY(quota int64) float64 {
@@ -141,6 +197,22 @@ func openTruncate(s string, maxChars int) (string, bool) {
 	return string(runes[:maxChars]), true
 }
 
+// openBoolParam 解析 0/1、true/false 形式的布尔查询参数
+func openBoolParam(c *gin.Context, name string, def bool) bool {
+	raw := strings.TrimSpace(c.Query(name))
+	if raw == "" {
+		return def
+	}
+	switch strings.ToLower(raw) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
+}
+
 func openIntParam(c *gin.Context, name string, def, min, max int) int {
 	v, _ := strconv.Atoi(c.Query(name))
 	if v < min {
@@ -162,29 +234,37 @@ func OpenQueryUsage(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
 		return
 	}
-	allowed, err := model.ScopeAllowedUsernames(scope)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "权限解析失败: " + err.Error()})
+	sf := resolveOpenScope(c, scope)
+	if sf.ErrMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": sf.ErrMsg})
 		return
 	}
-	names, msg := openRequestedUsernames(c, allowed)
-	if msg != "" {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+	if sf.DenyAll {
+		openScopeEmpty(c, "用户")
 		return
 	}
 
 	groupBy := strings.TrimSpace(c.Query("group_by"))
-	if groupBy != "model" && groupBy != "user_model" {
+	switch groupBy {
+	case "model", "user_model", "group", "all":
+	default:
 		groupBy = "user"
 	}
+	granularity := strings.TrimSpace(c.Query("granularity"))
+	if granularity != "day" && granularity != "hour" {
+		granularity = ""
+	}
 	rows, err := model.GetOpenUsageStats(model.OpenUsageFilter{
-		StartTime: start.Unix(),
-		EndTime:   end.Unix(),
-		Usernames: names,
-		Model:     strings.TrimSpace(c.Query("model")),
-		Group:     strings.TrimSpace(c.Query("group")),
-		GroupBy:   groupBy,
-		Limit:     openIntParam(c, "limit", 200, 1, 1000),
+		StartTime:   start.Unix(),
+		EndTime:     end.Unix(),
+		Usernames:   sf.Users,
+		Restricted:  sf.Restricted,
+		Groups:      sf.Groups,
+		Model:       strings.TrimSpace(c.Query("model")),
+		Group:       strings.TrimSpace(c.Query("group")),
+		GroupBy:     groupBy,
+		Granularity: granularity,
+		Limit:       openIntParam(c, "limit", 200, 1, 5000),
 	})
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
@@ -197,6 +277,8 @@ func OpenQueryUsage(c *gin.Context) {
 		Username         string  `json:"username"`
 		ModelName        string  `json:"model_name"`
 		Group            string  `json:"group"`
+		Bucket           string  `json:"bucket,omitempty"`       // 粒度分桶标签（东八区）
+		BucketStart      int64   `json:"bucket_start,omitempty"` // 分桶起点（unix 秒）
 		Requests         int64   `json:"requests"`
 		PromptTokens     int64   `json:"prompt_tokens"`
 		CompletionTokens int64   `json:"completion_tokens"`
@@ -208,8 +290,23 @@ func OpenQueryUsage(c *gin.Context) {
 	}
 	items := make([]item, 0, len(rows))
 	for _, r := range rows {
+		bucketLabel := ""
+		if r.BucketStart > 0 {
+			// bucket_start 是「东八区分桶序号」，换算回真实时间戳再格式化
+			unit := int64(86400)
+			if granularity == "hour" {
+				unit = 3600
+			}
+			bucketLabel = time.Unix(r.BucketStart*unit-28800, 0).In(time.FixedZone("CST", 8*3600)).
+				Format("2006-01-02")
+			if granularity == "hour" {
+				bucketLabel = time.Unix(r.BucketStart*unit-28800, 0).In(time.FixedZone("CST", 8*3600)).
+					Format("2006-01-02 15:00")
+			}
+		}
 		items = append(items, item{
 			Username: r.Username, ModelName: r.ModelName, Group: r.Group,
+			Bucket: bucketLabel, BucketStart: r.BucketStart,
 			Requests: r.Requests, PromptTokens: r.PromptTokens, CompletionTokens: r.CompletionTokens,
 			TotalTokens: r.TotalTokens, Quota: r.Quota, CostCNY: openCostCNY(r.Quota),
 			FirstAt: openFmtTime(r.FirstAt), LastAt: openFmtTime(r.LastAt),
@@ -236,11 +333,15 @@ func OpenQueryUsage(c *gin.Context) {
 		w := csv.NewWriter(c.Writer)
 		_ = w.Write([]string{"用户名", "模型", "分组", "调用次数", "输入Token", "输出Token", "总Token", "额度", "费用(元)", "首次调用", "最后调用"})
 		for _, it := range items {
-			_ = w.Write([]string{it.Username, it.ModelName, it.Group,
+			row := []string{it.Username, it.ModelName, it.Group, it.Bucket,
 				strconv.FormatInt(it.Requests, 10), strconv.FormatInt(it.PromptTokens, 10),
 				strconv.FormatInt(it.CompletionTokens, 10), strconv.FormatInt(it.TotalTokens, 10),
 				strconv.FormatInt(it.Quota, 10), strconv.FormatFloat(it.CostCNY, 'f', 4, 64),
-				it.FirstAt, it.LastAt})
+				it.FirstAt, it.LastAt}
+			if granularity == "" {
+				row = append(row[:3], row[4:]...) // 无粒度时不输出空列
+			}
+			_ = w.Write(row)
 		}
 		w.Flush()
 		return
@@ -252,15 +353,20 @@ func OpenQueryUsage(c *gin.Context) {
 		fmt.Fprintf(&b, "合计：%d 次调用，%d tokens，费用 ¥%.4f\n",
 			totals["requests"], totals["total_tokens"], totals["cost_cny"])
 		for _, it := range items {
-			fmt.Fprintf(&b, "- %s | %s | %d 次 | %d tokens | ¥%.4f | %s ~ %s\n",
-				it.Username, it.ModelName, it.Requests, it.TotalTokens, it.CostCNY, it.FirstAt, it.LastAt)
+			prefix := ""
+			if it.Bucket != "" {
+				prefix = it.Bucket + " | "
+			}
+			fmt.Fprintf(&b, "- %s%s | %s | %d 次 | %d tokens | ¥%.4f\n",
+				prefix, it.Username, it.ModelName, it.Requests, it.TotalTokens, it.CostCNY)
 		}
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(b.String()))
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
-		"range": rangeInfo, "group_by": groupBy, "totals": totals, "items": items,
+		"range": rangeInfo, "group_by": groupBy, "granularity": granularity,
+		"totals": totals, "items": items,
 	}})
 }
 
@@ -271,23 +377,22 @@ func OpenQueryUsage(c *gin.Context) {
 func OpenQueryUsers(c *gin.Context) {
 	scope := c.MustGet("open_scope").(*model.OpenKeyScope)
 
-	allowed, err := model.ScopeAllowedUsernames(scope)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "权限解析失败: " + err.Error()})
+	sf := resolveOpenScope(c, scope)
+	if sf.ErrMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": sf.ErrMsg})
 		return
 	}
-	names, msg := openRequestedUsernames(c, allowed)
-	if msg != "" {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+	if sf.DenyAll {
+		openScopeEmpty(c, "用户")
 		return
 	}
 	// 密钥按分组授权且未显式指定用户时，按分组下推（比逐一列举用户名更准确）
-	groups := []string(nil)
-	if names == nil && len(scope.Groups) > 0 {
+	groups := sf.Groups
+	if sf.Users == nil && len(scope.Groups) > 0 {
 		groups = scope.Groups
 	}
 
-	users, err := model.GetOpenUsers(groups, names)
+	users, err := model.GetOpenUsers(groups, sf.Users, sf.Restricted)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return
@@ -393,18 +498,19 @@ type openContentItem struct {
 }
 
 // loadOpenContents 取对话内容（受密钥 include_content 与范围限制）。返回 items/是否有内容权限/错误文本。
-func loadOpenContents(c *gin.Context, scope *model.OpenKeyScope, start, end time.Time, names []string, limit int, maxChars int) ([]openContentItem, string) {
+// loadOpenContents 取对话内容。默认只给「用户输入」，模型回复需显式 with_response=1。
+func loadOpenContents(c *gin.Context, scope *model.OpenKeyScope, sf openScopeFilter, start, end time.Time, limit, maxChars int, withResponse bool) ([]openContentItem, string) {
 	if !scope.IncludeContent {
 		return nil, "该密钥未开放对话内容（include_content=false），只能获取用量类数据"
 	}
 	filter := model.ChatLogFilter{
-		StartTime: start.Unix(),
-		EndTime:   end.Unix(),
-		ModelName: strings.TrimSpace(c.Query("model")),
-		Group:     strings.TrimSpace(c.Query("group")),
-	}
-	if names != nil {
-		filter.Usernames = names
+		StartTime:           start.Unix(),
+		EndTime:             end.Unix(),
+		ModelName:           strings.TrimSpace(c.Query("model")),
+		Group:               strings.TrimSpace(c.Query("group")),
+		Groups:              sf.Groups,
+		Usernames:           sf.Users,
+		UsernamesRestricted: sf.Restricted,
 	}
 	logs, _, err := model.GetChatLogs(filter, 1, limit)
 	if err != nil {
@@ -412,15 +518,33 @@ func loadOpenContents(c *gin.Context, scope *model.OpenKeyScope, start, end time
 	}
 	items := make([]openContentItem, 0, len(logs))
 	for _, l := range logs {
+		if l.Username != "" && sf.Restricted && len(sf.Users) > 0 && !openInSet(sf.Users, l.Username) {
+			continue
+		}
 		req, t1 := openTruncate(l.RequestContent, maxChars)
-		resp, t2 := openTruncate(l.ResponseContent, maxChars)
-		items = append(items, openContentItem{
+		item := openContentItem{
 			Time: openFmtTime(l.CreatedAt), Username: l.Username, ModelName: l.ModelName, Group: l.Group,
 			PromptTokens: l.PromptTokens, CompletionTokens: l.CompletionTokens,
-			Request: req, Response: resp, Truncated: t1 || t2,
-		})
+			Request: req, Truncated: t1,
+		}
+		if withResponse {
+			resp, t2 := openTruncate(l.ResponseContent, maxChars)
+			item.Response = resp
+			item.Truncated = t1 || t2
+		}
+		items = append(items, item)
 	}
 	return items, ""
+}
+
+// openInSet 判断用户名是否在白名单内（二次校验，防上游过滤遗漏）
+func openInSet(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 func OpenQueryContents(c *gin.Context) {
@@ -431,20 +555,20 @@ func OpenQueryContents(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
 		return
 	}
-	allowed, err := model.ScopeAllowedUsernames(scope)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "权限解析失败: " + err.Error()})
+	sf := resolveOpenScope(c, scope)
+	if sf.ErrMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": sf.ErrMsg})
 		return
 	}
-	names, msg := openRequestedUsernames(c, allowed)
-	if msg != "" {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+	if sf.DenyAll {
+		openScopeEmpty(c, "对话内容")
 		return
 	}
 	limit := openIntParam(c, "limit", 50, 1, 200)
 	maxChars := openIntParam(c, "max_chars", 0, 0, 100000)
+	withResponse := openBoolParam(c, "with_response", false)
 
-	items, errMsg := loadOpenContents(c, scope, start, end, names, limit, maxChars)
+	items, errMsg := loadOpenContents(c, scope, sf, start, end, limit, maxChars, withResponse)
 	if errMsg != "" {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": errMsg})
 		return
@@ -455,8 +579,12 @@ func OpenQueryContents(c *gin.Context) {
 		fmt.Fprintf(&b, "【调用内容】%s ~ %s，共 %d 条\n\n",
 			start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"), len(items))
 		for i, it := range items {
-			fmt.Fprintf(&b, "── 记录 %d ──\n时间：%s  用户：%s  模型：%s  tokens：%d/%d\n【提问】\n%s\n【回复】\n%s\n\n",
-				i+1, it.Time, it.Username, it.ModelName, it.PromptTokens, it.CompletionTokens, it.Request, it.Response)
+			fmt.Fprintf(&b, "── 记录 %d ──\n时间：%s  用户：%s  模型：%s  tokens：%d/%d\n【提问】\n%s\n",
+				i+1, it.Time, it.Username, it.ModelName, it.PromptTokens, it.CompletionTokens, it.Request)
+			if it.Response != "" {
+				fmt.Fprintf(&b, "【回复】\n%s\n", it.Response)
+			}
+			b.WriteString("\n")
 		}
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(b.String()))
 		return
@@ -464,8 +592,150 @@ func OpenQueryContents(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"range": gin.H{"start": start.Format("2006-01-02 15:04:05"), "end": end.Format("2006-01-02 15:04:05")},
-		"count": len(items), "items": items,
+		"count": len(items), "items": items, "with_response": withResponse,
 	}})
+}
+
+// ---- 批量导出对话内容：/api/open/contents/export ----
+//
+// 面向「所有相关分组的所有用户对话内容」场景：按 id 升序游标翻页，逐条写出，内存占用恒定。
+// 客户端循环：after_id 从 0 开始，每次取响应头 X-Next-After-Id，直到 X-Has-More=0。
+// 默认只返回用户输入（with_response=1 才带模型回复）。
+func OpenExportContents(c *gin.Context) {
+	scope := c.MustGet("open_scope").(*model.OpenKeyScope)
+
+	start, end, msg := openParseRange(c, scope, 7)
+	if msg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+		return
+	}
+	if !scope.IncludeContent {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "该密钥未开放对话内容（include_content=false），只能获取用量类数据"})
+		return
+	}
+	sf := resolveOpenScope(c, scope)
+	if sf.ErrMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": sf.ErrMsg})
+		return
+	}
+	afterId, _ := strconv.Atoi(c.Query("after_id"))
+	limit := openIntParam(c, "limit", 2000, 1, 5000)
+	maxChars := openIntParam(c, "max_chars", 0, 0, 100000)
+	withResponse := openBoolParam(c, "with_response", false)
+
+	filter := model.ChatLogFilter{
+		StartTime:           start.Unix(),
+		EndTime:             end.Unix(),
+		ModelName:           strings.TrimSpace(c.Query("model")),
+		Group:               strings.TrimSpace(c.Query("group")),
+		Groups:              sf.Groups,
+		Usernames:           sf.Users,
+		UsernamesRestricted: sf.Restricted,
+	}
+
+	format := strings.TrimSpace(c.Query("format"))
+	if format == "" {
+		format = "jsonl"
+	}
+
+	// 先探一次拿游标与是否还有更多（数据量小，直接全部取出后写出，保证响应头准确）
+	logs, hasMore, err := openFetchContentPage(filter, afterId, limit)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	nextAfter := afterId
+	if len(logs) > 0 {
+		nextAfter = logs[len(logs)-1].Id
+	}
+	c.Writer.Header().Set("X-Count", strconv.Itoa(len(logs)))
+	c.Writer.Header().Set("X-Next-After-Id", strconv.Itoa(nextAfter))
+	if hasMore {
+		c.Writer.Header().Set("X-Has-More", "1")
+	} else {
+		c.Writer.Header().Set("X-Has-More", "0")
+	}
+	c.Writer.Header().Set("Access-Control-Expose-Headers", "X-Count, X-Next-After-Id, X-Has-More")
+
+	switch format {
+	case "csv":
+		c.Writer.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		c.Writer.Header().Set("Content-Disposition",
+			fmt.Sprintf("attachment; filename=contents_%s.csv", time.Now().Format("20060102_150405")))
+		c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
+		w := csv.NewWriter(c.Writer)
+		header := []string{"日志ID", "时间", "用户ID", "用户名", "令牌", "渠道ID", "模型", "分组", "请求ID", "流式", "请求内容"}
+		if withResponse {
+			header = append(header, "回复内容")
+		}
+		_ = w.Write(header)
+		for _, l := range logs {
+			req, _ := openTruncate(l.RequestContent, maxChars)
+			row := []string{strconv.Itoa(l.Id), openFmtTime(l.CreatedAt), strconv.Itoa(l.UserId), l.Username,
+				l.TokenName, strconv.Itoa(l.ChannelId), l.ModelName, l.Group, l.RequestId,
+				strconv.FormatBool(l.IsStream), req}
+			if withResponse {
+				resp, _ := openTruncate(l.ResponseContent, maxChars)
+				row = append(row, resp)
+			}
+			_ = w.Write(row)
+		}
+		w.Flush()
+	case "text":
+		c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		var b strings.Builder
+		fmt.Fprintf(&b, "【对话内容】%s ~ %s，本页 %d 条，本页游标 %d~%d，还有更多：%v\n",
+			start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"),
+			len(logs), afterId, nextAfter, hasMore)
+		for _, l := range logs {
+			req, _ := openTruncate(l.RequestContent, maxChars)
+			fmt.Fprintf(&b, "── #%d %s | %s | %s\n%s\n", l.Id, openFmtTime(l.CreatedAt), l.Username, l.ModelName, req)
+			if withResponse {
+				resp, _ := openTruncate(l.ResponseContent, maxChars)
+				fmt.Fprintf(&b, "【回复】\n%s\n", resp)
+			}
+		}
+		_, _ = c.Writer.WriteString(b.String())
+	default: // jsonl：一行一条，便于直接喂给 AI
+		c.Writer.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+		for _, l := range logs {
+			req, truncated := openTruncate(l.RequestContent, maxChars)
+			item := gin.H{
+				"id": l.Id, "time": openFmtTime(l.CreatedAt), "user_id": l.UserId, "username": l.Username,
+				"token_name": l.TokenName, "channel_id": l.ChannelId, "model": l.ModelName, "group": l.Group,
+				"request_id": l.RequestId, "is_stream": l.IsStream,
+				"prompt_tokens": l.PromptTokens, "completion_tokens": l.CompletionTokens,
+				"request": req, "truncated": truncated,
+			}
+			if withResponse {
+				resp, t2 := openTruncate(l.ResponseContent, maxChars)
+				item["response"] = resp
+				item["truncated"] = truncated || t2
+			}
+			line, err := common.Marshal(item)
+			if err != nil {
+				continue
+			}
+			c.Writer.Write(line)
+			c.Writer.Write([]byte("\n"))
+		}
+	}
+}
+
+// openFetchContentPage 按游标取一页对话内容（升序，id > afterId）
+func openFetchContentPage(filter model.ChatLogFilter, afterId, limit int) ([]*model.ChatLog, bool, error) {
+	filter.AfterId = afterId
+	var logs []*model.ChatLog
+	tx := model.ApplyChatLogFilterForExport(model.LOG_DB.Model(&model.ChatLog{}), filter).
+		Order("id ASC").Limit(limit + 1)
+	if err := tx.Find(&logs).Error; err != nil {
+		return nil, false, err
+	}
+	hasMore := len(logs) > limit
+	if hasMore {
+		logs = logs[:limit]
+	}
+	return logs, hasMore, nil
 }
 
 // ---- 一站式报告：/api/open/report ----
@@ -493,22 +763,23 @@ func OpenQueryReport(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
 		return
 	}
-	allowed, err := model.ScopeAllowedUsernames(scope)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "权限解析失败: " + err.Error()})
+	sf := resolveOpenScope(c, scope)
+	if sf.ErrMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": sf.ErrMsg})
 		return
 	}
-	names, msg := openRequestedUsernames(c, allowed)
-	if msg != "" {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+	if sf.DenyAll {
+		openScopeEmpty(c, "用户")
 		return
 	}
+	withResponse := openBoolParam(c, "with_response", false)
 	topUsers := openIntParam(c, "top_users", 20, 1, 50)
 	samples := openIntParam(c, "samples", 3, 0, 200)
 	maxChars := openIntParam(c, "max_chars", 1200, 0, 100000)
 
 	rows, err := model.GetOpenUsageStats(model.OpenUsageFilter{
-		StartTime: start.Unix(), EndTime: end.Unix(), Usernames: names,
+		StartTime: start.Unix(), EndTime: end.Unix(), Usernames: sf.Users,
+		Restricted: sf.Restricted, Groups: sf.Groups,
 		Model: strings.TrimSpace(c.Query("model")), Group: strings.TrimSpace(c.Query("group")),
 		GroupBy: "user_model", Limit: 1000,
 	})
@@ -554,7 +825,7 @@ func OpenQueryReport(c *gin.Context) {
 	}
 
 	// 对话日志总数（按用户聚合，一次查询）：让调用方知道「共多少条、本报告附了多少条」
-	if counts, err := model.GetChatLogUserCounts(start.Unix(), end.Unix(), names); err == nil {
+	if counts, err := model.GetChatLogUserCounts(start.Unix(), end.Unix(), sf.Users, sf.Restricted); err == nil {
 		for _, u := range users {
 			u.LogCount = counts[u.Username]
 		}
@@ -579,7 +850,9 @@ func OpenQueryReport(c *gin.Context) {
 				}
 				c2 := c.Copy()
 				c2.Request.URL.RawQuery = fmt.Sprintf("limit=%d", want)
-				items, errMsg := loadOpenContents(c2, scope, start, end, []string{u.Username}, want, maxChars)
+				items, errMsg := loadOpenContents(c2, scope, openScopeFilter{
+					Users: []string{u.Username}, Restricted: true, Groups: sf.Groups,
+				}, start, end, want, maxChars, withResponse)
 				if errMsg != "" {
 					contentNote = errMsg
 					break

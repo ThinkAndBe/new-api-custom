@@ -425,6 +425,7 @@ func SetApiRouter(router *gin.Engine) {
 			openRoute.GET("/usage", controller.OpenQueryUsage)
 			openRoute.GET("/users", controller.OpenQueryUsers)
 			openRoute.GET("/contents", controller.OpenQueryContents)
+			openRoute.GET("/contents/export", controller.OpenExportContents)
 			openRoute.GET("/report", controller.OpenQueryReport)
 			// 面向 AI 智能体：自助说明 + OpenAPI 描述
 			openRoute.GET("/guide", controller.OpenAgentGuide)

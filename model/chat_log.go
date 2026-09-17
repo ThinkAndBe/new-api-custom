@@ -6,6 +6,8 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+
+	"gorm.io/gorm"
 )
 
 // ChatLog 对话日志，存储用户请求的文本内容（不含图片/文件等二进制数据）
@@ -40,6 +42,11 @@ type ChatLogFilter struct {
 	EndId     int
 	StartTime int64
 	EndTime   int64
+	// Groups 分组白名单（IN）；UsernamesRestricted=true 且 Usernames 为空表示「拒绝全部」
+	// ——密钥范围解析结果为空时必须拒绝，绝不能退化成"不过滤=看全部"。
+	Groups              []string
+	UsernamesRestricted bool
+	AfterId             int // 游标：仅取 id > AfterId（升序导出用）
 }
 
 // RecordChatLog 写入一条对话日志
@@ -114,8 +121,10 @@ func RecordChatLog(info *relaycommon.RelayInfo, content string) {
 
 // GetChatLogUserCounts 按用户统计对话日志条数（数据开放接口 report 用：告诉调用方共多少条）。
 // usernames 为空 = 全部用户。
-func GetChatLogUserCounts(startTime, endTime int64, usernames []string) (map[string]int64, error) {
-	tx := LOG_DB.Model(&ChatLog{}).Select("username, COUNT(*) as count")
+func GetChatLogUserCounts(startTime, endTime int64, usernames []string, restricted bool) (map[string]int64, error) {
+	tx := applyChatLogFilter(LOG_DB.Model(&ChatLog{}).Select("username, COUNT(*) as count"), ChatLogFilter{
+		Usernames: usernames, UsernamesRestricted: restricted,
+	})
 	if len(usernames) > 0 {
 		tx = tx.Where("username IN ?", usernames)
 	}
@@ -151,24 +160,10 @@ type ChatLogUserStat struct {
 
 // GetChatLogUserStats 按用户汇总对话日志（调用次数 / token），筛选条件与列表一致
 func GetChatLogUserStats(filter ChatLogFilter) ([]*ChatLogUserStat, error) {
-	tx := LOG_DB.Model(&ChatLog{}).
-		Select("user_id, MAX(username) as username, COUNT(*) as count, " +
-			"SUM(CASE WHEN prompt_tokens > 0 THEN prompt_tokens ELSE 0 END) as prompt_tokens, " +
-			"SUM(CASE WHEN completion_tokens > 0 THEN completion_tokens ELSE 0 END) as completion_tokens")
-	if filter.UserId != 0 {
-		tx = tx.Where("user_id = ?", filter.UserId)
-	}
-	if len(filter.Usernames) > 0 {
-		tx = tx.Where("username IN ?", filter.Usernames)
-	} else if filter.Username != "" {
-		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
-	}
-	if filter.ModelName != "" {
-		tx = tx.Where("model_name LIKE ?", "%"+filter.ModelName+"%")
-	}
-	if filter.Group != "" {
-		tx = tx.Where(logGroupCol+" LIKE ?", "%"+filter.Group+"%")
-	}
+	tx := applyChatLogFilter(LOG_DB.Model(&ChatLog{}).
+		Select("user_id, MAX(username) as username, COUNT(*) as count, "+
+			"SUM(CASE WHEN prompt_tokens > 0 THEN prompt_tokens ELSE 0 END) as prompt_tokens, "+
+			"SUM(CASE WHEN completion_tokens > 0 THEN completion_tokens ELSE 0 END) as completion_tokens"), filter)
 	// 通用关键词：同时搜用户名/分组/对话内容（如搜 WK 匹配 WK第一批/WK第二批 等）
 	if filter.Keyword != "" {
 		kw := "%" + filter.Keyword + "%"
@@ -187,19 +182,26 @@ func GetChatLogUserStats(filter ChatLogFilter) ([]*ChatLogUserStat, error) {
 	return stats, nil
 }
 
-func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, error) {
-	var logs []*ChatLog
-	var total int64
+// applyChatLogFilter 统一应用对话日志过滤条件（列表/统计/导出共用，避免各处写法漂移）。
+// 权限语义：UsernamesRestricted=true 且未给出用户名集合时，一律返回空集（安全兜底）。
+// ApplyChatLogFilterForExport 供数据开放接口的批量导出复用同一套过滤（含权限白名单语义）
+func ApplyChatLogFilterForExport(tx *gorm.DB, filter ChatLogFilter) *gorm.DB {
+	return applyChatLogFilter(tx, filter)
+}
 
-	tx := LOG_DB.Model(&ChatLog{})
-
+func applyChatLogFilter(tx *gorm.DB, filter ChatLogFilter) *gorm.DB {
 	if filter.UserId != 0 {
 		tx = tx.Where("user_id = ?", filter.UserId)
 	}
-	if len(filter.Usernames) > 0 {
+	if filter.UsernamesRestricted && len(filter.Usernames) == 0 {
+		tx = tx.Where("1 = 0")
+	} else if len(filter.Usernames) > 0 {
 		tx = tx.Where("username IN ?", filter.Usernames)
 	} else if filter.Username != "" {
 		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
+	}
+	if len(filter.Groups) > 0 {
+		tx = tx.Where(logGroupCol+" IN ?", filter.Groups)
 	}
 	if filter.ModelName != "" {
 		tx = tx.Where("model_name LIKE ?", "%"+filter.ModelName+"%")
@@ -210,16 +212,14 @@ func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, e
 	if filter.Group != "" {
 		tx = tx.Where(logGroupCol+" LIKE ?", "%"+filter.Group+"%")
 	}
-	// 通用关键词：同时搜用户名/分组/对话内容（如搜 WK 匹配 WK第一批/WK第二批 等）
-	if filter.Keyword != "" {
-		kw := "%" + filter.Keyword + "%"
-		tx = tx.Where("(username LIKE ? OR "+logGroupCol+" LIKE ? OR request_content LIKE ?)", kw, kw, kw)
-	}
 	if filter.StartId != 0 {
 		tx = tx.Where("id >= ?", filter.StartId)
 	}
 	if filter.EndId != 0 {
 		tx = tx.Where("id <= ?", filter.EndId)
+	}
+	if filter.AfterId != 0 {
+		tx = tx.Where("id > ?", filter.AfterId)
 	}
 	if filter.StartTime != 0 {
 		tx = tx.Where("created_at >= ?", filter.StartTime)
@@ -227,7 +227,19 @@ func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, e
 	if filter.EndTime != 0 {
 		tx = tx.Where("created_at <= ?", filter.EndTime)
 	}
+	return tx
+}
 
+func GetChatLogs(filter ChatLogFilter, page, pageSize int) ([]*ChatLog, int64, error) {
+	var logs []*ChatLog
+	var total int64
+
+	tx := applyChatLogFilter(LOG_DB.Model(&ChatLog{}), filter)
+	// 通用关键词：同时搜用户名/分组/对话内容（如搜 WK 匹配 WK第一批/WK第二批 等）
+	if filter.Keyword != "" {
+		kw := "%" + filter.Keyword + "%"
+		tx = tx.Where("(username LIKE ? OR "+logGroupCol+" LIKE ? OR request_content LIKE ?)", kw, kw, kw)
+	}
 	err := tx.Count(&total).Error
 	if err != nil {
 		return nil, 0, err
@@ -269,32 +281,33 @@ func DeleteAllChatLogs() error {
 }
 
 // StreamAllChatLogs 流式查询对话日志，用于导出
-func StreamAllChatLogs(filter ChatLogFilter, callback func(*ChatLog) error) error {
-	tx := LOG_DB.Model(&ChatLog{})
+// StreamChatLogsAfter 按 id 升序游标取数（id > afterId，最多 limit 条），用于批量导出。
+// 返回是否还有更多数据（用 limit+1 探测）。
+func StreamChatLogsAfter(filter ChatLogFilter, afterId, limit int, callback func(*ChatLog) error) (bool, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	filter.AfterId = afterId
+	var logs []*ChatLog
+	tx := applyChatLogFilter(LOG_DB.Model(&ChatLog{}), filter).Order("id ASC").Limit(limit + 1)
+	if err := tx.Find(&logs).Error; err != nil {
+		return false, err
+	}
+	hasMore := len(logs) > limit
+	if hasMore {
+		logs = logs[:limit]
+	}
+	for _, l := range logs {
+		if err := callback(l); err != nil {
+			return hasMore, err
+		}
+	}
+	return hasMore, nil
+}
 
-	if filter.UserId != 0 {
-		tx = tx.Where("user_id = ?", filter.UserId)
-	}
-	if len(filter.Usernames) > 0 {
-		tx = tx.Where("username IN ?", filter.Usernames)
-	} else if filter.Username != "" {
-		tx = tx.Where("username LIKE ?", "%"+filter.Username+"%")
-	}
-	if filter.ModelName != "" {
-		tx = tx.Where("model_name = ?", filter.ModelName)
-	}
-	if filter.TokenName != "" {
-		tx = tx.Where("token_name = ?", filter.TokenName)
-	}
-	if filter.Group != "" {
-		tx = tx.Where(logGroupCol+" = ?", filter.Group)
-	}
-	if filter.StartId != 0 {
-		tx = tx.Where("id >= ?", filter.StartId)
-	}
-	if filter.EndId != 0 {
-		tx = tx.Where("id <= ?", filter.EndId)
-	}
+func StreamAllChatLogs(filter ChatLogFilter, callback func(*ChatLog) error) error {
+	tx := applyChatLogFilter(LOG_DB.Model(&ChatLog{}), filter)
+
 	if filter.StartTime != 0 {
 		tx = tx.Where("created_at >= ?", filter.StartTime)
 	}

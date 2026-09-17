@@ -1,14 +1,13 @@
 package controller
 
-// open_api_guide.go — 面向 AI 智能体的使用说明（数据开放接口）。
+// open_api_guide.go — 面向 AI 智能体的操作手册（数据开放接口）。
 //
-// 说明文本随接口一起发布，并注入「当前密钥」的真实数据范围，顾问只要把密钥和本文档
-// 一起交给智能体，智能体即可自助完成：拉数据 → 交叉核对 → 产出合规审查结论。
-//   GET /api/open/guide          本文档（text/markdown，format=json 返回结构化）
-//   GET /api/open/openapi.json   五个查询端点的 OpenAPI 3.0 描述（供支持工具导入的智能体）
+// 文档随接口一起发布，并注入「当前密钥」的真实数据范围；顾问把密钥和本文档交给智能体后，
+// 智能体即可自助完成：拉权限内数据 → 交叉核对 → 产出合规审查结论。
+//   GET /api/open/guide          本文档（text/markdown；format=json 返回结构化）
+//   GET /api/open/openapi.json   查询端点的 OpenAPI 3.0 描述（供支持工具导入的智能体）
 //
-// 实现提示：文档正文用反引号包裹的原生字符串承载，其中的 markdown 反引号统一写成 ~~
-// 占位符，最后 ReplaceAll 还原——否则会提前结束 Go 字符串。
+// 实现提示：正文用反引号原生字符串承载，其中 markdown 反引号统一写 ~~ 占位，最后 ReplaceAll 还原。
 
 import (
 	"fmt"
@@ -57,155 +56,196 @@ func openScopeDesc(scope *model.OpenKeyScope, allowed []string) string {
 	return fmt.Sprintf("共 %d 个授权用户：%s", len(names), strings.Join(names, "、"))
 }
 
-// buildAgentGuide 生成面向 AI 智能体的完整使用说明（中文）。
+// buildAgentGuide 生成面向 AI 智能体的操作手册
 func buildAgentGuide(c *gin.Context, scope *model.OpenKeyScope, allowed []string) string {
 	base := openBaseURL(c)
 
-	contentRule := "可以获取对话内容（密钥已开放 include_content）"
+	contentRule := "可以读取用户输入内容（include_content=true）"
 	if !scope.IncludeContent {
-		contentRule = "**不可获取对话内容**（该密钥 include_content=false）：/api/open/contents 会直接报错，" +
-			"report 也不会带内容样本。请只基于用量数据下结论，并在结论中注明「本次未提供内容，无法判断用途本身是否合规」"
+		contentRule = "**无内容权限**（include_content=false）：/api/open/contents 与 /api/open/contents/export 会报错，" +
+			"report 也不带内容。只能基于用量数据下结论，并注明「本次未提供内容，无法判断用途」"
+	}
+	scopeGroups := "（未按分组限定）"
+	if len(scope.Groups) > 0 {
+		scopeGroups = strings.Join(scope.Groups, "、")
 	}
 
-	guide := `# TOKENHUB 数据开放接口 · AI 智能体使用说明
+	guide := `# TOKENHUB 数据开放接口 · AI 智能体操作手册
 
-## 一、你的角色与目标
-你是「用户 AI 使用合规审查助手」。你通过 TOKENHUB 的只读数据开放接口，获取指定用户在指定
-时间范围内的模型调用情况与调用内容，然后为顾问产出结论：每个用户在用什么模型、花了多少、
-是否存在与工作无关的用途、是否存在资源浪费（超长上下文、重复提问、模型选择不当）、是否涉及
-敏感信息，以及是否可以继续授权。
+## 0. 你的任务
+你是「用户 AI 使用合规审查助手」。基于只读的数据开放接口，回答两类问题并给出结论：
+- 任务 A：每个用户的**调用次数、按时间节点的 token 消耗总量、消耗金额**
+- 任务 B：**所有相关分组的全部用户对话内容**（用于判断用途是否合规、是否浪费资源）
 
-## 二、硬性约束（必须遵守）
-1. 所有接口都是**只读**的；不要尝试任何写操作，也不要请求本说明以外的接口。
-2. 只使用接口返回的数据。不要编造用户、模型、金额、时间或对话内容；数据缺失就写「数据缺失」。
-3. 用户范围受密钥限制，~~users~~ 只能填下方「你的数据范围」里的用户，越权请求会被拒绝。
-4. 时间跨度受密钥「最多回看天数」限制，超出部分会被自动裁剪，请在结论里写明实际覆盖的区间。
-5. 金额单位是人民币元（¥），接口已直接给出（~~cost_cny~~ / ~~used_cny~~ 等），不要自行换算。
-6. 引用对话内容作为证据时，只引用接口返回的原文片段，不要扩写、也不要推测用户动机。
+## 1. 最高优先级约束（违反即为错误输出）
+1. **权限边界**：你只能访问本密钥范围内的数据（见 §3）。接口返回的数据必定已按范围过滤；
+   你若传 ~~users~~ / ~~groups~~ 只能**收窄**，越权会直接报错——不要枚举或猜测范围外的用户。
+2. **只读**：所有接口都是 GET，不要尝试任何写操作。
+3. **不编造**：只使用接口返回的数据。缺失就写「数据缺失」，不要推测用户动机、不要补数据。
+4. **内容默认只有用户输入**：内容接口默认返回用户提问（~~request~~），模型回复默认不返回
+   （需要时显式 ~~with_response=1~~）。
+5. **金额单位是人民币元**，接口已给出 ~~cost_cny~~ / ~~used_cny~~，不要自行换算。
+6. 时间参数只写日期（~~YYYY-MM-DD~~）时按**整天**处理；分桶时间统一为**东八区**。
 
-## 三、鉴权
-所有请求携带同一个请求头（密钥由顾问另行提供）：
+## 2. 鉴权
+所有请求带同一个请求头：
 
-    Authorization: Bearer sk-open-xxxx
+    Authorization: Bearer <本密钥>
 
-## 四、你的数据范围（本密钥）
-- 可访问用户：__SCOPE__
+## 3. 你的数据范围（由本密钥决定，不可扩大）
+- 授权分组：__SCOPE_GROUPS__
+- 可访问用户：__SCOPE_USERS__
 - 内容权限：__CONTENT__
 - 最多回看天数：__MAXDAYS__ 天
 - 站点地址：__BASE__
 
-## 五、接口清单
+## 4. 任务 A：调用次数 / 按时间节点的 token / 金额
 
-### 1. 一站式报告（首选，一次调用拿到大部分材料）
-    GET __BASE__/api/open/report?start=YYYY-MM-DD&end=YYYY-MM-DD&top_users=20&samples=3&max_chars=1200&format=text
+    GET __BASE__/api/open/usage?start=2026-09-01&end=2026-09-30&granularity=day&group_by=user&format=json
 
-参数：~~start~~/~~end~~（默认最近 7 天）、~~users~~（逗号分隔，缺省=范围内全部）、~~model~~、~~group~~、
-~~top_users~~（默认 20，按费用降序取前 N 人）、~~samples~~（每人最近几条内容样本，默认 3，0=不带内容）、
-~~max_chars~~（每条内容截断长度，默认 1200）、~~format=json|text~~（text 是可直接阅读/喂给大模型的
-纯文本，末尾自带审查提示词）。
-返回：~~totals~~ 合计；~~users[]~~ 每人 ~~requests~~ / ~~total_tokens~~ / ~~prompt_tokens~~ /
-~~completion_tokens~~ / ~~cost_cny~~ / ~~first_at~~ / ~~last_at~~；~~models[]~~ 该人各模型明细；~~samples[]~~ 内容样本。
+参数组合（按需选一种）：
+| 目标 | 参数 |
+| --- | --- |
+| 每个用户 × 每天的次数/token/金额 | ~~granularity=day&group_by=user~~ |
+| 每个用户 × 每小时（排查突发） | ~~granularity=hour&group_by=user~~ |
+| 每个用户 × 每模型 × 每天 | ~~granularity=day&group_by=user_model~~ |
+| 每个分组 × 每天（先看大盘） | ~~granularity=day&group_by=group~~ |
+| 全体 × 每天 | ~~granularity=day&group_by=all~~ |
+| 只要区间合计（不分时间） | 去掉 ~~granularity~~ |
 
-### 2. 模型调用情况（只需要数字时用）
-    GET __BASE__/api/open/usage?start=YYYY-MM-DD&end=YYYY-MM-DD&group_by=user_model&format=json
+返回（json）：
+    {"success":true,"data":{
+      "range":{"start":"2026-09-01 00:00:00","end":"2026-09-30 23:59:59","days":30},
+      "group_by":"user","granularity":"day",
+      "totals":{"requests":0,"prompt_tokens":0,"completion_tokens":0,"total_tokens":0,"quota":0,"cost_cny":0},
+      "items":[{"username":"张三","model_name":"","group":"WK第一批","bucket":"2026-09-16",
+                "requests":120,"prompt_tokens":3500000,"completion_tokens":45000,"total_tokens":3545000,
+                "quota":1776000,"cost_cny":3.552,"first_at":"...","last_at":"..."}]}}
 
-~~group_by~~：~~user~~（默认，按人）/ ~~model~~ / ~~user_model~~（人×模型）；~~limit~~ 默认 200、最大 1000；
-~~format=csv|text~~ 可导出报表或纯文本。
-每行字段：~~username~~ / ~~model_name~~ / ~~group~~ / ~~requests~~ / ~~prompt_tokens~~ / ~~completion_tokens~~ /
-~~total_tokens~~ / ~~quota~~ / ~~cost_cny~~ / ~~first_at~~ / ~~last_at~~。
+字段语义：
+- ~~requests~~ 调用次数；~~prompt_tokens~~ 输入 token；~~completion_tokens~~ 输出 token；~~total_tokens~~ 两者之和
+- ~~quota~~ 原始额度单位；~~cost_cny~~ = quota / 500000，单位为元（**报金额用这个**）
+- ~~bucket~~ 分桶标签（东八区）：~~granularity=day~~ 为 ~~YYYY-MM-DD~~，~~hour~~ 为 ~~YYYY-MM-DD HH:00~~
+- ~~first_at~~ / ~~last_at~~ 仅在不分桶时有意义（该组内首末调用时间）
+- ~~limit~~ 默认 200、最大 5000；超限时按 ~~bucket~~ 升序 + 金额降序截断
 
-### 3. 用户额度概览（回答「给了多少、用了多少」）
-    GET __BASE__/api/open/users?format=json
+## 5. 任务 B：所有相关分组的全部用户对话内容
 
-**注意：额度字段是账户累计值，不随时间范围变化。** 字段：~~user_id~~ / ~~username~~ / ~~display_name~~ /
-~~employee_id~~ / ~~group~~ / ~~status~~ / ~~quota~~ / ~~used_quota~~ / ~~remaining_quota~~ / ~~quota_cny~~ /
-~~used_cny~~ / ~~remaining_cny~~ / ~~request_count~~ / ~~created_at~~ / ~~last_login_at~~。
-典型用法：用本接口的累计已用跟接口 2 的区间费用对照，回答「这段时间的消耗占其总额度的多少」。
+**用游标循环拉取，不要用 ~~page~~ 深翻页**（慢且易漏）。默认只返回用户输入。
 
-### 4. 调用内容（要看原文时用）
-    GET __BASE__/api/open/contents?users=张三&start=YYYY-MM-DD&end=YYYY-MM-DD&limit=50&max_chars=2000&format=text
+    GET __BASE__/api/open/contents/export?start=2026-09-16&end=2026-09-16&limit=2000&format=jsonl&after_id=0
 
-~~limit~~ 默认 50、最大 200，按时间**从新到旧**返回；~~max_chars~~ 控制截断（0=完整原文）。
-字段：~~time~~ / ~~username~~ / ~~model~~ / ~~group~~ / ~~prompt_tokens~~ / ~~completion_tokens~~ /
-~~request~~ / ~~response~~ / ~~truncated~~。
+响应头（每次都要读）：
+- ~~X-Next-After-Id~~：下一页的 ~~after_id~~（填进下一次请求）
+- ~~X-Has-More~~：~~1~~ 还有数据，~~0~~ 已拉完
+- ~~X-Count~~：本页条数
 
-### 5. 对话日志明细与导出报表（字段与后台「对话日志 → 导出CSV」完全一致）
-    GET __BASE__/api/open/chat_logs?start=YYYY-MM-DD&end=YYYY-MM-DD&format=csv
-    GET __BASE__/api/open/chat_logs?start=...&end=...&stats=1                  # 按人汇总条数与 token
-    GET __BASE__/api/open/chat_logs?start=...&end=...&page=1&page_size=50      # 明细分页
+循环（伪代码，务必按此实现）：
+    after = 0
+    loop:
+      resp = GET /api/open/contents/export?start=..&end=..&limit=2000&format=jsonl&after_id={after}
+      consume(resp.body)              # jsonl：一行一条 JSON
+      if resp.headers[X-Has-More] == "0": break
+      after = resp.headers[X-Next-After-Id]
 
-导出报表列（顺序固定）：~~日志ID~~、~~时间~~、~~用户ID~~、~~用户名~~、~~令牌~~、~~渠道ID~~、~~模型~~、
-~~分组~~、~~请求ID~~、~~流式~~、~~请求内容~~。时间为东八区本地时间，格式 ~~YYYY-MM-DD HH:mm:ss~~；
-仅当密钥开放内容权限时才有「请求内容」列。
+其它参数：
+| 参数 | 说明 |
+| --- | --- |
+| ~~format=jsonl~~ | 默认；一行一条 JSON，最适合直接消费 |
+| ~~format=csv~~ | 列与后台「对话日志 → 导出CSV」完全一致，适合交付 Excel |
+| ~~format=text~~ | 纯文本，适合人读 |
+| ~~users=张三,李四~~ | 只取指定用户（必须在授权范围内） |
+| ~~groups=WK第一批~~ | 只取指定分组（必须是本密钥授权分组的子集） |
+| ~~model=glm-5.3~~ | 只取指定模型（模糊匹配） |
+| ~~max_chars=2000~~ | 每条内容截断长度，0=原文；长上下文建议 2000~8000 |
+| ~~with_response=1~~ | 附带模型回复（默认不返回） |
+| ~~limit~~ | 默认 2000、最大 5000 |
 
-## 六、字段字典（明细 / 汇总 / 额度）
-| 字段 | 含义 | 出现位置 |
+jsonl 每行字段：
+    {"id":123,"time":"2026-09-16 18:07:50","user_id":11,"username":"肖仕泉","token_name":"tok",
+     "channel_id":3,"model":"glm-5.3","group":"WK第二批","request_id":"...","is_stream":false,
+     "prompt_tokens":6879,"completion_tokens":702,"request":"<用户输入原文>","truncated":false}
+
+> 数据量大时建议**按天切片**循环（每天各自 after_id 循环），便于断点续传与分批交给模型。
+
+## 6. 其它端点
+
+| 端点 | 用途 | 关键参数 |
 | --- | --- | --- |
-| 日志ID（id） | 一次调用的唯一编号 | 明细 |
-| 时间（time / created_at） | 调用发生时间（本地时区） | 明细；usage/report 的 first_at、last_at |
-| 用户ID（user_id） | 用户编号 | 明细、users |
-| 用户名（username） | 登录用户名，审查报告以它为单位 | 全部 |
-| 令牌（token_name） | 调用所用令牌名 | 明细 |
-| 渠道ID（channel_id） | 命中的上游渠道编号 | 明细 |
-| 模型（model_name / model） | 模型名 | 全部 |
-| 分组（group） | 计费分组（用户分组或被令牌覆盖后的实际分组） | 全部 |
-| 请求ID（request_id） | 上游请求追踪号 | 明细 |
-| 流式（is_stream） | 是否流式返回 | 明细 |
-| 请求内容（request / 请求内容） | 用户提问原文（受 max_chars 截断） | 明细、contents、report.samples |
-| 回复内容（response） | 模型回复原文（同上） | contents、report.samples |
-| tokens | 输入 prompt_tokens / 输出 completion_tokens / 合计 total_tokens | 明细、usage、report |
-| 费用（cost_cny） | 该次或该组调用的费用（元） | usage、report |
-| 额度（quota / used_quota / remaining_quota） | 账户总额度、累计已用、剩余（元，累计值） | users |
+| ~~/api/open/users~~ | 每人**累计**总额度/已用/剩余（元）+ 累计调用次数 + 分组/状态/工号 | ~~format=json\|text\|csv~~ |
+| ~~/api/open/report~~ | 一次拿到：用量汇总 + 每人模型明细 + 每人最近 N 条输入内容 | ~~top_users≤50~~、~~samples≤200~~、~~max_chars~~、~~with_response~~、~~format=json\|text~~ |
+| ~~/api/open/contents~~ | 单页取内容（不想写游标循环时用，单次上限 200 条） | ~~users~~、~~groups~~、~~limit≤200~~、~~max_chars~~、~~with_response~~、~~format=json\|text~~ |
+| ~~/api/open/chat_logs~~ | 明细/报表：~~stats=1~~ 按人汇总、~~format=csv~~ 导出报表、~~page/page_size≤100~~ 分页 | ~~token_name~~、~~model_name~~、~~group~~ |
+| ~~/api/open/guide~~ | 本手册（~~format=json~~ 返回结构化 + 范围字段） | — |
 
-## 七、推荐工作流
-1. 先调**接口 3**（users）确认范围内有哪些人、各自额度与累计消耗，建立基线。
-2. 再调**接口 1**（report，format=text）拿到区间内的费用排序、模型明细与内容样本。
-3. 对「费用异常高」或「模型选择可疑」的用户，用**接口 4**（contents，users=该人、max_chars 调大、
-   必要时分页）取更完整的原文核对。
-4. 需要和顾问已有表格对齐时，用**接口 5**的 ~~format=csv~~ 导出报表（列与后台导出完全一致）。
-5. 组织结论时写清区间、人数、总费用、每人结论与证据；数据不足就写「数据不足」。
+额度说明：~~/api/open/users~~ 的额度是**账户累计值**，不随时间窗变化；与 ~~/usage~~ 的区间金额对照即可回答
+「这段时间的消耗占其总额度的多少」。
 
-## 八、输出格式要求
-按用户逐条给出，每条包含：
+## 7. 推荐执行顺序
+1. ~~GET /api/open/users~~ → 建基线：范围内有哪些人、各自额度与累计消耗（发现"授权了没用"/"额度给太多"）。
+2. ~~GET /api/open/usage?granularity=day&group_by=user~~ → 任务 A 的答案：每人每日次数/token/金额矩阵。
+3. ~~GET /api/open/contents/export~~ 游标循环拉完 → 任务 B 的答案：范围内全部用户输入内容。
+4. 交叉核对：对「金额靠前」或「模型选择可疑」的用户，用 ~~users=~~ 单独再拉一次细看。
+5. 输出结论（见 §8）。
+
+## 8. 输出格式（严格遵守）
+按用户逐条：
 - **结论**：合规 / 需关注 / 不建议继续授权（三选一）
-- **用量事实**：调用次数、tokens、费用、主要使用的模型、活跃时段
-- **判断依据**：为什么给出该结论（对照标准：与工作无关的用途、明显浪费、敏感信息）
-- **证据**：直接引用接口返回的内容片段，并注明时间与模型
-最后给一段整体小结（范围覆盖度、共性问题、建议的额度或授权调整）。
+- **用量事实**：区间内调用次数、输入/输出 token、金额（元）、主要模型、按天分布要点
+- **判断依据**：对照标准——①与工作无关的用途；②资源浪费（超长上下文、重复提问、模型选择不当）；
+  ③敏感信息（客户数据、代码密钥、个人信息）
+- **证据**：直接引用返回内容中的原文片段，注明时间与模型
+最后给整体小结：覆盖区间、人数、总金额、共性问题、额度或授权调整建议。
+若范围内无数据或内容权限缺失，明确写出，不要用推测填充。
 
-## 九、错误处理
-返回体统一为 ~~{"success":false,"message":"..."}~~，常见 message 与处置：
-- ~~缺少 Authorization: Bearer <开放密钥>~~：没带密钥。
-- ~~密钥无效~~ / ~~密钥已过期~~ / ~~密钥已停用~~：联系管理员换发。
-- ~~用户「X」不在该密钥的数据范围内~~：越权请求，改用授权范围内的用户。
-- ~~该密钥未开放对话内容（include_content=false）~~：无内容权限，改用用量类接口。
-- ~~start 时间格式应为 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss~~：时间参数写错。
-- ~~对话日志功能未启用~~：站点未开启对话日志，请管理员开启。
+## 9. 错误处理
+返回体统一 ~~{"success":false,"message":"..."}~~（HTTP 200）：
+| message | 含义 / 处置 |
+| --- | --- |
+| 缺少 Authorization: Bearer <开放密钥> | 请求头没带密钥 |
+| 密钥无效 / 密钥已过期 / 密钥已停用 | 联系管理员换发 |
+| 用户「X」不在该密钥的数据范围内 | 越权（只能查授权用户），改用范围内用户 |
+| 分组「X」不在该密钥的数据范围内 | 越权；或该密钥未按分组授权，去掉 ~~groups~~ |
+| 该密钥未开放对话内容（include_content=false） | 无内容权限，改用用量类接口 |
+| 该密钥的数据范围内当前没有… | 范围解析为空（如分组下无人），属正常空结果 |
+| start/end 时间格式应为 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss | 时间参数写错 |
+| 对话日志功能未启用 | 站点未开启对话日志，请管理员开启 |
 
-## 十、示例
-    # 1) 最近 30 天一览（费用降序、每人 3 条内容样本）
+## 10. 完整示例
+    KEY=sk-open-xxxx
+    BASE=__BASE__
+
+    # 任务 A：每人每天的次数/token/金额
     curl -H "Authorization: Bearer $KEY" \
-      "__BASE__/api/open/report?start=__START__&end=__END__&top_users=20&samples=3&format=text"
+      "$BASE/api/open/usage?start=__START__&end=__END__&granularity=day&group_by=user&format=json"
 
-    # 2) 看某人是否在浪费：先看用量，再看内容
-    curl -H "Authorization: Bearer $KEY" "__BASE__/api/open/usage?users=张三&group_by=user_model&start=__START__&end=__END__"
-    curl -H "Authorization: Bearer $KEY" "__BASE__/api/open/contents?users=张三&limit=50&max_chars=2000&start=__START__&end=__END__&format=text"
+    # 任务 A：分组大盘
+    curl -H "Authorization: Bearer $KEY" \
+      "$BASE/api/open/usage?start=__START__&end=__END__&granularity=day&group_by=group&format=text"
 
-    # 3) 与后台导出报表同列的 CSV
+    # 任务 B：游标循环拉取全部用户输入内容（jsonl）
+    after=0
+    while :; do
+      curl -s -D headers.txt -H "Authorization: Bearer $KEY" \
+        "$BASE/api/open/contents/export?start=__START__&end=__END__&limit=2000&format=jsonl&after_id=$after" >> contents.jsonl
+      grep -qi "X-Has-More: 0" headers.txt && break
+      after=$(grep -i "X-Next-After-Id:" headers.txt | tr -d '\r' | awk '{print $2}')
+    done
+
+    # 与后台导出报表同列（交付 Excel）
     curl -H "Authorization: Bearer $KEY" -o chat_logs.csv \
-      "__BASE__/api/open/chat_logs?start=__START__&end=__END__&format=csv"
+      "$BASE/api/open/chat_logs?start=__START__&end=__END__&format=csv"
 `
 
-	start := timeNowMinusDays(30)
-	end := timeNowDate()
 	repl := map[string]string{
-		"~~":          "`",
-		"__SCOPE__":   openScopeDesc(scope, allowed),
-		"__CONTENT__": contentRule,
-		"__MAXDAYS__": fmt.Sprintf("%d", scope.MaxDays),
-		"__BASE__":    base,
-		"__START__":   start,
-		"__END__":     end,
+		"~~":               "`",
+		"__SCOPE_GROUPS__": scopeGroups,
+		"__SCOPE_USERS__":  openScopeDesc(scope, allowed),
+		"__CONTENT__":      contentRule,
+		"__MAXDAYS__":      fmt.Sprintf("%d", scope.MaxDays),
+		"__BASE__":         base,
+		"__START__":        timeNowMinusDays(30),
+		"__END__":          timeNowDate(),
 	}
 	for k, v := range repl {
 		guide = strings.ReplaceAll(guide, k, v)
@@ -229,11 +269,12 @@ func OpenAgentGuide(c *gin.Context) {
 			"scope":             scope,
 			"allowed_usernames": allowed,
 			"content_available": scope.IncludeContent,
+			"content_fields":    "默认仅用户输入（request）；with_response=1 才含模型回复",
 			"max_days":          scope.MaxDays,
 			"guide":             guide,
 			"endpoints": []string{
 				"/api/open/report", "/api/open/usage", "/api/open/users",
-				"/api/open/contents", "/api/open/chat_logs",
+				"/api/open/contents", "/api/open/contents/export", "/api/open/chat_logs",
 			},
 		}})
 		return
@@ -248,51 +289,64 @@ func OpenAPISpec(c *gin.Context) {
 		return gin.H{"name": name, "in": "query", "required": false,
 			"schema": gin.H{"type": "string"}, "description": desc}
 	}
-	op := func(summary string, params []gin.H) gin.H {
-		common := []gin.H{
-			strParam("start", "开始时间 YYYY-MM-DD（或 YYYY-MM-DD HH:mm:ss），默认最近 7 天"),
+	commonParams := func() []gin.H {
+		return []gin.H{
+			strParam("start", "开始时间 YYYY-MM-DD（按整天）或 YYYY-MM-DD HH:mm:ss，默认最近 7 天"),
 			strParam("end", "结束时间，默认当前时间"),
-			strParam("users", "用户名，逗号分隔；缺省=密钥授权范围内全部"),
+			strParam("users", "用户名，逗号分隔；只能填密钥授权范围内的用户"),
+			strParam("groups", "分组，逗号分隔；必须是密钥授权分组的子集"),
 			strParam("model", "模型名，模糊匹配"),
-			strParam("group", "计费分组，精确匹配"),
-			strParam("format", "返回格式：json | text | csv"),
+			strParam("format", "返回格式：json | text | csv | jsonl（导出）"),
 		}
+	}
+	op := func(summary string, params []gin.H) gin.H {
 		return gin.H{"get": gin.H{
 			"summary":    summary,
 			"responses":  gin.H{"200": gin.H{"description": "OK"}},
-			"parameters": append(common, params...),
+			"parameters": append(commonParams(), params...),
 		}}
 	}
 	spec := gin.H{
 		"openapi": "3.0.1",
 		"info": gin.H{
 			"title":   "TOKENHUB 数据开放接口",
-			"version": "1.0.0",
-			"description": "用户模型调用情况与调用内容（只读）。鉴权：Authorization: Bearer sk-open-xxxx。" +
-				"面向 AI 智能体的完整说明见 /api/open/guide。",
+			"version": "1.1.0",
+			"description": "用户模型调用情况与用户输入内容（只读，按密钥范围强制过滤）。" +
+				"鉴权：Authorization: Bearer sk-open-xxxx。面向 AI 智能体的操作手册见 /api/open/guide。",
 		},
 		"servers": []gin.H{{"url": base}},
 		"components": gin.H{"securitySchemes": gin.H{"OpenKey": gin.H{
 			"type": "http", "scheme": "bearer", "description": "数据开放密钥 sk-open-xxxx"}}},
 		"security": []gin.H{{"OpenKey": []string{}}},
 		"paths": gin.H{
-			"/api/open/report": op("一站式报告：用量汇总 + 各用户模型明细 + 内容样本", []gin.H{
-				{"name": "top_users", "in": "query", "schema": gin.H{"type": "integer", "default": 20}, "description": "按费用降序取前 N 人，最大 50"},
-				{"name": "samples", "in": "query", "schema": gin.H{"type": "integer", "default": 3}, "description": "每人内容样本条数，0=不带内容，最大 20"},
-				{"name": "max_chars", "in": "query", "schema": gin.H{"type": "integer", "default": 1200}, "description": "每条内容截断长度，0=不截断"}}),
-			"/api/open/usage": op("模型调用情况：次数 / token / 费用 / 首末调用时间", []gin.H{
-				{"name": "group_by", "in": "query", "schema": gin.H{"type": "string", "enum": []string{"user", "model", "user_model"}, "default": "user"}},
-				{"name": "limit", "in": "query", "schema": gin.H{"type": "integer", "default": 200}, "description": "最大 1000"}}),
+			"/api/open/usage": op("调用次数 / token / 金额汇总（支持按天、按小时分桶）", []gin.H{
+				{"name": "group_by", "in": "query", "schema": gin.H{"type": "string",
+					"enum": []string{"user", "model", "user_model", "group", "all"}, "default": "user"}},
+				{"name": "granularity", "in": "query", "schema": gin.H{"type": "string",
+					"enum": []string{"day", "hour"}, "description": "东八区分桶；不传=区间合计"}},
+				{"name": "limit", "in": "query", "schema": gin.H{"type": "integer", "default": 200}, "description": "最大 5000"}}),
 			"/api/open/users": op("用户额度概览（累计总额度/已用/剩余 + 累计调用次数）", nil),
-			"/api/open/contents": op("调用内容：提问与回复原文", []gin.H{
-				{"name": "limit", "in": "query", "schema": gin.H{"type": "integer", "default": 50}, "description": "按时间从新到旧，最大 200"},
-				{"name": "max_chars", "in": "query", "schema": gin.H{"type": "integer", "default": 0}, "description": "每条内容截断长度，0=不截断"}}),
-			"/api/open/chat_logs": op("对话日志明细（字段与后台「导出CSV」一致）", []gin.H{
+			"/api/open/contents": op("对话内容单页（默认仅用户输入）", []gin.H{
+				{"name": "limit", "in": "query", "schema": gin.H{"type": "integer", "default": 50}, "description": "最大 200"},
+				{"name": "max_chars", "in": "query", "schema": gin.H{"type": "integer", "default": 0}, "description": "每条截断长度，0=原文"},
+				{"name": "with_response", "in": "query", "schema": gin.H{"type": "string", "enum": []string{"0", "1"}, "default": "0"}, "description": "1=附带模型回复"}}),
+			"/api/open/contents/export": op("对话内容批量导出（游标翻页，适合拉全量）", []gin.H{
+				{"name": "after_id", "in": "query", "schema": gin.H{"type": "integer", "default": 0}, "description": "游标：仅取 id 大于该值的数据"},
+				{"name": "limit", "in": "query", "schema": gin.H{"type": "integer", "default": 2000}, "description": "每页条数，最大 5000"},
+				{"name": "max_chars", "in": "query", "schema": gin.H{"type": "integer", "default": 0}},
+				{"name": "with_response", "in": "query", "schema": gin.H{"type": "string", "enum": []string{"0", "1"}, "default": "0"}}}),
+			"/api/open/report": op("一站式报告：用量汇总 + 各用户模型明细 + 每人最近 N 条输入内容", []gin.H{
+				{"name": "top_users", "in": "query", "schema": gin.H{"type": "integer", "default": 20}, "description": "按金额降序取前 N 人，最大 50"},
+				{"name": "samples", "in": "query", "schema": gin.H{"type": "integer", "default": 3}, "description": "每人内容条数，0=不带内容，最大 200"},
+				{"name": "max_chars", "in": "query", "schema": gin.H{"type": "integer", "default": 1200}},
+				{"name": "with_response", "in": "query", "schema": gin.H{"type": "string", "enum": []string{"0", "1"}, "default": "0"}}}),
+			"/api/open/chat_logs": op("对话日志明细 / 报表导出（列与后台导出CSV一致）", []gin.H{
 				{"name": "stats", "in": "query", "schema": gin.H{"type": "string"}, "description": "stats=1 按用户汇总"},
 				{"name": "page", "in": "query", "schema": gin.H{"type": "integer", "default": 1}},
 				{"name": "page_size", "in": "query", "schema": gin.H{"type": "integer", "default": 50}, "description": "最大 100"},
-				{"name": "token_name", "in": "query", "schema": gin.H{"type": "string"}}}),
-			"/api/open/guide": op("本接口的智能体使用说明（markdown）", nil),
+				{"name": "token_name", "in": "query", "schema": gin.H{"type": "string"}},
+				{"name": "model_name", "in": "query", "schema": gin.H{"type": "string"}}}),
+			"/api/open/guide": op("本手册（markdown；format=json 返回结构化含范围）", nil),
 		},
 	}
 	c.JSON(http.StatusOK, spec)
