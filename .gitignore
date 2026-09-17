@@ -81,3 +81,6 @@ new-api-local-run.log
 new-api-local-run-v*.log
 web/classic/new-api-local-run.log
 local-front/server.js
+
+# 生产使用报表（含员工调用明细，勿入库）
+reports/
