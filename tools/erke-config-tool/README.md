@@ -49,12 +49,30 @@ v2.3 起有兜底：候选地址依次为「环境变量 → 构建注入 → �
 网络类失败会换下一个地址重试，只有服务端明确返回业务错误（配置码无效/过期）才停下来。
 `--server` 可打印生效地址与候选列表；报错也会区分「地址不可达/被拦截」与「配置码无效」。
 
+## 任务栏图标（v2.3 起）
+
+exe 的资源里一直有图标（`rsrc -ico` 写入的 RT_GROUP_ICON，组 id=2，含 16/32/48/64/256 五个尺寸），
+但 walk 的窗口默认不发 `WM_SETICON` —— 所以资源管理器里能看到 exe 图标、而**运行中的窗口在任务栏是空白**。
+现已在 `appicon.go` 里取该资源并设置给窗口（大/小图标一起设，资源 id 取不到时兜底系统默认图标）。
+
+验证方式（无需肉眼，直接问 Windows，与任务栏同一查询路径）：
+
+```powershell
+# 启动 exe 后
+$p = Get-Process erke-config-tool | Select -First 1
+[W]::SendMessage($p.MainWindowHandle, 0x007F, [IntPtr]1, [IntPtr]::Zero)   # WM_GETICON(ICON_BIG)，非 0 即已设置
+```
+
+改动前实测返回 0（空白），修复后返回非 0。
+
 ## 构建
 
 需要 Windows + Go 1.25+（实测 `CGO_ENABLED=0` 即可构建：walk 走 x/sys，不需要 gcc）。
 资源 syso（comctl32 v6 清单，控制现代样式）已提交，无需重复生成；
 若修改 app.manifest 则重新生成：
-`go run github.com/akavel/rsrc -manifest app.manifest -o rsrc_windows_amd64.syso`
+`go run github.com/akavel/rsrc -manifest app.manifest -ico icon.ico -o rsrc_windows_amd64.syso`
+
+⚠️ 重新生成资源时**必须带 `-ico icon.ico`**：不带的话 exe 就没有图标资源，任务栏/标题栏会变空白（窗口中显式设置图标依赖这个资源组，当前组 id = 2）。
 
 ```bash
 cd tools/erke-config-tool

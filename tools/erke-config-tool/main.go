@@ -102,6 +102,7 @@ func main() {
 	err := MainWindow{
 		AssignTo: &ui.mw,
 		Title:    "ERKE AI 配置工具",
+		Icon:     appIcon(), // 任务栏/标题栏图标（不设会显示空白）
 		MinSize:  Size{Width: 420, Height: 340},
 		Size:     Size{Width: 480, Height: 400},
 		Layout:   VBox{Margins: Margins{}, Spacing: 0},
@@ -196,6 +197,8 @@ func main() {
 		walk.MsgBox(nil, "ERKE 配置工具", "界面创建失败: "+err.Error(), walk.MsgBoxIconError)
 		return
 	}
+	// 双保险：显式设置窗口图标（大小图标一起设），确保任务栏不空白
+	_ = ui.mw.SetIcon(appIcon())
 	applyWin11Style(ui.mw)
 	ui.dark = shouldUseDark()
 	if ui.dark {
