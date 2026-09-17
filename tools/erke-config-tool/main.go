@@ -26,7 +26,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 )
 
-const version = "2.2"
+const version = "2.3"
 
 // serverBase 由构建时注入（-ldflags "-X main.serverBase=..."）
 var serverBase = "https://tokenhub.erke.com:3000"
@@ -73,6 +73,12 @@ func main() {
 				return
 			}
 			fmt.Printf("[已修复] %s\n  条数：%d\n  原文件备份：%s\n  说明：已改为裸数组格式（顶层 [），不会再被 WorkBuddy 硬件门限清理\n", path, n, bak)
+			return
+		case "--server":
+			fmt.Printf("生效地址：%s\n候选列表（按顺序尝试）：\n", resolveServer())
+			for i, c := range serverCandidates() {
+				fmt.Printf("  %d) %s\n", i+1, c)
+			}
 			return
 		case "--check":
 			product := cliProduct(os.Args[2:])
@@ -285,64 +291,6 @@ func (ui *appUI) apply() {
 	ui.setStatus(msg, true)
 }
 
-// fetchAndBuild 拉取配置：支持 6 位码 / /redeem 相对路径 / 完整链接（可带 key）。
-func fetchAndBuild(target, product string) (*usageConfig, error) {
-	if isBareCode(target) {
-		target = "/redeem?code=" + neturl.QueryEscape(target)
-	}
-	if strings.HasPrefix(target, "/redeem") {
-		code := ""
-		if u, err := neturl.Parse(target); err == nil {
-			code = u.Query().Get("code")
-		}
-		if code == "" {
-			return nil, fmt.Errorf("配置码为空")
-		}
-		server := resolveServer()
-		if server == "" {
-			return nil, fmt.Errorf("工具未配置服务器地址")
-		}
-		target = strings.TrimSuffix(server, "/") + "/v1/usage/guide_redeem?code=" + neturl.QueryEscape(code)
-	}
-	if !strings.Contains(target, "://") {
-		return nil, fmt.Errorf("请输入 6 位配置码，或粘贴完整链接（https:// 开头）")
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	httpReq, _ := http.NewRequest("GET", target, nil)
-	if u, err := neturl.Parse(target); err == nil {
-		if k := u.Query().Get("key"); k != "" {
-			httpReq.Header.Set("Authorization", "Bearer "+k)
-		}
-		q := u.Query()
-		if q.Get("product") == "" {
-			q.Set("product", product)
-			httpReq.URL.RawQuery = q.Encode()
-		}
-	}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("拉取配置失败: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-
-	var apiResp struct {
-		Success bool `json:"success"`
-		Data    struct {
-			Models []usageModel `json:"models"`
-		} `json:"data"`
-		Message string `json:"message"`
-	}
-	if err := json.Unmarshal(body, &apiResp); err != nil || !apiResp.Success {
-		if apiResp.Message != "" {
-			return nil, fmt.Errorf("%s", apiResp.Message)
-		}
-		return nil, fmt.Errorf("配置码无效或已过期，请回教程页重新生成")
-	}
-	return &usageConfig{Models: apiResp.Data.Models}, nil
-}
-
 type usageModel struct {
 	Id                string `json:"id"`
 	Name              string `json:"name"`
@@ -358,6 +306,138 @@ type usageModel struct {
 
 type usageConfig struct {
 	Models []usageModel `json:"models"`
+}
+
+// serverCandidates 返回要尝试的服务器地址（按优先级、去重）：
+//  1. 环境变量 ERKE_CONFIG_SERVER（测试/临时覆盖）
+//  2. 构建注入的 serverBase（默认 https://tokenhub.erke.com:3000）
+//  3. 同主机的 :3000 与 443 变体（互为兜底）
+//
+// 为什么要兜底：443 挂在零信任(aTrust)后面，非浏览器客户端会被 302 拽到门户认证页；
+// 而 :3000 是 API-only 端口、不过零信任。两边各有适用网络环境，任一可用即可。
+func serverCandidates() []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(u string) {
+		u = strings.TrimSuffix(strings.TrimSpace(u), "/")
+		if u == "" || seen[u] {
+			return
+		}
+		seen[u] = true
+		out = append(out, u)
+	}
+	if env := strings.TrimSpace(os.Getenv("ERKE_CONFIG_SERVER")); env != "" {
+		add(env)
+	}
+	add(serverBase)
+	// 同主机的两种端口变体
+	for _, base := range append([]string{}, out...) {
+		if u, err := neturl.Parse(base); err == nil && u.Host != "" {
+			host := u.Hostname()
+			add(u.Scheme + "://" + host + ":3000")
+			add(u.Scheme + "://" + host)
+		}
+	}
+	return out
+}
+
+var errNetworkBlocked = fmt.Errorf("网络受限")
+
+// fetchOnce 向单个完整 URL 发请求并解析；返回 (配置, 是否为服务端的明确业务失败信息)
+func fetchOnce(target, product string) (*usageConfig, string, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	httpReq, err := http.NewRequest("GET", target, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	if u, err := neturl.Parse(target); err == nil {
+		if k := u.Query().Get("key"); k != "" {
+			httpReq.Header.Set("Authorization", "Bearer "+k)
+		}
+		q := u.Query()
+		if q.Get("product") == "" {
+			q.Set("product", product)
+			httpReq.URL.RawQuery = q.Encode()
+		}
+	}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %v", errNetworkBlocked, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var apiResp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Models []usageModel `json:"models"`
+		} `json:"data"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		// 拿到的不是 JSON：多半是被零信任/网关拦下返回了 HTML 登录页
+		head := strings.TrimSpace(string(body))
+		if len(head) > 120 {
+			head = head[:120] + "…"
+		}
+		return nil, "", fmt.Errorf("%w: 返回内容不是 JSON（HTTP %d）：%s", errNetworkBlocked, resp.StatusCode, head)
+	}
+	if !apiResp.Success {
+		return nil, apiResp.Message, nil // 服务端明确拒绝（如配置码无效/过期）——权威结论，不再换地址重试
+	}
+	return &usageConfig{Models: apiResp.Data.Models}, "", nil
+}
+
+// fetchWithCandidates 依次尝试候选地址：网络类失败换下一个地址，业务类失败（配置码无效）立即返回。
+// 抽出来是为了可单测（不依赖真实网络环境）。
+func fetchWithCandidates(candidates []string, code, product string) (*usageConfig, error) {
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("工具未配置服务器地址")
+	}
+	var lastErr error
+	for _, server := range candidates {
+		url := server + "/v1/usage/guide_redeem?code=" + neturl.QueryEscape(code)
+		cfg, bizMsg, err := fetchOnce(url, product)
+		// 先判业务失败：fetchOnce 对「服务端明确拒绝」返回的是 (nil, 消息, nil)，
+		// 若先判 err==nil 会把这个当成成功，导致 GUI 拿到空配置（曾踩过）。
+		if bizMsg != "" {
+			return nil, fmt.Errorf("%s", bizMsg) // 配置码无效/过期：权威结论，不再换地址重试
+		}
+		if err == nil {
+			return cfg, nil
+		}
+		lastErr = err
+	}
+	return nil, fmt.Errorf("拉取配置失败：已尝试 %d 个服务器地址均不可达。\n%v\n请确认已连接公司网络（或已登录零信任/aTrust）后重试；"+
+		"仍失败可运行 `erke-config-tool.exe --server` 查看候选地址并反馈给管理员。", len(candidates), lastErr)
+}
+
+// fetchAndBuild 拉取配置：支持 6 位码（走候选地址兜底）/ 完整链接（单地址）。
+func fetchAndBuild(target, product string) (*usageConfig, error) {
+	if isBareCode(target) {
+		target = "/redeem?code=" + neturl.QueryEscape(target)
+	}
+	if strings.HasPrefix(target, "/redeem") {
+		code := ""
+		if u, err := neturl.Parse(target); err == nil {
+			code = u.Query().Get("code")
+		}
+		if code == "" {
+			return nil, fmt.Errorf("配置码为空")
+		}
+		return fetchWithCandidates(serverCandidates(), code, product)
+	}
+	if !strings.Contains(target, "://") {
+		return nil, fmt.Errorf("请输入 6 位配置码，或粘贴完整链接（https:// 开头）")
+	}
+	cfg, bizMsg, err := fetchOnce(target, product)
+	if err != nil {
+		return nil, fmt.Errorf("拉取配置失败：%v", err)
+	}
+	if bizMsg != "" {
+		return nil, fmt.Errorf("%s", bizMsg)
+	}
+	return cfg, nil
 }
 
 // cliProduct 解析 --product 参数（默认 workbuddy）

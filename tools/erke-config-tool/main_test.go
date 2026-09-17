@@ -4,6 +4,8 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -190,4 +192,70 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// 候选地址：环境变量优先，且同主机 :3000 / 443 两种变体都在列表里
+func TestServerCandidates(t *testing.T) {
+	t.Setenv("ERKE_CONFIG_SERVER", "http://example.invalid:9999/")
+	cands := serverCandidates()
+	if len(cands) < 3 {
+		t.Fatalf("候选地址过少: %v", cands)
+	}
+	if cands[0] != "http://example.invalid:9999" {
+		t.Fatalf("环境变量应优先: %v", cands)
+	}
+	joined := strings.Join(cands, ",")
+	if !strings.Contains(joined, "example.invalid:3000") || !strings.Contains(joined, "http://example.invalid,") && !strings.Contains(joined, "http://example.invalid") {
+		t.Fatalf("缺少端口变体: %v", cands)
+	}
+}
+
+// 兜底与短路：第一个地址不可达 → 换下一个；服务端明确拒绝 → 立即返回不再重试
+func TestFetchFallsBackAndShortCircuits(t *testing.T) {
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		switch r.URL.Query().Get("code") {
+		case "ZZZZZZ":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":false,"message":"配置码无效或已过期，请回教程页重新生成"}`))
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"models":[{"id":"glm-5.3","name":"ERKE glm-5.3"}]}}`))
+		}
+	}))
+	defer srv.Close()
+
+	// 1) 第一个地址是死端口，应从第二个（真实测试服务）拿到配置
+	cfg, err := fetchWithCandidates([]string{"http://127.0.0.1:1", srv.URL}, "ABC123", "workbuddy")
+	if err != nil {
+		t.Fatalf("应回退成功: %v", err)
+	}
+	if len(cfg.Models) != 1 || cfg.Models[0].Id != "glm-5.3" {
+		t.Fatalf("回退后配置不对: %+v", cfg.Models)
+	}
+
+	// 2) 业务失败（配置码无效）必须短路：只打一次请求，不再尝试后续地址
+	hits = 0
+	_, err = fetchWithCandidates([]string{srv.URL, "http://127.0.0.1:1"}, "ZZZZZZ", "workbuddy")
+	if err == nil || !strings.Contains(err.Error(), "配置码无效") {
+		t.Fatalf("应返回配置码无效: %v", err)
+	}
+	if hits != 1 {
+		t.Fatalf("业务失败不应重试其它地址，实际请求 %d 次", hits)
+	}
+
+	// 3) 返回 HTML（模拟被零信任拦截）→ 报网络受限而不是"配置码无效"
+	blocked := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<html><title>aTrust 2.0</title><h1>302 Found</h1></body></html>"))
+	}))
+	defer blocked.Close()
+	_, err = fetchWithCandidates([]string{blocked.URL}, "ABC123", "workbuddy")
+	if err == nil || strings.Contains(err.Error(), "配置码无效") {
+		t.Fatalf("被拦截时不应误报配置码无效: %v", err)
+	}
+	if !strings.Contains(err.Error(), "均不可达") {
+		t.Fatalf("应提示地址不可达/网络受限: %v", err)
+	}
 }

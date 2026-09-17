@@ -34,6 +34,21 @@ erke-config-tool.exe --normalize             # 把对象包裹格式就地修复
 erke-config-tool.exe --normalize --product codebuddy
 ```
 
+## ⚠️ 构建铁律：内置地址必须带 `:3000`
+
+```bash
+-ldflags "-X main.serverBase=https://tokenhub.erke.com:3000"
+```
+
+原因：443 挂在零信任(aTrust)后面，**非浏览器客户端**（本工具、curl、脚本）会被 302 拽到门户
+认证页；而 `:3000` 是 API-only 端口、不过零信任，`/v1/usage/guide_redeem` 正挂在这条 relay 路由上。
+2026-09-17 曾因重建时照抄了本文档里的旧命令（不带 `:3000`）导致用户「配置码无效」——本地测试用
+`ERKE_CONFIG_SERVER` 覆盖地址，正好掩盖了这个错误，所以**改完地址务必用 `--server` 复核**。
+
+v2.3 起有兜底：候选地址依次为「环境变量 → 构建注入 → 同主机 `:3000` → 同主机 443」，
+网络类失败会换下一个地址重试，只有服务端明确返回业务错误（配置码无效/过期）才停下来。
+`--server` 可打印生效地址与候选列表；报错也会区分「地址不可达/被拦截」与「配置码无效」。
+
 ## 构建
 
 需要 Windows + Go 1.25+（实测 `CGO_ENABLED=0` 即可构建：walk 走 x/sys，不需要 gcc）。
@@ -43,7 +58,7 @@ erke-config-tool.exe --normalize --product codebuddy
 
 ```bash
 cd tools/erke-config-tool
-CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -H windowsgui -X main.serverBase=https://tokenhub.erke.com" -o erke-config-tool.exe
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H windowsgui -X main.serverBase=https://tokenhub.erke.com:3000" -o erke-config-tool.exe
 ```
 
 测试可用环境变量覆盖服务器地址：ERKE_CONFIG_SERVER=http://127.0.0.1:3000
@@ -58,7 +73,7 @@ CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -H windowsgui -X main.serverBas
 
 ```bash
 cd tools/erke-config-tool
-go build -trimpath -ldflags "-s -w -H windowsgui -X main.serverBase=https://tokenhub.erke.com" -o erke-config-tool.exe
+go build -trimpath -ldflags "-s -w -H windowsgui -X main.serverBase=https://tokenhub.erke.com:3000" -o erke-config-tool.exe
 ```
 
 ## 用户流程（短码模式，最简）
