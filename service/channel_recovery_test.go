@@ -28,7 +28,7 @@ func TestRecoverChannelsByRecoveryAt(t *testing.T) {
 	pauseRules := []dto.SchedulePauseRule{{Days: []int{wd}, Start: "00:00", End: "23:59", Reason: "tmp"}}
 	cases := []tc{
 		{id: 921, name: "到点-探活已关", status: common.ChannelStatusAutoDisabled, recovery: now.Add(-time.Minute).Unix(),
-			reason: "status_code=429, 已达到 5 小时使用上限，2099-01-01 00:00:00 后可继续使用",
+			reason:   "status_code=429, 已达到 5 小时使用上限，2099-01-01 00:00:00 后可继续使用",
 			settings: dto.ChannelOtherSettings{HealthCheckDisabled: true}, wantAfter: common.ChannelStatusEnabled},
 		{id: 922, name: "到点-原因无关键词", status: common.ChannelStatusAutoDisabled, recovery: now.Add(-time.Minute).Unix(),
 			reason: "上游连接被重置", settings: dto.ChannelOtherSettings{}, wantAfter: common.ChannelStatusEnabled},

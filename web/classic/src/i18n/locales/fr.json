@@ -3878,6 +3878,11 @@
     "② 调用内容（提问与回复原文，max_chars 截断便于喂给 AI）：": "② Call contents (raw prompts and replies; max_chars truncates for AI input):",
     "③ 一站式报告（用量 + 模型明细 + 内容样本 + 现成审查提示词，format=text 直接发给 AI）：": "③ One-call report (usage + per-model breakdown + content samples + ready review prompt; format=text is AI-ready):",
     "通用参数：start / end（支持 YYYY-MM-DD，默认最近 7 天）、users（逗号分隔，缺省=授权范围内全部）、model、group、format=json|text|csv、limit。时间跨度受密钥「最多回看天数」限制；需要内容时密钥必须勾选「包含对话内容」": "Common params: start / end (YYYY-MM-DD, default last 7 days), users (comma separated; default = all inside scope), model, group, format=json|text|csv, limit. The range is capped by the key lookback days; content requires the key to allow content.",
-    "原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）": "The original GET /api/open/chat_logs is unchanged (stats=1 summary, format=csv report, paged detail by default)"
+    "原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）": "The original GET /api/open/chat_logs is unchanged (stats=1 summary, format=csv report, paged detail by default)",
+    "复制智能体说明": "Copier le guide pour agent",
+    "智能体说明已复制（已按该密钥的数据范围生成）": "Guide pour agent copié (généré selon la portée de cette clé)",
+    "获取说明失败，请检查密钥是否有效": "Échec du chargement du guide, vérifiez la clé",
+    "④ 用户额度概览（总额度/已用/剩余 + 累计调用次数）：": "④ Aperçu des quotas (total / utilisé / restant + nombre d’appels cumulés) :",
+    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "Guide en libre-service : GET /api/open/guide (markdown, portée de la clé injectée ; spec OpenAPI sur /api/open/openapi.json). Chaque clé dispose d'un bouton « Copier le guide pour agent »."
   }
 }

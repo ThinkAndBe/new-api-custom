@@ -4006,6 +4006,11 @@
     "② 调用内容（提问与回复原文，max_chars 截断便于喂给 AI）：": "② 调用内容（提问与回复原文，max_chars 截断便于喂给 AI）：",
     "③ 一站式报告（用量 + 模型明细 + 内容样本 + 现成审查提示词，format=text 直接发给 AI）：": "③ 一站式报告（用量 + 模型明细 + 内容样本 + 现成审查提示词，format=text 直接发给 AI）：",
     "通用参数：start / end（支持 YYYY-MM-DD，默认最近 7 天）、users（逗号分隔，缺省=授权范围内全部）、model、group、format=json|text|csv、limit。时间跨度受密钥「最多回看天数」限制；需要内容时密钥必须勾选「包含对话内容」": "通用参数：start / end（支持 YYYY-MM-DD，默认最近 7 天）、users（逗号分隔，缺省=授权范围内全部）、model、group、format=json|text|csv、limit。时间跨度受密钥「最多回看天数」限制；需要内容时密钥必须勾选「包含对话内容」",
-    "原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）": "原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）"
+    "原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）": "原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）",
+    "复制智能体说明": "复制智能体说明",
+    "智能体说明已复制（已按该密钥的数据范围生成）": "智能体说明已复制（已按该密钥的数据范围生成）",
+    "获取说明失败，请检查密钥是否有效": "获取说明失败，请检查密钥是否有效",
+    "④ 用户额度概览（总额度/已用/剩余 + 累计调用次数）：": "④ 用户额度概览（总额度/已用/剩余 + 累计调用次数）：",
+    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体"
   }
 }

@@ -437,8 +437,8 @@ func DeactivateUser(id int) error {
 		return errors.New("id 为空！")
 	}
 	return DB.Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status":          common.UserStatusDeactivated,
-		"deactivated_at":  common.GetTimestamp(),
+		"status":         common.UserStatusDeactivated,
+		"deactivated_at": common.GetTimestamp(),
 	}).Error
 }
 
@@ -449,9 +449,9 @@ func ReactivateUser(id int) error {
 	}
 	// 恢复软删除的用户（清除 DeletedAt）+ 恢复状态
 	return DB.Unscoped().Model(&User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status":          common.UserStatusEnabled,
-		"deactivated_at":  0,
-		"deleted_at":      nil,
+		"status":         common.UserStatusEnabled,
+		"deactivated_at": 0,
+		"deleted_at":     nil,
 	}).Error
 }
 
@@ -1351,6 +1351,40 @@ func RootUserExists() bool {
 		return false
 	}
 	return true
+}
+
+// OpenUserRow 数据开放接口的用户行（额度/用量概览，不含任何凭据字段）
+type OpenUserRow struct {
+	Id           int    `json:"id"`
+	Username     string `json:"username"`
+	DisplayName  string `json:"display_name"`
+	EmployeeId   string `json:"employee_id"`
+	Group        string `json:"group"`
+	Status       int    `json:"status"` // 1=启用 2=禁用
+	Quota        int    `json:"quota"`
+	UsedQuota    int    `json:"used_quota"`
+	RequestCount int    `json:"request_count"`
+	CreatedAt    int64  `json:"created_at"`
+	LastLoginAt  int64  `json:"last_login_at"`
+}
+
+// GetOpenUsers 查询用户额度概览（数据开放接口用）。
+// groups/usernames 均空 = 全部用户；两者都非空时取并集。
+func GetOpenUsers(groups []string, usernames []string) ([]*OpenUserRow, error) {
+	tx := DB.Model(&User{}).Select("id, username, display_name, employee_id, " +
+		commonGroupCol + ", status, quota, used_quota, request_count, created_at, last_login_at")
+	if len(usernames) > 0 && len(groups) > 0 {
+		tx = tx.Where("username IN ? OR "+commonGroupCol+" IN ?", usernames, groups)
+	} else if len(usernames) > 0 {
+		tx = tx.Where("username IN ?", usernames)
+	} else if len(groups) > 0 {
+		tx = tx.Where(commonGroupCol+" IN ?", groups)
+	}
+	var rows []*OpenUserRow
+	if err := tx.Order("used_quota desc").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 // GetAllAdminUserIds 返回所有管理员（role >= RoleAdminUser）的用户 ID 列表。

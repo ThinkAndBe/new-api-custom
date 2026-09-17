@@ -423,8 +423,12 @@ func SetApiRouter(router *gin.Engine) {
 			openRoute.GET("/chat_logs", controller.OpenQueryChatLogs)
 			// 面向顾问的主形态：一次调用拿到做总结/合规审查所需数据
 			openRoute.GET("/usage", controller.OpenQueryUsage)
+			openRoute.GET("/users", controller.OpenQueryUsers)
 			openRoute.GET("/contents", controller.OpenQueryContents)
 			openRoute.GET("/report", controller.OpenQueryReport)
+			// 面向 AI 智能体：自助说明 + OpenAPI 描述
+			openRoute.GET("/guide", controller.OpenAgentGuide)
+			openRoute.GET("/openapi.json", controller.OpenAPISpec)
 		}
 
 		shadowRoute := apiRouter.Group("/shadow")

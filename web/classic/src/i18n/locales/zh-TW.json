@@ -3871,6 +3871,11 @@
     "② 调用内容（提问与回复原文，max_chars 截断便于喂给 AI）：": "② 呼叫內容（提問與回覆原文，max_chars 截斷便於餵給 AI）：",
     "③ 一站式报告（用量 + 模型明细 + 内容样本 + 现成审查提示词，format=text 直接发给 AI）：": "③ 一站式報告（用量 + 模型明細 + 內容樣本 + 現成審查提示詞，format=text 直接傳給 AI）：",
     "通用参数：start / end（支持 YYYY-MM-DD，默认最近 7 天）、users（逗号分隔，缺省=授权范围内全部）、model、group、format=json|text|csv、limit。时间跨度受密钥「最多回看天数」限制；需要内容时密钥必须勾选「包含对话内容」": "通用參數：start / end（支援 YYYY-MM-DD，預設最近 7 天）、users（逗號分隔，預設=授權範圍內全部）、model、group、format=json|text|csv、limit。時間跨度受金鑰「最多回看天數」限制；需要內容時金鑰必須勾選「包含對話內容」",
-    "原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）": "原有 GET /api/open/chat_logs 保留不變（stats=1 彙總、format=csv 報表、預設明細分頁）"
+    "原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）": "原有 GET /api/open/chat_logs 保留不變（stats=1 彙總、format=csv 報表、預設明細分頁）",
+    "复制智能体说明": "複製智能體說明",
+    "智能体说明已复制（已按该密钥的数据范围生成）": "智能體說明已複製（已依該金鑰的資料範圍產生）",
+    "获取说明失败，请检查密钥是否有效": "取得說明失敗，請檢查金鑰是否有效",
+    "④ 用户额度概览（总额度/已用/剩余 + 累计调用次数）：": "④ 使用者額度概覽（總額度/已用/剩餘 + 累計呼叫次數）：",
+    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "智能體自助說明：GET /api/open/guide（markdown，已注入該金鑰的資料範圍；OpenAPI 描述見 /api/open/openapi.json）。金鑰列表每列都有「複製智能體說明」，複製後可直接傳給 AI 智能體"
   }
 }

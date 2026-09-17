@@ -77,6 +77,29 @@ const OpenKeyPanel = () => {
     }
   };
 
+  // 复制「给 AI 智能体的使用说明」：用该密钥实时拉取 /api/open/guide，
+  // 文档里已注入这条密钥的真实数据范围（能查哪些人、有没有内容权限、回看天数），
+  // 顾问把它连同说明一起发给智能体即可自助开工。
+  const copyAgentGuide = async (key) => {
+    try {
+      const res = await fetch('/api/open/guide', {
+        headers: { Authorization: 'Bearer ' + key },
+      });
+      const text = await res.text();
+      // 说明本身是 markdown，只有「接口报错」时才是 JSON 体；不能简单地在全文里搜
+      // "success":false ——文档的错误处理章节里就写着这个串，会误判（实测踩过）。
+      const looksLikeErrorJson = text.trimStart().startsWith('{');
+      if (!res.ok || looksLikeErrorJson) {
+        showError(t('获取说明失败，请检查密钥是否有效'));
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      showSuccess(t('智能体说明已复制（已按该密钥的数据范围生成）'));
+    } catch (e) {
+      showError(t('复制失败，请手动选择文本复制'));
+    }
+  };
+
   const openCreate = () => {
     setEditing(null);
     setNewKey('');
@@ -199,9 +222,16 @@ const OpenKeyPanel = () => {
     {
       title: '',
       dataIndex: 'op',
-      width: 130,
+      width: 250,
       render: (_, r) => (
         <Space>
+          <Button
+            size='small'
+            theme='light'
+            onClick={() => copyAgentGuide(r.key)}
+          >
+            {t('复制智能体说明')}
+          </Button>
           <Button size='small' theme='light' onClick={() => openEdit(r)}>{t('编辑')}</Button>
           <Popconfirm title={t('确定删除该密钥？')} onConfirm={() => removeKey(r.id)}>
             <Button size='small' type='danger' theme='light'>{t('删除')}</Button>
@@ -266,6 +296,11 @@ const OpenKeyPanel = () => {
           <Text code>{`GET {站点}/api/open/report?start=2026-09-01&end=2026-09-30&top_users=20&samples=3&format=text`}</Text>
           <br />
           {t('通用参数：start / end（支持 YYYY-MM-DD，默认最近 7 天）、users（逗号分隔，缺省=授权范围内全部）、model、group、format=json|text|csv、limit。时间跨度受密钥「最多回看天数」限制；需要内容时密钥必须勾选「包含对话内容」')}
+          <br />
+          {t('④ 用户额度概览（总额度/已用/剩余 + 累计调用次数）：')}
+          <Text code>{`GET {站点}/api/open/users?format=json`}</Text>
+          <br />
+          {t('智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体')}
           <br />
           {t('原有 GET /api/open/chat_logs 保留不变（stats=1 汇总、format=csv 报表、默认明细分页）')}
         </Paragraph>

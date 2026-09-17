@@ -246,6 +246,120 @@ func OpenQueryUsage(c *gin.Context) {
 	}})
 }
 
+// ---- 用户额度概览：/api/open/users ----
+
+// OpenQueryUsers 每个用户的额度与用量概览（总额度/已用/余额 + 调用次数 + 最近登录）。
+// 额度类字段是「账户累计值」（不随时间窗变化）；区间用量请看 /api/open/usage。
+func OpenQueryUsers(c *gin.Context) {
+	scope := c.MustGet("open_scope").(*model.OpenKeyScope)
+
+	allowed, err := model.ScopeAllowedUsernames(scope)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "权限解析失败: " + err.Error()})
+		return
+	}
+	names, msg := openRequestedUsernames(c, allowed)
+	if msg != "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
+		return
+	}
+	// 密钥按分组授权且未显式指定用户时，按分组下推（比逐一列举用户名更准确）
+	groups := []string(nil)
+	if names == nil && len(scope.Groups) > 0 {
+		groups = scope.Groups
+	}
+
+	users, err := model.GetOpenUsers(groups, names)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	type item struct {
+		UserId         int     `json:"user_id"`
+		Username       string  `json:"username"`
+		DisplayName    string  `json:"display_name"`
+		EmployeeId     string  `json:"employee_id"`
+		Group          string  `json:"group"`
+		Status         string  `json:"status"`
+		Quota          int     `json:"quota"`
+		UsedQuota      int     `json:"used_quota"`
+		RemainingQuota int     `json:"remaining_quota"`
+		QuotaCNY       float64 `json:"quota_cny"`
+		UsedCNY        float64 `json:"used_cny"`
+		RemainingCNY   float64 `json:"remaining_cny"`
+		RequestCount   int     `json:"request_count"`
+		CreatedAt      string  `json:"created_at"`
+		LastLoginAt    string  `json:"last_login_at"`
+	}
+	statusText := func(st int) string {
+		if st == common.UserStatusEnabled {
+			return "启用"
+		}
+		return "禁用"
+	}
+	items := make([]item, 0, len(users))
+	var totalQuota, totalUsed int64
+	for _, u := range users {
+		remaining := u.Quota - u.UsedQuota
+		if remaining < 0 {
+			remaining = 0
+		}
+		items = append(items, item{
+			UserId: u.Id, Username: u.Username, DisplayName: u.DisplayName, EmployeeId: u.EmployeeId,
+			Group: u.Group, Status: statusText(u.Status),
+			Quota: u.Quota, UsedQuota: u.UsedQuota, RemainingQuota: remaining,
+			QuotaCNY: openCostCNY(int64(u.Quota)), UsedCNY: openCostCNY(int64(u.UsedQuota)),
+			RemainingCNY: openCostCNY(int64(remaining)),
+			RequestCount: u.RequestCount,
+			CreatedAt:    openFmtTime(u.CreatedAt), LastLoginAt: openFmtTime(u.LastLoginAt),
+		})
+		totalQuota += int64(u.Quota)
+		totalUsed += int64(u.UsedQuota)
+	}
+
+	if c.Query("format") == "csv" {
+		c.Writer.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		c.Writer.Header().Set("Content-Disposition",
+			fmt.Sprintf("attachment; filename=users_%s.csv", time.Now().Format("20060102_150405")))
+		c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
+		w := csv.NewWriter(c.Writer)
+		_ = w.Write([]string{"用户ID", "用户名", "显示名", "工号", "分组", "状态", "总额度(元)", "已用额度(元)", "剩余额度(元)", "调用次数", "注册时间", "最后登录"})
+		for _, it := range items {
+			_ = w.Write([]string{
+				strconv.Itoa(it.UserId), it.Username, it.DisplayName, it.EmployeeId, it.Group, it.Status,
+				strconv.FormatFloat(it.QuotaCNY, 'f', 4, 64), strconv.FormatFloat(it.UsedCNY, 'f', 4, 64),
+				strconv.FormatFloat(it.RemainingCNY, 'f', 4, 64), strconv.Itoa(it.RequestCount),
+				it.CreatedAt, it.LastLoginAt,
+			})
+		}
+		w.Flush()
+		return
+	}
+
+	if c.Query("format") == "text" {
+		var b strings.Builder
+		fmt.Fprintf(&b, "【用户额度概览】共 %d 人（累计值，不随时间窗变化）\n", len(items))
+		fmt.Fprintf(&b, "合计：总额度 ¥%.2f，已用 ¥%.2f\n", openCostCNY(totalQuota), openCostCNY(totalUsed))
+		for _, it := range items {
+			fmt.Fprintf(&b, "- %s（%s）| %s | %s | 额度 ¥%.2f | 已用 ¥%.2f | 剩余 ¥%.2f | 累计调用 %d 次 | 最后登录 %s\n",
+				it.Username, it.DisplayName, it.Group, it.Status,
+				it.QuotaCNY, it.UsedCNY, it.RemainingCNY, it.RequestCount, it.LastLoginAt)
+		}
+		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(b.String()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"count": len(items),
+		"totals": gin.H{
+			"quota": totalQuota, "used_quota": totalUsed,
+			"quota_cny": openCostCNY(totalQuota), "used_cny": openCostCNY(totalUsed),
+		},
+		"items": items,
+	}})
+}
+
 // ---- 调用内容：/api/open/contents ----
 
 type openContentItem struct {
