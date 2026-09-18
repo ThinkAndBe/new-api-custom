@@ -9,6 +9,7 @@ package controller
 // 失败 302 回登录页并携带 atrust_error 参数（登录页读取后提示）。
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -46,10 +47,12 @@ func ATrustSSOStart(c *gin.Context) {
 
 	session := sessions.Default(c)
 
-	// 已登录则直接回控制台
+	// 已登录则回到 SSO 回调页拉登录态（写 localStorage）再进控制台。
+	// 不直接跳 /console：SPA 路由守卫依赖 localStorage 用户对象，
+	// 缺失时会被弹回登录页（前端登录态引导缺口）。
 	if session.Get("username") != nil {
-		c.Redirect(http.StatusFound, "/console")
-		return
+		c.Redirect(http.StatusFound, "/oauth/atrust?sso=1")
+		return;
 	}
 
 	// state（复用通用 OAuth 的会话字段，回调时校验）
@@ -132,10 +135,13 @@ func ATrustSSOCallback(c *gin.Context) {
 
 // ATrustSSOFinish 前端回调页拉取登录态：会话已建立，返回用户信息
 // 供前端写入 localStorage（与 /api/user/login 响应同构）。
+// 失败路径记日志：假 401 / 会话丢失这类「服务端 SSO 成功但前端未落位」
+// 的问题此前在 docker logs 里不可见，排障只能靠猜。
 func ATrustSSOFinish(c *gin.Context) {
 	session := sessions.Default(c)
 	id := session.Get("id")
 	if id == nil {
+		common.SysLog("[aTrust SSO] finish 失败: 无会话（Cookie 未达或已过期）ip=" + c.ClientIP())
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "零信任会话不存在，请重新发起登录",
@@ -146,6 +152,7 @@ func ATrustSSOFinish(c *gin.Context) {
 	if err := user.FillUserById(); err != nil || user.Id == 0 {
 		session.Clear()
 		_ = session.Save()
+		common.SysError("[aTrust SSO] finish 失败: 用户不存在或已注销 id=" + fmt.Sprintf("%d", user.Id))
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "用户不存在或已注销",
