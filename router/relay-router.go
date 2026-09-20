@@ -68,6 +68,10 @@ func SetRelayRouter(router *gin.Engine) {
 	}
 	// 配置码兑换走 /v1/ 路径（3000 端口只放行 /v1/*，不加 TokenAuth）
 	router.GET("/v1/usage/guide_redeem", middleware.CriticalRateLimit(), controller.RedeemGuideShortCode)
+	// 配置工具下发电走 /v1/（macOS 一键脚本用 curl 拉取，443 会把非浏览器客户端
+	// 302 到零信任门户，导致 zsh 报 "parse error near '<'"——3000 不过零信任）
+	router.GET("/v1/usage/config_tool", middleware.CriticalRateLimit(), controller.DownloadUsageGuideConfigTool)
+	router.GET("/v1/usage/config_tool_mac", middleware.CriticalRateLimit(), controller.DownloadUsageGuideConfigToolMac)
 
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
