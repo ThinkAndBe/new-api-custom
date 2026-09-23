@@ -578,6 +578,100 @@ func GetUserLogStats(logType int, startTimestamp int64, endTimestamp int64, mode
 	return stats, nil
 }
 
+// CenterUsageStat 按中心（用户所在中心）汇总的用量行
+type CenterUsageStat struct {
+	Center           string  `json:"center"`
+	Users            int     `json:"users"`
+	Count            int64   `json:"count"`
+	PromptTokens     int64   `json:"prompt_tokens"`
+	CompletionTokens int64   `json:"completion_tokens"`
+	TotalTokens      int64   `json:"total_tokens"`
+	Quota            int64   `json:"quota"`
+	CostCNY          float64 `json:"cost_cny"`
+	Percent          float64 `json:"percent"` // total_tokens 占比（0-100）
+}
+
+// GetUsageStatsByCenter 按用户所在中心汇总区间用量（使用日志页「各中心 Token 占比」）。
+// 实现说明：logs 与 users 可能分属不同数据源（DB/LOG_DB），不做跨库 JOIN——
+// 先按用户聚合 logs，再查 users 的 center 映射，应用层合并；中心为空归入「未同步中心」。
+func GetUsageStatsByCenter(logType int, startTimestamp, endTimestamp int64) ([]*CenterUsageStat, error) {
+	tx := LOG_DB.Table("logs").
+		Select("user_id, COUNT(*) as count, "+
+			"SUM(CASE WHEN prompt_tokens > 0 THEN prompt_tokens ELSE 0 END) as prompt_tokens, "+
+			"SUM(CASE WHEN completion_tokens > 0 THEN completion_tokens ELSE 0 END) as completion_tokens, "+
+			"SUM(CASE WHEN quota > 0 THEN quota ELSE 0 END) as quota").
+		Where("type = ?", logType)
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	var userRows []*UserLogStat
+	if err := tx.Group("user_id").Limit(2000).Find(&userRows).Error; err != nil {
+		return nil, err
+	}
+
+	type userCenter struct {
+		Id     int
+		Center string
+	}
+	var centers []userCenter
+	if err := DB.Model(&User{}).Select("id, center").Find(&centers).Error; err != nil {
+		return nil, err
+	}
+	centerOf := make(map[int]string, len(centers))
+	for _, c := range centers {
+		centerOf[c.Id] = c.Center
+	}
+
+	const unknown = "未同步中心"
+	byCenter := map[string]*CenterUsageStat{}
+	userSeen := map[string]map[int]bool{}
+	for _, r := range userRows {
+		center := centerOf[r.UserId]
+		if center == "" {
+			center = unknown
+		}
+		row := byCenter[center]
+		if row == nil {
+			row = &CenterUsageStat{Center: center}
+			byCenter[center] = row
+			userSeen[center] = map[int]bool{}
+		}
+		if !userSeen[center][r.UserId] {
+			userSeen[center][r.UserId] = true
+			row.Users++
+		}
+		row.Count += r.Count
+		row.PromptTokens += r.PromptTokens
+		row.CompletionTokens += r.CompletionTokens
+		row.Quota += r.Quota
+		row.TotalTokens += r.PromptTokens + r.CompletionTokens
+	}
+	out := make([]*CenterUsageStat, 0, len(byCenter))
+	var grand int64
+	for _, row := range byCenter {
+		grand += row.TotalTokens
+		out = append(out, row)
+	}
+	for _, row := range out {
+		if row.Quota > 0 {
+			row.CostCNY = float64(row.Quota) / common.QuotaPerUnit
+		}
+		if grand > 0 {
+			row.Percent = float64(row.TotalTokens) * 100 / float64(grand)
+		}
+	}
+	// 按 token 降序（插入排序，行数很小）
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].TotalTokens > out[j-1].TotalTokens; j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out, nil
+}
+
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("sum(quota) quota, count(*) request_count, sum(prompt_tokens) prompt_tokens, sum(completion_tokens) completion_tokens")
 

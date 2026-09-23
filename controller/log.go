@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -115,6 +116,37 @@ func GetUserLogStats(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data":    stats,
+	})
+}
+
+// GetCenterUsageStats 各中心（用户所在中心，零信任同步）区间用量占比
+// GET /api/log/center_stats?start_timestamp=&end_timestamp=（默认近 30 天）
+func GetCenterUsageStats(c *gin.Context) {
+	logType, _ := strconv.Atoi(c.Query("type"))
+	if logType == 0 {
+		logType = model.LogTypeConsume
+	}
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	if endTimestamp == 0 {
+		endTimestamp = time.Now().Unix()
+	}
+	if startTimestamp == 0 {
+		startTimestamp = endTimestamp - 30*86400
+	}
+	stats, err := model.GetUsageStatsByCenter(logType, startTimestamp, endTimestamp)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"start_timestamp": startTimestamp,
+			"end_timestamp":   endTimestamp,
+			"items":           stats,
+		},
 	})
 }
 

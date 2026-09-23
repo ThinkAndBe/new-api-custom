@@ -3336,7 +3336,7 @@
     "请选择通知方式": "Please select notification method",
     "调整额度": "Adjust Quota",
     "调整额度成功": "Quota adjusted successfully",
-    "调用次数": "Call Count",
+    "调用次数": "Requests",
     "调用次数分布": "Models call distribution",
     "调用次数排行": "Models call ranking",
     "调用趋势": "Call trend",
@@ -4039,6 +4039,14 @@
     "智能体说明已复制（已按该密钥的数据范围生成）": "Agent guide copied (generated for this key’s data scope)",
     "获取说明失败，请检查密钥是否有效": "Failed to load the guide, check that the key is valid",
     "④ 用户额度概览（总额度/已用/剩余 + 累计调用次数）：": "④ User quota overview (total / used / remaining + lifetime request count):",
-    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "Self-service guide for agents: GET /api/open/guide (markdown, with this key’s data scope injected; OpenAPI spec at /api/open/openapi.json). Each key row has a \"Copy agent guide\" button — paste the result straight into your AI agent"
+    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "Self-service guide for agents: GET /api/open/guide (markdown, with this key’s data scope injected; OpenAPI spec at /api/open/openapi.json). Each key row has a \"Copy agent guide\" button — paste the result straight into your AI agent",
+    "各中心 Token 占比（近 30 天）": "Token share by center (last 30 days)",
+    "中心": "Center",
+    "Token 占比": "Token share",
+    "总 Tokens": "Total tokens",
+    "输入 / 输出": "Input / Output",
+    "费用(元)": "Cost (CNY)",
+    "区间：{{start}} ~ {{end}}，共 {{centers}} 个中心，合计 {{tokens}} tokens（¥{{cost}}）。中心来自零信任组织架构同步。": "Range: {{start}} ~ {{end}}, {{centers}} centers, {{tokens}} tokens total (¥{{cost}}). Centers come from zero-trust org sync.",
+    "暂无数据（需先通过零信任同步用户所在中心）": "No data yet (user centers must be synced from zero-trust first)"
   }
 }

@@ -32,6 +32,23 @@ type ATrustDirectoryUser struct {
 	RoleIdList  []string `json:"roleIdList"` // 关联角色（微信目录存角色的 externalId，本地目录存 id）
 }
 
+// CenterFromGroupPath 从零信任组织路径提取「所在中心」。
+// 规则（2026-09-20 按 149 名真实角色成员校准）：取第一个以「中心」结尾的段
+// （如 /鸿星尔克实业/制造基地/鞋业开发中心/业务组 → 鞋业开发中心，143/149 命中）；
+// 路径中没有「中心」段的（大货销售系统、电商事业部这类事业部级组织），取第三段兜底。
+func CenterFromGroupPath(groupPath string) string {
+	segs := strings.Split(strings.Trim(groupPath, "/"), "/")
+	for _, s := range segs {
+		if strings.HasSuffix(s, "中心") {
+			return s
+		}
+	}
+	if len(segs) >= 3 {
+		return segs[2]
+	}
+	return ""
+}
+
 // MatchATrustSyncEmployeeId 工号白名单过滤（ATrustSyncEmployeeIds 空=不过滤）。
 // 用于收敛「角色被绑定到组织节点后继承出的大量成员」，只保留控制台
 // 直接成员对应的工号名单。
@@ -166,10 +183,10 @@ type atrustRoleDetailResponse struct {
 	Code interface{} `json:"code"`
 	Msg  string      `json:"msg"`
 	Data struct {
-		Id         string   `json:"id"`
-		Name       string   `json:"name"`
-		ExternalId string   `json:"externalId"`
-		UserIdList []string `json:"userIdList"`  // 角色直接关联的用户 id（权威成员列表）
+		Id          string   `json:"id"`
+		Name        string   `json:"name"`
+		ExternalId  string   `json:"externalId"`
+		UserIdList  []string `json:"userIdList"`  // 角色直接关联的用户 id（权威成员列表）
 		GroupIdList []string `json:"groupIdList"` // 关联的组织架构 id（有值说明还绑了组织节点）
 	} `json:"data"`
 }
@@ -246,13 +263,13 @@ func ATrustQueryRoleMembers(roleName string) ([]ATrustDirectoryUser, error) {
 
 // ATrustSyncReport 工号同步结果报告
 type ATrustSyncReport struct {
-	RoleMembers    int      `json:"role_members"`    // 零信任角色成员数（同步数据源）
-	TargetUsers    int      `json:"target_users"`    // 参与同步的本地账号数（按分组过滤后）
-	Synced         int      `json:"synced"`          // 本次新写入工号
-	Overwritten    int      `json:"overwritten"`     // 工号按目录更新（与原值不同）
-	SkippedSame    int      `json:"skipped_same"`    // 已绑定且一致
-	Ambiguous      []string `json:"ambiguous"`       // 角色成员同名多人：姓名(工号列表)
-	Unmatched      []string `json:"unmatched"`       // 本地账号在角色成员中无同名：用户名
+	RoleMembers int      `json:"role_members"` // 零信任角色成员数（同步数据源）
+	TargetUsers int      `json:"target_users"` // 参与同步的本地账号数（按分组过滤后）
+	Synced      int      `json:"synced"`       // 本次新写入工号
+	Overwritten int      `json:"overwritten"`  // 工号按目录更新（与原值不同）
+	SkippedSame int      `json:"skipped_same"` // 已绑定且一致
+	Ambiguous   []string `json:"ambiguous"`    // 角色成员同名多人：姓名(工号列表)
+	Unmatched   []string `json:"unmatched"`    // 本地账号在角色成员中无同名：用户名
 }
 
 // SyncEmployeeIdsFromATrust 执行一次工号批量同步（角色成员为源，本地为目标）
@@ -266,12 +283,18 @@ func SyncEmployeeIdsFromATrust() (*ATrustSyncReport, error) {
 		return nil, fmt.Errorf("拉取零信任角色成员失败: %v", err)
 	}
 
-	// displayName → 工号集合（角色成员同名多人时会有多个工号）
+	// displayName → 工号集合（角色成员同名多人时会有多个工号）+ 目录用户（取中心用）
 	nameIndex := make(map[string][]string, len(dirUsers))
+	nameUsers := make(map[string]map[string]ATrustDirectoryUser, len(dirUsers))
 	for _, u := range dirUsers {
 		name := strings.TrimSpace(u.DisplayName)
 		if name != "" {
-			nameIndex[name] = append(nameIndex[name], strings.TrimSpace(u.Name))
+			emp := strings.TrimSpace(u.Name)
+			nameIndex[name] = append(nameIndex[name], emp)
+			if nameUsers[name] == nil {
+				nameUsers[name] = map[string]ATrustDirectoryUser{}
+			}
+			nameUsers[name][emp] = u
 		}
 	}
 
@@ -313,7 +336,21 @@ func SyncEmployeeIdsFromATrust() (*ATrustSyncReport, error) {
 			for id := range ids {
 				employeeId = id
 			}
+			// 所在中心：以目录为准，工号相同也刷新（组织调动的场景）
+			center := ""
+			if du, ok := nameUsers[strings.TrimSpace(u.Username)][employeeId]; ok {
+				center = CenterFromGroupPath(du.GroupPath)
+			} else if du, ok := nameUsers[strings.TrimSpace(u.DisplayName)][employeeId]; ok {
+				center = CenterFromGroupPath(du.GroupPath)
+			}
 			if u.EmployeeId == employeeId {
+				if center != "" && center != u.Center {
+					if err := model.DB.Model(u).Update("center", center).Error; err != nil {
+						common.SysError("[工号同步] 更新中心失败 " + u.Username + ": " + err.Error())
+					} else {
+						common.SysLog("[工号同步] 更新中心: " + u.Username + " → " + center)
+					}
+				}
 				report.SkippedSame++
 				continue
 			}
@@ -322,7 +359,11 @@ func SyncEmployeeIdsFromATrust() (*ATrustSyncReport, error) {
 			} else {
 				report.Synced++
 			}
-			if err := model.DB.Model(u).Update("employee_id", employeeId).Error; err != nil {
+			updates := map[string]interface{}{"employee_id": employeeId}
+			if center != "" {
+				updates["center"] = center
+			}
+			if err := model.DB.Model(u).Updates(updates).Error; err != nil {
 				common.SysError("[工号同步] 写入失败 " + u.Username + ": " + err.Error())
 			} else {
 				common.SysLog("[工号同步] " + u.Username + " ← 工号 " + employeeId)

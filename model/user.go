@@ -36,7 +36,8 @@ type User struct {
 	OidcId             string         `json:"oidc_id" gorm:"column:oidc_id;index"`
 	WeChatId           string         `json:"wechat_id" gorm:"column:wechat_id;index"`
 	WeChatWorkId       string         `json:"wechat_work_id" gorm:"column:wechat_work_id;index"`
-	EmployeeId         string         `json:"employee_id" gorm:"column:employee_id;index"` // 工号（零信任同步）
+	EmployeeId         string         `json:"employee_id" gorm:"column:employee_id;index"`             // 工号（零信任同步）
+	Center             string         `json:"center" gorm:"column:center;type:varchar(64);default:''"` // 所在中心（零信任组织路径提取）
 	TelegramId         string         `json:"telegram_id" gorm:"column:telegram_id;index"`
 	VerificationCode   string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
 	AccessToken        *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management

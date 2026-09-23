@@ -559,7 +559,7 @@
     "请先勾选要导入的用户": "Chọn người dùng trước",
     "默认额度": "Hạn mức mặc định",
     "导入分组": "Nhóm nhập",
-    "人": "người",
+    "人": "users",
     "已选": "Đã chọn",
     "零信任导入": "Nhập Zero Trust",
     "跳过": "Bỏ qua",
@@ -921,7 +921,7 @@
     "删除账户": "Xóa tài khoản",
     "删除账户确认": "Xác nhận xóa tài khoản",
     "删除部署失败": "Failed to delete deployment",
-    "刷新": "Làm mới",
+    "刷新": "Refresh",
     "刷新凭证": "Làm mới thông tin xác thực",
     "刷新失败": "Làm mới thất bại",
     "刷新容器信息": "Refresh Container Info",
@@ -3738,7 +3738,7 @@
     "读取失败": "Đọc thất bại",
     "调整额度": "Điều chỉnh hạn ngạch",
     "调整额度成功": "Điều chỉnh hạn ngạch thành công",
-    "调用次数": "Số lần gọi",
+    "调用次数": "Requests",
     "调用次数分布": "Phân phối số lần gọi",
     "调用次数排行": "Xếp hạng số lần gọi",
     "调用趋势": "Xu hướng cuộc gọi",
@@ -4415,6 +4415,14 @@
     "智能体说明已复制（已按该密钥的数据范围生成）": "Đã sao chép hướng dẫn cho agent (theo phạm vi của khóa này)",
     "获取说明失败，请检查密钥是否有效": "Không tải được hướng dẫn, hãy kiểm tra khóa",
     "④ 用户额度概览（总额度/已用/剩余 + 累计调用次数）：": "④ Tổng quan hạn mức (tổng / đã dùng / còn lại + số lần gọi lũy kế):",
-    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "Hướng dẫn tự phục vụ cho agent: GET /api/open/guide (markdown, đã gắn phạm vi dữ liệu của khóa; OpenAPI tại /api/open/openapi.json). Mỗi dòng khóa đều có nút “Sao chép hướng dẫn cho agent”"
+    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "Hướng dẫn tự phục vụ cho agent: GET /api/open/guide (markdown, đã gắn phạm vi dữ liệu của khóa; OpenAPI tại /api/open/openapi.json). Mỗi dòng khóa đều có nút “Sao chép hướng dẫn cho agent”",
+    "各中心 Token 占比（近 30 天）": "Token share by center (last 30 days)",
+    "中心": "Center",
+    "Token 占比": "Token share",
+    "总 Tokens": "Total tokens",
+    "输入 / 输出": "Input / Output",
+    "费用(元)": "Cost (CNY)",
+    "区间：{{start}} ~ {{end}}，共 {{centers}} 个中心，合计 {{tokens}} tokens（¥{{cost}}）。中心来自零信任组织架构同步。": "Range: {{start}} ~ {{end}}, {{centers}} centers, {{tokens}} tokens total (¥{{cost}}). Centers come from zero-trust org sync.",
+    "暂无数据（需先通过零信任同步用户所在中心）": "No data yet (user centers must be synced from zero-trust first)"
   }
 }

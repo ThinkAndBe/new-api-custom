@@ -567,7 +567,7 @@
     "请先勾选要导入的用户": "Sélectionnez d'abord",
     "默认额度": "Quota par défaut",
     "导入分组": "Groupe",
-    "人": "utilisateurs",
+    "人": "users",
     "已选": "Sélectionnés",
     "零信任导入": "Import Zero Trust",
     "跳过": "Ignoré",
@@ -934,7 +934,7 @@
     "删除账户": "Supprimer le compte",
     "删除账户确认": "Confirmation de la suppression du compte",
     "删除部署失败": "Failed to delete deployment",
-    "刷新": "Actualiser",
+    "刷新": "Refresh",
     "刷新凭证": "Actualiser les identifiants",
     "刷新失败": "Échec de l'actualisation",
     "刷新容器信息": "Refresh Container Info",
@@ -3320,7 +3320,7 @@
     "请选择通知方式": "Veuillez sélectionner la méthode de notification",
     "调整额度": "Ajuster le quota",
     "调整额度成功": "Quota ajusté avec succès",
-    "调用次数": "Nombre d'appels",
+    "调用次数": "Requests",
     "调用次数分布": "Distribution des appels de modèles",
     "调用次数排行": "Classement des appels de modèles",
     "调用趋势": "Tendance des appels",
@@ -3883,6 +3883,14 @@
     "智能体说明已复制（已按该密钥的数据范围生成）": "Guide pour agent copié (généré selon la portée de cette clé)",
     "获取说明失败，请检查密钥是否有效": "Échec du chargement du guide, vérifiez la clé",
     "④ 用户额度概览（总额度/已用/剩余 + 累计调用次数）：": "④ Aperçu des quotas (total / utilisé / restant + nombre d’appels cumulés) :",
-    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "Guide en libre-service : GET /api/open/guide (markdown, portée de la clé injectée ; spec OpenAPI sur /api/open/openapi.json). Chaque clé dispose d'un bouton « Copier le guide pour agent »."
+    "智能体自助说明：GET /api/open/guide（markdown，已注入该密钥的数据范围；OpenAPI 描述见 /api/open/openapi.json）。密钥列表里每行都有「复制智能体说明」，复制出来可直接发给 AI 智能体": "Guide en libre-service : GET /api/open/guide (markdown, portée de la clé injectée ; spec OpenAPI sur /api/open/openapi.json). Chaque clé dispose d'un bouton « Copier le guide pour agent ».",
+    "各中心 Token 占比（近 30 天）": "Token share by center (last 30 days)",
+    "中心": "Center",
+    "Token 占比": "Token share",
+    "总 Tokens": "Total tokens",
+    "输入 / 输出": "Input / Output",
+    "费用(元)": "Cost (CNY)",
+    "区间：{{start}} ~ {{end}}，共 {{centers}} 个中心，合计 {{tokens}} tokens（¥{{cost}}）。中心来自零信任组织架构同步。": "Range: {{start}} ~ {{end}}, {{centers}} centers, {{tokens}} tokens total (¥{{cost}}). Centers come from zero-trust org sync.",
+    "暂无数据（需先通过零信任同步用户所在中心）": "No data yet (user centers must be synced from zero-trust first)"
   }
 }

@@ -28,6 +28,7 @@ import ChannelAffinityUsageCacheModal from './modals/ChannelAffinityUsageCacheMo
 import ParamOverrideModal from './modals/ParamOverrideModal';
 import UserStatsModal from './modals/UserStatsModal';
 import TokenSummaryPanel from './TokenSummaryPanel';
+import CenterStatsPanel from './CenterStatsPanel';
 import { useLogsData } from '../../../hooks/usage-logs/useUsageLogsData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -65,6 +66,9 @@ const LogsPage = () => {
 
       {/* 令牌汇总统计面板 */}
       <TokenSummaryPanel {...logsData} />
+
+      {/* 各中心 Token 占比（管理员） */}
+      <CenterStatsPanel />
 
       {/* 按用户汇总 */}
       <UserStatsModal

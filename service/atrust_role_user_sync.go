@@ -24,7 +24,7 @@ import (
 type ATrustRoleUserSyncResult struct {
 	RoleMembers int      `json:"role_members"`
 	Created     int      `json:"created"`
-	Skipped     int      `json:"skipped"`  // 工号或姓名已命中本地账号
+	Skipped     int      `json:"skipped"` // 工号或姓名已命中本地账号
 	Failed      int      `json:"failed"`
 	Errors      []string `json:"errors"`
 }
@@ -46,9 +46,14 @@ func SyncATrustRoleUsers() (*ATrustRoleUserSyncResult, error) {
 			continue
 		}
 
-		// 工号已绑定 → 已有账号，跳过
+		// 工号已绑定 → 已有账号，跳过建号；但顺手刷新「所在中心」（目录为准）
 		var exist model.User
 		if err := model.DB.Where("employee_id = ?", emp).First(&exist).Error; err == nil {
+			if c := CenterFromGroupPath(m.GroupPath); c != "" && c != exist.Center {
+				if err := model.DB.Model(&exist).Update("center", c).Error; err == nil {
+					common.SysLog("[角色同步] 更新中心: " + exist.Username + " → " + c)
+				}
+			}
 			result.Skipped++
 			continue
 		}
@@ -57,7 +62,11 @@ func SyncATrustRoleUsers() (*ATrustRoleUserSyncResult, error) {
 		if err := model.DB.Where(
 			"username = ? OR display_name = ?", name, name,
 		).First(&byName).Error; err == nil {
-			if err := model.DB.Model(&byName).Update("employee_id", emp).Error; err == nil {
+			updates := map[string]interface{}{"employee_id": emp}
+			if c := CenterFromGroupPath(m.GroupPath); c != "" {
+				updates["center"] = c
+			}
+			if err := model.DB.Model(&byName).Updates(updates).Error; err == nil {
 				common.SysLog("[角色同步] 补绑工号: " + byName.Username + " ← " + name + "(" + emp + ")")
 			}
 			result.Skipped++
@@ -81,6 +90,7 @@ func SyncATrustRoleUsers() (*ATrustRoleUserSyncResult, error) {
 			Username:    username,
 			DisplayName: name,
 			EmployeeId:  emp,
+			Center:      CenterFromGroupPath(m.GroupPath),
 			Password:    common.GetUUID(),
 			Role:        common.RoleCommonUser,
 			Status:      common.UserStatusEnabled,

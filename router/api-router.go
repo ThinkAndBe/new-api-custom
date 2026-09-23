@@ -345,6 +345,8 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.DELETE("/", middleware.AdminAuth(), controller.DeleteHistoryLogs)
 		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
 		logRoute.GET("/user_stats", middleware.AdminAuth(), controller.GetUserLogStats)
+		// 各中心（所在中心，零信任同步）用量占比：使用日志页
+		logRoute.GET("/center_stats", middleware.AdminAuth(), controller.GetCenterUsageStats)
 		logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
 		logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
