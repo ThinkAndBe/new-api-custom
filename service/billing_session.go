@@ -344,6 +344,16 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		return nil, types.NewError(fmt.Errorf("relayInfo is nil"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 	}
 
+	// 每日 Token 限额校验（钱包/订阅两条计费路径共用此入口；任务类预扣费也走这里）
+	if ok, used, limit, reset := model.CheckUserDailyTokenLimit(relayInfo.UserId); !ok {
+		logger.LogWarn(c, fmt.Sprintf("user %d hit daily token limit: used=%d limit=%d", relayInfo.UserId, used, limit))
+		return nil, types.NewErrorWithStatusCode(
+			fmt.Errorf("今日 Token 用量已达上限（已用 %d / 上限 %d），将于 %s 重置",
+				used, limit, reset.Format("2006-01-02 15:04")),
+			types.ErrorCodeInsufficientUserQuota, http.StatusTooManyRequests,
+			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+	}
+
 	pref := common.NormalizeBillingPreference(relayInfo.UserSetting.BillingPreference)
 
 	// 钱包路径需要先检查用户额度

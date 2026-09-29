@@ -45,6 +45,7 @@ func TestMain(m *testing.M) {
 		&model.Channel{},
 		&model.TopUp{},
 		&model.UserSubscription{},
+		&model.UserDailyUsage{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}

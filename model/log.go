@@ -291,6 +291,8 @@ type RecordConsumeLogParams struct {
 }
 
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
+	// 每日 Token 限额计数：与使用日志同口径（输入+输出），不受日志开关影响
+	IncrUserDailyTokens(userId, int64(params.PromptTokens)+int64(params.CompletionTokens), int64(params.Quota))
 	if !common.LogConsumeEnabled {
 		return
 	}

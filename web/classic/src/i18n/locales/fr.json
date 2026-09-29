@@ -3891,6 +3891,8 @@
     "输入 / 输出": "Input / Output",
     "费用(元)": "Cost (CNY)",
     "区间：{{start}} ~ {{end}}，共 {{centers}} 个中心，合计 {{tokens}} tokens（¥{{cost}}）。中心来自零信任组织架构同步。": "Range: {{start}} ~ {{end}}, {{centers}} centers, {{tokens}} tokens total (¥{{cost}}). Centers come from zero-trust org sync.",
-    "暂无数据（需先通过零信任同步用户所在中心）": "No data yet (user centers must be synced from zero-trust first)"
+    "暂无数据（需先通过零信任同步用户所在中心）": "No data yet (user centers must be synced from zero-trust first)",
+    "每日 Token 上限（0=不限）": "Daily token limit (0 = unlimited)",
+    "该用户一天内可消耗的 tokens 总量（输入+输出），超限后拒绝请求，次日零点重置。留空或 0 表示不限制。": "Total tokens (input + output) this user can consume per day. Requests are rejected once the limit is reached, resetting at midnight. Empty or 0 means unlimited."
   }
 }

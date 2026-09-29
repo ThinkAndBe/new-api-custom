@@ -94,6 +94,7 @@ const EditUserModal = (props) => {
     quota_amount: 0,
     group: 'default',
     remark: '',
+    daily_token_limit: 0,
   });
 
   const fetchGroups = async () => {
@@ -329,6 +330,18 @@ const EditUserModal = (props) => {
                         label={t('备注')}
                         placeholder={t('请输入备注（仅管理员可见）')}
                         showClear
+                      />
+                    </Col>
+
+                    <Col span={24}>
+                      <Form.InputNumber
+                        field='daily_token_limit'
+                        label={t('每日 Token 上限（0=不限）')}
+                        placeholder='0'
+                        min={0}
+                        step={10000}
+                        style={{ width: '100%' }}
+                        extraText={t('该用户一天内可消耗的 tokens 总量（输入+输出），超限后拒绝请求，次日零点重置。留空或 0 表示不限制。')}
                       />
                     </Col>
                   </Row>

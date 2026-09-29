@@ -36,8 +36,9 @@ type User struct {
 	OidcId             string         `json:"oidc_id" gorm:"column:oidc_id;index"`
 	WeChatId           string         `json:"wechat_id" gorm:"column:wechat_id;index"`
 	WeChatWorkId       string         `json:"wechat_work_id" gorm:"column:wechat_work_id;index"`
-	EmployeeId         string         `json:"employee_id" gorm:"column:employee_id;index"`             // 工号（零信任同步）
-	Center             string         `json:"center" gorm:"column:center;type:varchar(64);default:''"` // 所在中心（零信任组织路径提取）
+	EmployeeId         string         `json:"employee_id" gorm:"column:employee_id;index"`                 // 工号（零信任同步）
+	Center             string         `json:"center" gorm:"column:center;type:varchar(64);default:''"`     // 所在中心（零信任组织路径提取）
+	DailyTokenLimit    int64          `json:"daily_token_limit" gorm:"column:daily_token_limit;default:0"` // 每日 Token 上限（0=不限）
 	TelegramId         string         `json:"telegram_id" gorm:"column:telegram_id;index"`
 	VerificationCode   string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
 	AccessToken        *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
@@ -726,6 +727,8 @@ func (user *User) Update(updatePassword bool) error {
 		return err
 	}
 
+	// 上限可能已变，失效每日限额缓存
+	InvalidateDailyTokenLimitCache(user.Id)
 	// Update cache
 	return updateUserCache(*user)
 }
@@ -766,6 +769,10 @@ func (user *User) Edit(updatePassword bool) error {
 		"group":        newUser.Group,
 		"remark":       newUser.Remark,
 	}
+	if newUser.DailyTokenLimit < 0 {
+		newUser.DailyTokenLimit = 0
+	}
+	updates["daily_token_limit"] = newUser.DailyTokenLimit
 	if updatePassword {
 		updates["password"] = newUser.Password
 		updates["must_change_password"] = false
