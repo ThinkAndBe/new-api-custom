@@ -232,6 +232,15 @@ var quotaExhaustedKeywords = []string{
 	"billing limit",
 	"spending limit",
 	"billing_hard_limit_reached",
+	// 订阅类（火山 doubao CodingPlan 等：订阅过期返回 400，不在 401/503 自动禁用码里，
+	// 也不含上述额度关键词——实测 2026-09-28 起实业账号订阅过期连报 3 天无人禁用）
+	"codingplan subscription",
+	"subscription has expired",
+	"no valid subscription",
+	"subscribe",
+	"订阅已过期",
+	"订阅过期",
+	"没有有效的订阅",
 	// 中文
 	"使用上限",
 	"使用限制",
